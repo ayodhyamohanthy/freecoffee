@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Referrals — FreeCoffee</title>
+<meta name="description" content="FreeCoffee referral program — 10% of referee base earnings for 12 months, gated on 60 verified minutes. Demo, simulated data.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2314100D'/%3E%3Cpath d='M8 13h11a1 1 0 0 1 1 1v5a4 4 0 0 1-4 4h-5a4 4 0 0 1-4-4v-5a1 1 0 0 1 1-1z' fill='%23E0A93E'/%3E%3Cpath d='M20 14h2.2a2.4 2.4 0 0 1 0 4.8H20v-1.6h2.2a.8.8 0 0 0 0-1.6H20z' fill='%23E0A93E'/%3E%3Crect x='7' y='10.6' width='13.5' height='1.6' rx='.8' fill='%23E0A93E'/%3E%3C/svg%3E">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#14100D">
+<link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body data-page="referrals">
+
+<a class="skip-link" href="#main">Skip to content</a>
+
+<div class="shell">
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar">
+    <a class="side-logo" href="index.html" aria-label="FreeCoffee home">
+      <svg class="logo" width="22" height="22" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+        <path d="M8 13h11a1 1 0 0 1 1 1v5a4 4 0 0 1-4 4h-5a4 4 0 0 1-4-4v-5a1 1 0 0 1 1-1z" fill="currentColor"/>
+        <path d="M20 14h2.2a2.4 2.4 0 0 1 0 4.8H20v-1.6h2.2a.8.8 0 0 0 0-1.6H20z" fill="currentColor"/>
+        <rect x="7" y="10.6" width="13.5" height="1.6" rx=".8" fill="currentColor"/>
+      </svg>
+      <span>FreeCoffee</span>
+      <span class="side-demo">Demo</span>
+    </a>
+
+    <nav class="side-nav" aria-label="Main">
+      <p class="side-label">Earn</p>
+      <a class="side-item" href="dashboard.html">
+        <svg class="side-ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+        Overview
+      </a>
+      <a class="side-item" href="payouts.html">
+        <svg class="side-ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6 12h.01M18 12h.01"/></svg>
+        Payouts
+      </a>
+      <a class="side-item active" href="referrals.html" aria-current="page">
+        <svg class="side-ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M17 8h5M19.5 5.5v5"/></svg>
+        Referrals
+      </a>
+      <p class="side-label">Advertise</p>
+      <a class="side-item side-disabled" href="#" onclick="return false" aria-disabled="true" title="Not part of the demo">
+        <svg class="side-ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M3 11l16-6v14L3 13v-2z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>
+        Campaigns
+      </a>
+      <p class="side-label">Account</p>
+      <a class="side-item" href="profile.html">
+        <svg class="side-ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.3 3.1-5.5 7-5.5s7 2.2 7 5.5"/></svg>
+        Profile
+      </a>
+      <a class="side-item" href="profile.html#settings">
+        <svg class="side-ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.01a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.01a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1z"/></svg>
+        Settings
+      </a>
+    </nav>
+
+    <!-- user chip -->
+    <a class="user-chip" href="profile.html" aria-label="Account profile">
+      <span class="user-tile" aria-hidden="true">FC</span>
+      <span class="user-meta">
+        <span class="user-name">Demo User</span><br>
+        <span class="user-mail">demo@freecoffee.local</span>
+      </span>
+    </a>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <div class="shell-main">
+
+    <header class="topbar">
+      <nav class="crumbs" aria-label="Breadcrumb">
+        <a class="crumb" href="index.html">Earn</a>
+        <span class="crumb-sep" aria-hidden="true">›</span>
+        <span class="crumb current" aria-current="page">Referrals</span>
+      </nav>
+      <div class="topbar-tools">
+        <a class="topbar-link" href="index.html#faq">Support</a>
+      </div>
+    </header>
+
+    <main id="main" class="shell-content">
+
+      <div class="dash-head">
+        <div>
+          <h1>Referrals</h1>
+          <p class="dash-sub">You earn <strong>10% of your referee's base earnings for 12 months</strong> —
+            gated on them logging ≥60 verified minutes in their first 30 days. Demo data, seeded (seed 42).</p>
+        </div>
+      </div>
+
+      <div class="dash-main">
+
+        <!-- ============ REFERRAL LINK ============ -->
+        <section class="card" aria-label="Your referral link">
+          <h2 style="font-size:1.15rem">Your referral link</h2>
+          <p class="section-sub" style="margin-bottom:0">Anyone who installs FreeCoffee through this link counts as
+            your referee — the demo's two referees arrived exactly this way.</p>
+          <div class="linkbox">
+            <input class="input" type="text" id="referralLink" readonly
+                   value="https://freecoffee.local/r/demo-user" aria-label="Referral URL">
+            <button type="button" class="btn btn-primary" id="copyLinkBtn">Copy</button>
+          </div>
+        </section>
+
+        <!-- ============ REWARDS ============ -->
+        <section class="card" aria-label="Rewards" style="margin-top:16px">
+          <h2 style="font-size:1.15rem">Rewards</h2>
+          <div class="grid-2" style="margin-top:14px">
+            <div class="card" style="background:var(--panel)">
+              <p class="micro">The reward</p>
+              <p style="margin:8px 0 0; font-size:1.05rem"><strong>10% of referee base earnings, 12 months.</strong>
+                Accrues daily against their simulated flights, straight into your ledger as
+                <span class="type-chip t-referral">referral</span> rows.</p>
+            </div>
+            <div class="card" style="background:var(--panel)">
+              <p class="micro">The gate</p>
+              <p style="margin:8px 0 0; font-size:1.05rem"><strong>≥60 verified minutes in their first 30 days.</strong>
+                No gate-passing, no payout — which keeps the program worth funding and referral spam worthless.</p>
+            </div>
+          </div>
+          <p class="footnote">Referral earnings come out of the platform side, never out of your referee's balance.
+            See the <a href="payouts.html">payout model</a> for the sustainability math.</p>
+        </section>
+
+        <!-- ============ 3-STAT ROW ============ -->
+        <section class="stat-grid" aria-label="Referral stats" style="margin-top:16px; margin-bottom:0">
+          <div class="card stat-card">
+            <p class="stat-num" id="refUsers">2</p>
+            <p class="stat-label">referred users</p>
+          </div>
+          <div class="card stat-card">
+            <p class="stat-num" id="refEarnings">$2.82</p>
+            <p class="stat-label">referral earnings · all time</p>
+          </div>
+          <div class="card stat-card">
+            <p class="stat-num" id="refTier">3</p>
+            <p class="stat-label">referrals to next tier · +$5 bonus</p>
+          </div>
+        </section>
+
+        <!-- ============ REFEREE TABLE (ledger-driven) ============ -->
+        <section class="card" aria-label="Your referees" style="margin-top:16px">
+          <h2 style="font-size:1.15rem">Your referees</h2>
+          <div class="table-scroll" style="margin-top:12px">
+            <table class="rail-table">
+              <thead>
+                <tr><th scope="col">Referee</th><th scope="col">Gate status</th><th scope="col" class="num">Accrued</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th scope="row">astra.dev</th>
+                  <td><span class="pill pill-ok">Verified</span>&nbsp; 74 verified minutes in first 30 days</td>
+                  <td class="num" style="text-align:right; font-family:var(--mono)">$2.24</td>
+                </tr>
+                <tr>
+                  <th scope="row">quill@mac</th>
+                  <td><span class="pill pill-gold">In 30-day gate</span>&nbsp; 41 of 60 verified minutes</td>
+                  <td class="num" style="text-align:right; font-family:var(--mono)">$0.58</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="footnote" id="refFoot">Numbers come from the same seeded ledger as the dashboard —
+            referral rows are 10% of each referee's daily base earnings.</p>
+        </section>
+
+      </div>
+
+    </main>
+
+    <footer class="shell-foot">
+      <p class="disclaimer" style="border-top:0;padding-top:0">FreeCoffee demo — simulated data. Not affiliated with SponsorBar or KickBot Inc.</p>
+    </footer>
+  </div>
+</div>
+
+<script src="assets/js/demo.js"></script>
+<script>
+/* Referrals — verify the displayed stats against the seeded ledger. */
+(function () {
+  'use strict';
+  function $(id) { return document.getElementById(id); }
+
+  function toast(msg) {
+    var region = $('toastRegion');
+    if (!region) return;
+    var t = document.createElement('div');
+    t.className = 'toast';
+    t.textContent = msg;
+    region.appendChild(t);
+    window.setTimeout(function () { t.classList.add('show'); }, 10);
+    window.setTimeout(function () {
+      t.classList.remove('show');
+      window.setTimeout(function () { if (t.parentNode) t.parentNode.removeChild(t); }, 300);
+    }, 3800);
+  }
+
+  function copyText(text, okMsg) {
+    function fallback() {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed'; ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch (e) { /* non-fatal */ }
+      document.body.removeChild(ta);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { toast(okMsg); }, fallback);
+    } else {
+      fallback();
+      toast(okMsg);
+    }
+  }
+
+  function init() {
+    $('copyLinkBtn').addEventListener('click', function () {
+      copyText($('referralLink').value, 'Referral link copied to the clipboard.');
+    });
+
+    // Recompute referral stats from the seeded engine and update the stat row.
+    try {
+      var D = window.FreeCoffeeDemo;
+      var h = D.generateHistory(D.SEED);
+      var refs = h.totals.referrals;
+      var sum = 0;
+      for (var i = 0; i < refs.length; i++) sum += refs[i].accrued;
+      $('refEarnings').textContent = '$' + (Math.round(sum * 100) / 100).toFixed(2);
+      $('refUsers').textContent = String(refs.length);
+      $('refFoot').textContent = 'Numbers come from the same seeded ledger as the dashboard — ' +
+        'referral rows are 10% of each referee\'s daily base earnings. ' +
+        'astra.dev $' + refs[0].accrued.toFixed(2) + ' · quill@mac $' + refs[1].accrued.toFixed(2) + '.';
+    } catch (e) { /* static values already match seed 42 */ }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
+<script>
+/* Service worker registration — shared inline snippet on all pages.
+   Skipped on file:// (no SW support there); failures are non-fatal. */
+if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
+  try {
+    navigator.serviceWorker.register('sw.js').then(function (reg) {
+      console.info('FreeCoffee: service worker registered (scope ' + reg.scope + ')');
+    }).catch(function (err) {
+      console.info('FreeCoffee: service worker registration failed: ' + err);
+    });
+  } catch (err) {
+    console.info('FreeCoffee: service worker registration failed: ' + err);
+  }
+}
+</script>
+</body>
+</html>
