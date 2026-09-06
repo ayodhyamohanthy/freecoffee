@@ -138,6 +138,15 @@
                 Live campaigns display with a LIVE marker and never add to the simulated ledger.</p>
             </div>
             <div class="field">
+              <label class="field-label" for="minCpm">MIN CPM FLOOR ($)</label>
+              <input class="input" type="number" id="minCpm" name="minCpm" inputmode="decimal"
+                     style="width:90px" placeholder="none" step="0.5" min="0" max="100"
+                     aria-describedby="minCpmHint">
+              <p class="footnote" id="minCpmHint" style="margin-top:6px">Only show campaigns paying at least this much
+                per 1,000 verified minutes. Campaigns below the floor are hidden everywhere (menu bar, dashboard rows,
+                banner). Highest CPM always wins the placement.</p>
+            </div>
+            <div class="field">
               <span class="field-label" id="emailPrefsLabel">Email preferences</span>
               <div class="prefs-row" role="group" aria-labelledby="emailPrefsLabel">
                 <label class="pref">
@@ -282,18 +291,27 @@ Disclaimer: FreeCoffee demo — simulated data. Not affiliated with SponsorBar o
     $('email').value = p.email || 'demo@freecoffee.local';
     $('coffeePref').value = p.coffeePref || 'flat-white';
     $('adFeedUrl').value = p.adFeedUrl || '';
+    // minCpm floor: empty string → 0 (no floor). Non-numeric/garbage → 0.
+    var minCpmNum = Number(p.minCpm);
+    $('minCpm').value = (p.minCpm === 0 || p.minCpm === '0' ||
+                         (isFinite(minCpmNum) && minCpmNum !== 0)) ? String(minCpmNum) : '';
     $('prefWeekly').checked = p.prefWeekly !== false;
     $('prefPayout').checked = p.prefPayout !== false;
     $('prefProduct').checked = !!p.prefProduct;
 
     $('profileForm').addEventListener('submit', function (ev) {
       ev.preventDefault();
+      // MIN CPM floor: empty string → 0; clamped 0–100 to match the cpm cap.
+      var minCpmVal = Number($('minCpm').value);
+      if (!isFinite(minCpmVal) || minCpmVal < 0) minCpmVal = 0;
+      if (minCpmVal > 100) minCpmVal = 100;
       writeState({
         profile: {
           displayName: $('displayName').value.trim() || 'Demo User',
           email: $('email').value.trim() || 'demo@freecoffee.local',
           coffeePref: $('coffeePref').value,
           adFeedUrl: $('adFeedUrl').value.replace(/^\s+|\s+$/g, ''),
+          minCpm: minCpmVal,
           prefWeekly: $('prefWeekly').checked,
           prefPayout: $('prefPayout').checked,
           prefProduct: $('prefProduct').checked,

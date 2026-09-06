@@ -424,14 +424,28 @@
 
   /* ------------------------------------------------------------------
      Live campaigns (real-advertiser bridge) — rendered INTO the Recent
-     sponsors list below the fictional demo sponsors. Display only: live
-     campaigns NEVER inject rows into the ledger and never move a balance.
-     Each row shows a LIVE chip; when the feed supplied a validated https
-     clickUrl the row is a real link (new tab, rel sponsored). The amount
-     column reads "—" with an honest tooltip.
+     sponsors list below the fictional demo sponsors, in auction order:
+     highest CPM first (pickAd), with campaigns below the user's minimum-
+     CPM floor (state.profile.minCpm) filtered out entirely. Display only:
+     live campaigns NEVER inject rows into the ledger and never move a
+     balance. Each row shows a LIVE chip and its winning CPM ("$X.XX CPM");
+     when the feed supplied a validated https clickUrl the row is a real
+     link (new tab, rel sponsored). The amount column reads "—" with an
+     honest tooltip.
      ------------------------------------------------------------------ */
-  function renderLiveSponsors(list) {
+  function liveMinCpm() {
+    return (state.profile && Number(state.profile.minCpm)) || 0;
+  }
+
+  function eligibleLiveCampaigns() {
     var live = state.liveCampaigns;
+    if (!live || !live.length) return [];
+    return D.pickAd ? D.pickAd(live, { minCpm: liveMinCpm() })
+                    : live.slice();   // engine without pickAd → unfiltered fallback
+  }
+
+  function renderLiveSponsors(list) {
+    var live = eligibleLiveCampaigns();
     if (!live || !live.length) return;
 
     for (var i = 0; i < live.length; i++) {
@@ -467,8 +481,10 @@
 
       var amt = document.createElement('span');
       amt.className = 'sp-amt';
-      amt.textContent = '—';
-      amt.title = 'Live campaign — earnings settle once the platform backend is live (never injected into the demo ledger)';
+      var cpm = Number(camp.cpm);
+      amt.textContent = '— · $' + (isFinite(cpm) ? cpm : 0).toFixed(2) + ' CPM';
+      amt.title = 'Live campaign at $' + (isFinite(cpm) ? cpm : 0).toFixed(2) +
+        ' CPM — earnings settle once the platform backend is live (never injected into the demo ledger)';
       li.appendChild(amt);
 
       if (camp.clickUrl && /^https:\/\//i.test(camp.clickUrl)) {
@@ -510,8 +526,18 @@
       text.textContent = 'Live feed error: ' + errMsg + ' — fix or disconnect the feed on this page.';
       return;
     }
-    var n = count || 0;
-    text.textContent = n + ' live campaign' + (n === 1 ? '' : 's') + ' connected — earnings for live campaigns settle once the platform backend is live.';
+    // Floor-aware count + top bid: campaigns below the user's minimum-CPM
+    // floor are filtered out entirely (never shown), so both the banner
+    // count and the sponsor rows reflect only eligible campaigns.
+    var eligible = eligibleLiveCampaigns();
+    var n = eligible.length;
+    var top = 0;
+    for (var i = 0; i < eligible.length; i++) {
+      var c = Number(eligible[i].cpm);
+      if (isFinite(c) && c > top) top = c;
+    }
+    text.textContent = n + ' live campaign' + (n === 1 ? '' : 's') + ' connected · top bid $' +
+      top.toFixed(2) + ' CPM — earnings for live campaigns settle once the platform backend is live.';
   }
 
   function disconnectLiveFeed() {

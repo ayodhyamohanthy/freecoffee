@@ -16,5 +16,14 @@
     "cpm": 4.5,
     "logoText": "MM",
     "accent": "#6FBF8B"
+  },
+  {
+    "id": "qa_camp_003",
+    "sponsor": "Lowball Labs",
+    "tagline": "Low bid — must sort last",
+    "clickUrl": "https://github.com/ayodhyamohanthy/freecoffee",
+    "cpm": 0.75,
+    "logoText": "LB",
+    "accent": "#E57373"
   }
 ]

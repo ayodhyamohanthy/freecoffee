@@ -252,6 +252,47 @@
   }
 
   /* ------------------------------------------------------------------
+     pickAd(campaigns, opts) — the highest-bid-wins auction selector.
+
+     opts = { minCpm (number, default 0), count (default campaigns.length) }
+     Returns a NEW array: eligible campaigns (cpm >= minCpm) sorted by
+     cpm DESC, ties broken by id ASC, capped at count. The input array is
+     never mutated and the campaign objects are handed back as-is; bad
+     input (null, non-array, garbage rows) never throws — garbage rows are
+     skipped and a non-array input yields []. Missing/invalid cpm coerces
+     to 0, so lowball and malformed bids sort to the back, never crash.
+     ------------------------------------------------------------------ */
+  function pickAd(campaigns, opts) {
+    try {
+      if (!Array.isArray(campaigns)) return [];
+      var minCpm = (opts && opts.minCpm !== undefined) ? Number(opts.minCpm) : 0;
+      if (!isFinite(minCpm) || minCpm < 0) minCpm = 0;
+      var count = (opts && opts.count !== undefined) ? Number(opts.count) : campaigns.length;
+      if (!isFinite(count) || count < 0) count = campaigns.length;
+
+      var entries = [];
+      for (var i = 0; i < campaigns.length; i++) {
+        var c = campaigns[i];
+        if (!c || typeof c !== 'object') continue;        // skip garbage rows
+        var cpm = Number(c.cpm);
+        if (!isFinite(cpm)) cpm = 0;
+        if (cpm < minCpm) continue;                       // below the floor → out
+        var id = typeof c.id === 'string' ? c.id : '';
+        entries.push({ c: c, cpm: cpm, id: id });
+      }
+      entries.sort(function (a, b) {
+        if (b.cpm !== a.cpm) return b.cpm - a.cpm;        // highest CPM first
+        return a.id < b.id ? -1 : (a.id > b.id ? 1 : 0);  // ties: id ASC
+      });
+      var out = [];
+      for (var j = 0; j < entries.length && out.length < count; j++) out.push(entries[j].c);
+      return out;
+    } catch (e) {
+      return [];
+    }
+  }
+
+  /* ------------------------------------------------------------------
      generateHistory(seed) → deterministic demo ledger + totals.
 
      ~9 days ending just before the fixed anchor. Each day produces
@@ -617,9 +658,10 @@
     var balTimer = null;
 
     // Live campaigns (real advertiser bridge): when non-empty, the chip and
-    // tag line rotate through THEM instead of the fictional sponsors, and a
-    // "LIVE CAMPAIGN" micro-label replaces the "Current winning sponsor"
-    // title. Display only — never touches the seeded ledger.
+    // tag line rotate through THEM instead of the fictional sponsors — in
+    // auction order, highest CPM first — and a "LIVE CAMPAIGN · $X.XX CPM"
+    // micro-label replaces the "Current winning sponsor" title. Display
+    // only — never touches the seeded ledger.
     var liveCampaigns = [];
 
     function renderChip() {
@@ -640,13 +682,15 @@
         }
       }
       if (tag) {
-        // Micro-label before the tagline: "LIVE CAMPAIGN" when a real feed is
-        // connected, the fictional-sponsor title otherwise.
+        // Micro-label before the tagline: "LIVE CAMPAIGN · $X.XX CPM" when a
+        // real feed is connected (the winning bid is always visible), the
+        // fictional-sponsor title otherwise.
         tag.textContent = '';
         if (useLive) {
           var label = document.createElement('span');
           label.className = 'mb-live-label';
-          label.textContent = 'LIVE CAMPAIGN';
+          var liveCpm = Number(sp.cpm);
+          label.textContent = 'LIVE CAMPAIGN · $' + (isFinite(liveCpm) ? liveCpm : 0).toFixed(2) + ' CPM';
           tag.appendChild(label);
           tag.appendChild(document.createTextNode(sp.tag || ''));
         } else {
@@ -730,7 +774,8 @@
       if (!feedUrl || typeof fetch !== 'function') return;
       fetchLiveCampaigns(feedUrl).then(function (res) {
         if (!res || res.error || !res.campaigns || !res.campaigns.length) return;
-        liveCampaigns = res.campaigns;
+        // Auction order: highest CPM first (pickAd never mutates the input).
+        liveCampaigns = pickAd(res.campaigns);
         idx = 0;
         renderChip();
         // Landing-page caption + footnote go live-aware (index.html demo).
@@ -765,9 +810,11 @@
       isPaused: function () { return paused; },
       /* Live-advertiser bridge: hand in validated campaigns (or []) to swap
          the chip/tag rotation over to them (or back to the fictional
-         sponsors). Display only — the ledger is never touched. */
+         sponsors). The rotation walks pickAd() order — highest CPM first.
+         Display only — the ledger is never touched. */
       applyLiveCampaigns: function (campaigns) {
-        liveCampaigns = (Array.isArray(campaigns) && campaigns.length) ? campaigns.slice(0, 20) : [];
+        liveCampaigns = (Array.isArray(campaigns) && campaigns.length)
+          ? pickAd(campaigns).slice(0, 20) : [];
         idx = 0;
         renderChip();
       }
@@ -865,6 +912,7 @@
     generateHistory: generateHistory,
     projectMonthly: projectMonthly,
     fetchLiveCampaigns: fetchLiveCampaigns,
+    pickAd: pickAd,
     cups: cups,
     initMenuBarDemo: initMenuBarDemo,
     initInstallUX: initInstallUX,
