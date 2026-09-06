@@ -86,6 +86,8 @@
   if (!state.paidOut) state.paidOut = [];   // [{ts, amount}]
   if (typeof state.paused !== 'boolean') state.paused = false;
   if (!state.balanceOffset) state.balanceOffset = 0; // live drift from the ticker (display only)
+  if (!state.profile || typeof state.profile !== 'object') state.profile = {}; // profile page fields (incl. adFeedUrl)
+  if (!Array.isArray(state.liveCampaigns)) state.liveCampaigns = []; // live feed cache — display only, never ledger rows
   saveState();
 
   function $(id) { return document.getElementById(id); }
@@ -416,6 +418,140 @@
 
       list.appendChild(li);
     }
+
+    renderLiveSponsors(list);
+  }
+
+  /* ------------------------------------------------------------------
+     Live campaigns (real-advertiser bridge) — rendered INTO the Recent
+     sponsors list below the fictional demo sponsors. Display only: live
+     campaigns NEVER inject rows into the ledger and never move a balance.
+     Each row shows a LIVE chip; when the feed supplied a validated https
+     clickUrl the row is a real link (new tab, rel sponsored). The amount
+     column reads "—" with an honest tooltip.
+     ------------------------------------------------------------------ */
+  function renderLiveSponsors(list) {
+    var live = state.liveCampaigns;
+    if (!live || !live.length) return;
+
+    for (var i = 0; i < live.length; i++) {
+      var camp = live[i];
+
+      var li = document.createElement('li');
+      li.className = 'sp-row sp-live';
+
+      var tile = document.createElement('span');
+      tile.className = 'sp-tile';
+      tile.textContent = camp.logoText || camp.sponsor.charAt(0).toUpperCase();
+      if (camp.accent) tile.style.backgroundColor = camp.accent; // validated #rrggbb
+      li.appendChild(tile);
+
+      var meta = document.createElement('span');
+      meta.className = 'sp-meta';
+      var name = document.createElement('span');
+      name.className = 'sp-name';
+      name.textContent = camp.sponsor;
+      var chip = document.createElement('span');
+      chip.className = 'live-chip';
+      chip.textContent = 'LIVE';
+      name.appendChild(chip);
+      meta.appendChild(name);
+      if (camp.tagline) {
+        var tag = document.createElement('span');
+        tag.className = 'sp-tag';
+        tag.textContent = camp.tagline;
+        tag.title = camp.tagline;
+        meta.appendChild(tag);
+      }
+      li.appendChild(meta);
+
+      var amt = document.createElement('span');
+      amt.className = 'sp-amt';
+      amt.textContent = '—';
+      amt.title = 'Live campaign — earnings settle once the platform backend is live (never injected into the demo ledger)';
+      li.appendChild(amt);
+
+      if (camp.clickUrl && /^https:\/\//i.test(camp.clickUrl)) {
+        var a = document.createElement('a');
+        a.href = camp.clickUrl;                 // validated https by fetchLiveCampaigns
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer sponsored';
+        a.setAttribute('aria-label', camp.sponsor + ' — live campaign (opens in a new tab)');
+        // Move the row contents into the anchor so the whole row is the link.
+        while (li.firstChild) a.appendChild(li.firstChild);
+        a.className = li.className;
+        li.className = '';
+        li.appendChild(a);
+      }
+
+      list.appendChild(li);
+    }
+  }
+
+  /* ------------------------------------------------------------------
+     Live feed banner (under the balance card) — honest status line +
+     disconnect. The banner never claims settled earnings.
+     ------------------------------------------------------------------ */
+  function renderLiveBanner(count, errMsg) {
+    var banner = $('liveBanner');
+    var text = $('liveBannerText');
+    var btn = $('liveDisconnectBtn');
+    if (!banner || !text || !btn) return;
+
+    if (!(state.profile && state.profile.adFeedUrl)) {
+      banner.hidden = true;
+      btn.hidden = true;
+      return;
+    }
+    banner.hidden = false;
+    btn.hidden = false;
+    text.textContent = '';
+    if (errMsg && !count) {
+      text.textContent = 'Live feed error: ' + errMsg + ' — fix or disconnect the feed on this page.';
+      return;
+    }
+    var n = count || 0;
+    text.textContent = n + ' live campaign' + (n === 1 ? '' : 's') + ' connected — earnings for live campaigns settle once the platform backend is live.';
+  }
+
+  function disconnectLiveFeed() {
+    state.profile = state.profile || {};
+    delete state.profile.adFeedUrl;
+    state.liveCampaigns = [];
+    saveState();
+    renderLiveBanner(0);
+    renderSponsors();
+    toast('Live feed disconnected — back to the fictional demo sponsors.');
+  }
+
+  /* Fetch the connected feed (if any) and refresh the live surfaces.
+     Cached campaigns in state.liveCampaigns render immediately and are
+     replaced when the fetch succeeds; the ledger is never touched. */
+  function initLiveFeed() {
+    var feedUrl = (state.profile && state.profile.adFeedUrl) || null;
+    if (!feedUrl) {
+      renderLiveBanner(0);
+      return;
+    }
+    if (typeof D.fetchLiveCampaigns !== 'function') return;
+
+    if (state.liveCampaigns && state.liveCampaigns.length) {
+      renderLiveBanner(state.liveCampaigns.length);
+      renderSponsors();
+    }
+
+    D.fetchLiveCampaigns(feedUrl).then(function (res) {
+      var campaigns = (res && res.campaigns) || [];
+      var error = (res && res.error) || null;
+      if (campaigns.length) {
+        state.liveCampaigns = campaigns;      // cached for offline reloads
+        saveState();
+        renderLiveBanner(campaigns.length);
+      } else if (error) {
+        renderLiveBanner(state.liveCampaigns ? state.liveCampaigns.length : 0, error);
+      }
+      renderSponsors();
+    });
   }
 
   /* ------------------------------------------------------------------
@@ -551,6 +687,12 @@
       applyPaused(!state.paused);
     });
     $('payoutBtn').addEventListener('click', doPayout);
+
+    // Live-advertiser bridge: connected feed → banner + LIVE sponsor rows
+    // (+ the landing demo rotation on index.html via demo.js). Display only.
+    var disconnectBtn = $('liveDisconnectBtn');
+    if (disconnectBtn) disconnectBtn.addEventListener('click', disconnectLiveFeed);
+    initLiveFeed();
 
     document.addEventListener('visibilitychange', function () {
       // Ticker naturally skips hidden tabs; re-render on return so the

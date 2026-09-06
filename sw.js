@@ -2,7 +2,7 @@
    FreeCoffee demo service worker — plain ES2018, no transpiler, no imports.
 
    Caching strategy:
-     - precache (install):  the five pages + CSS + JS + icons, cache-first
+     - precache (install):  the six pages + CSS + JS + icons, cache-first
      - navigations:         network-first, fall back to cache (then /index.html)
      - other same-origin GET: cache-first, runtime-cache misses
      - cross-origin / non-GET: untouched (the demo has none, but be explicit)
@@ -12,7 +12,7 @@
 /* eslint-disable no-restricted-globals */
 'use strict';
 
-var CACHE = 'freecoffee-v1';
+var CACHE = 'freecoffee-v2';
 
 var PRECACHE = [
   './',
@@ -21,6 +21,7 @@ var PRECACHE = [
   './payouts.html',
   './profile.html',
   './referrals.html',
+  './advertisers.html',
   './assets/css/styles.css',
   './assets/js/demo.js',
   './assets/js/dashboard.js',

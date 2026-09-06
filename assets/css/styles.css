@@ -1040,3 +1040,46 @@ input[type="range"]::-moz-range-thumb {
   .mb-sponsor, .mb-balance { transition: none; }
   .prog-fill { transition: none; }
 }
+
+/* ==========================================================================
+   LIVE CAMPAIGN FEED (real-advertiser bridge — display only, never ledger)
+   ========================================================================== */
+/* Banner under the dashboard balance card. */
+.live-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  margin-top: 16px; padding: 10px 16px;
+  background: var(--gold-dim); border: 1px solid rgba(224, 169, 62, 0.35); border-radius: 12px;
+}
+.live-banner-text { margin: 0; font-size: 0.84rem; color: var(--text-dim); }
+.live-banner-text strong { color: var(--gold-bright); }
+
+/* LIVE chip on sponsor rows + landing demo micro-label. */
+.live-chip {
+  display: inline-block; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.12em;
+  padding: 2px 8px; border-radius: 999px; margin-left: 8px; vertical-align: 1px;
+  color: var(--gold-bright); border: 1px solid rgba(224, 169, 62, 0.4); background: var(--gold-dim);
+}
+.mb-live-label {
+  display: inline-block; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase; padding: 2px 8px; border-radius: 999px; margin-right: 8px;
+  color: var(--gold-bright); border: 1px solid rgba(224, 169, 62, 0.4); background: var(--gold-dim);
+}
+
+/* Live rows in the Recent sponsors list — the whole row is a link. */
+a.sp-row { text-decoration: none; }
+a.sp-row:hover { border-color: rgba(224, 169, 62, 0.5); background: var(--panel-2); }
+a.sp-row:hover .sp-name { color: var(--gold-bright); }
+.sp-live .sp-amt { color: var(--text-faint); }
+
+/* Advertisers page — copyable feed-spec code block. */
+.codeblock {
+  position: relative; margin-top: 14px; padding: 16px 16px 14px;
+  background: var(--input-bg); border: 1px solid var(--input-line); border-radius: 12px;
+  font-family: var(--mono); font-size: 0.78rem; line-height: 1.55;
+  color: var(--text-dim); overflow-x: auto; white-space: pre;
+}
+.codeblock .code-copy { position: absolute; top: 10px; right: 10px; }
+.spec-field { color: var(--gold-bright); }
+.spec-string { color: var(--success); }
+.spec-num { color: var(--amber, #E2B45A); }
+.spec-comment { color: var(--text-faint); }

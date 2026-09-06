@@ -46,7 +46,7 @@
         Referrals
       </a>
       <p class="side-label">Advertise</p>
-      <a class="side-item side-disabled" href="#" onclick="return false" aria-disabled="true" title="Not part of the demo">
+      <a class="side-item" href="advertisers.html">
         <svg class="side-ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M3 11l16-6v14L3 13v-2z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>
         Campaigns
       </a>
@@ -123,6 +123,19 @@
                 <option value="cold-brew">Cold brew</option>
                 <option value="decaf">Decaf (why?)</option>
               </select>
+            </div>
+            <div class="field">
+              <label class="field-label" for="adFeedUrl">Ad feed URL <span class="pill pill-gold" style="margin-left:6px">real advertisers</span></label>
+              <div class="linkbox" style="margin-top:8px">
+                <input class="input" type="url" id="adFeedUrl" name="adFeedUrl"
+                       placeholder="https://example.com/freecoffee-feed.json" spellcheck="false"
+                       aria-describedby="adFeedUrlHint">
+                <button type="button" class="btn btn-ghost" id="testFeedBtn">Test</button>
+              </div>
+              <p class="footnote" id="adFeedUrlHint" style="margin-top:6px">Optional — plug in a real ad campaign feed
+                (affiliate network, offerwall, direct sponsor): an HTTPS URL returning a JSON array of campaigns.
+                See the <a href="advertisers.html">feed contract</a>. Leave empty to stay on the fictional demo sponsors.
+                Live campaigns display with a LIVE marker and never add to the simulated ledger.</p>
             </div>
             <div class="field">
               <span class="field-label" id="emailPrefsLabel">Email preferences</span>
@@ -268,6 +281,7 @@ Disclaimer: FreeCoffee demo — simulated data. Not affiliated with SponsorBar o
     $('displayName').value = p.displayName || 'Demo User';
     $('email').value = p.email || 'demo@freecoffee.local';
     $('coffeePref').value = p.coffeePref || 'flat-white';
+    $('adFeedUrl').value = p.adFeedUrl || '';
     $('prefWeekly').checked = p.prefWeekly !== false;
     $('prefPayout').checked = p.prefPayout !== false;
     $('prefProduct').checked = !!p.prefProduct;
@@ -279,6 +293,7 @@ Disclaimer: FreeCoffee demo — simulated data. Not affiliated with SponsorBar o
           displayName: $('displayName').value.trim() || 'Demo User',
           email: $('email').value.trim() || 'demo@freecoffee.local',
           coffeePref: $('coffeePref').value,
+          adFeedUrl: $('adFeedUrl').value.replace(/^\s+|\s+$/g, ''),
           prefWeekly: $('prefWeekly').checked,
           prefPayout: $('prefPayout').checked,
           prefProduct: $('prefProduct').checked,
@@ -286,6 +301,29 @@ Disclaimer: FreeCoffee demo — simulated data. Not affiliated with SponsorBar o
         }
       });
       toast('Profile saved — stored locally in freecoffee:v1. (demo)');
+    });
+
+    // Test the ad feed URL: fetch + strict-validate via the demo engine's
+    // fetchLiveCampaigns (never throws — always {campaigns, error}).
+    $('testFeedBtn').addEventListener('click', function () {
+      var D = window.FreeCoffeeDemo;
+      var url = $('adFeedUrl').value.replace(/^\s+|\s+$/g, '');
+      if (!url) { toast('Enter an https:// feed URL first.'); return; }
+      if (!D || typeof D.fetchLiveCampaigns !== 'function') {
+        toast('Feed testing unavailable (demo engine failed to load).');
+        return;
+      }
+      var btn = $('testFeedBtn');
+      btn.disabled = true;
+      D.fetchLiveCampaigns(url).then(function (res) {
+        btn.disabled = false;
+        if (res && !res.error && res.campaigns && res.campaigns.length) {
+          toast('Feed OK: ' + res.campaigns.length + ' campaign' +
+            (res.campaigns.length === 1 ? '' : 's') + ' — save changes to connect.');
+        } else {
+          toast('Feed error: ' + ((res && res.error) || 'unknown error'));
+        }
+      });
     });
 
     $('setupPayoutBtn').addEventListener('click', function () {

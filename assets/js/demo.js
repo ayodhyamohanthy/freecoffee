@@ -131,6 +131,127 @@
   }
 
   /* ------------------------------------------------------------------
+     Live-advertiser feed bridge — the pluggable AD FEED CONTRACT.
+
+     A feed is any HTTPS URL returning a JSON array of campaigns:
+       [
+         {
+           "id": "camp_001",
+           "sponsor": "Acme Coffee Co.",
+           "tagline": "Single-origin beans — 20% off first bag",
+           "clickUrl": "https://advertiser.example/offer?utm_source=freecoffee",
+           "cpm": 6.0,
+           "logoText": "AC",
+           "accent": "#C98F4E"
+         }
+       ]
+
+     fetchLiveCampaigns(feedUrl) → Promise<{campaigns, error}> — NEVER throws.
+       • 8 s AbortController timeout
+       • strict validation: https-only URLs (clickUrl must match the same
+         /^https?:\/\//i rule as every other URL here — http links are dropped),
+         strings trimmed + length-capped (sponsor 40, tagline 90, logoText 2,
+         id 40), cpm coerced to a number clamped 0–100, accent validated
+         /^#[0-9a-fA-F]{6}$/ (else the default caramel)
+       • dedupe by id, cap 20 campaigns
+       • invalid entries are skipped; the promise only rejects nothing —
+         failures come back as {error: '...'} with campaigns: [].
+
+     Live campaigns NEVER touch the ledger — they render only.
+     ------------------------------------------------------------------ */
+  var LIVE_LIMITS = {
+    MAX_CAMPAIGNS: 20,
+    TIMEOUT_MS: 8000,
+    ID: 40,
+    SPONSOR: 40,
+    TAGLINE: 90,
+    LOGO_TEXT: 2,
+    CPM_MIN: 0,
+    CPM_MAX: 100,
+    DEFAULT_ACCENT: '#C98F4E'
+  };
+
+  function capStr(val, max) {
+    if (typeof val !== 'string') return '';
+    return val.replace(/^\s+|\s+$/g, '').slice(0, max);
+  }
+
+  function isValidHttpsUrl(val) {
+    if (typeof val !== 'string') return false;
+    if (!/^https?:\/\//i.test(val)) return false;   // same URL rule as everywhere else
+    return /^https:\/\//i.test(val);                // feeds are https-only
+  }
+
+  function fetchLiveCampaigns(feedUrl) {
+    return new Promise(function (resolve) {
+      function fail(msg) { resolve({ campaigns: [], error: msg }); }
+
+      if (typeof feedUrl !== 'string' || !isValidHttpsUrl(feedUrl)) {
+        fail('Feed URL must be an https:// URL');
+        return;
+      }
+
+      var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      var timer = null;
+      if (controller) {
+        timer = setTimeout(function () { try { controller.abort(); } catch (e) { /* noop */ } },
+          LIVE_LIMITS.TIMEOUT_MS);
+      }
+
+      var opts = controller ? { signal: controller.signal } : {};
+      fetch(feedUrl, opts).then(function (res) {
+        if (!res || !res.ok) { fail('Feed fetch failed — HTTP ' + (res ? res.status : 'error')); return; }
+        return res.text().then(function (text) {
+          var data;
+          try { data = JSON.parse(text); } catch (e) { fail('Feed is not valid JSON'); return; }
+          if (!Array.isArray(data)) { fail('Feed must be a JSON array of campaigns'); return; }
+
+          var seen = {};
+          var out = [];
+          for (var i = 0; i < data.length && out.length < LIVE_LIMITS.MAX_CAMPAIGNS; i++) {
+            var raw = data[i];
+            if (!raw || typeof raw !== 'object') continue;
+
+            var sponsor = capStr(raw.sponsor, LIVE_LIMITS.SPONSOR);
+            var tagline = capStr(raw.tagline, LIVE_LIMITS.TAGLINE);
+            var id = capStr(raw.id, LIVE_LIMITS.ID) || ('camp_' + (i + 1));
+            var click = isValidHttpsUrl(raw.clickUrl) ? raw.clickUrl : '';
+            if (!sponsor) continue;               // a campaign without a name is unusable
+
+            // cpm: coerce to a finite number, clamp 0–100 (informational —
+            // live campaigns never inject earnings into the ledger).
+            var cpm = Number(raw.cpm);
+            if (!isFinite(cpm)) cpm = 0;
+            cpm = Math.min(LIVE_LIMITS.CPM_MAX, Math.max(LIVE_LIMITS.CPM_MIN, cpm));
+
+            var logo = capStr(raw.logoText, LIVE_LIMITS.LOGO_TEXT) ||
+              sponsor.split(/\s+/).map(function (w) { return w.charAt(0); }).join('').slice(0, 2).toUpperCase();
+            var accent = (typeof raw.accent === 'string' && /^#[0-9a-fA-F]{6}$/.test(raw.accent))
+              ? raw.accent : LIVE_LIMITS.DEFAULT_ACCENT;
+
+            if (seen[id]) continue;               // dedupe by id
+            seen[id] = true;
+            out.push({
+              id: id,
+              sponsor: sponsor,
+              tagline: tagline,
+              clickUrl: click,
+              cpm: cpm,
+              logoText: logo,
+              accent: accent
+            });
+          }
+          if (timer) clearTimeout(timer);
+          resolve({ campaigns: out, error: out.length ? null : 'Feed contained no valid campaigns' });
+        });
+      }).catch(function () {
+        if (timer) clearTimeout(timer);
+        fail('Feed fetch failed — network error, timeout, or blocked URL');
+      });
+    });
+  }
+
+  /* ------------------------------------------------------------------
      generateHistory(seed) → deterministic demo ledger + totals.
 
      ~9 days ending just before the fixed anchor. Each day produces
@@ -495,10 +616,43 @@
     var chipTimer = null;
     var balTimer = null;
 
+    // Live campaigns (real advertiser bridge): when non-empty, the chip and
+    // tag line rotate through THEM instead of the fictional sponsors, and a
+    // "LIVE CAMPAIGN" micro-label replaces the "Current winning sponsor"
+    // title. Display only — never touches the seeded ledger.
+    var liveCampaigns = [];
+
     function renderChip() {
-      var sp = order[idx % order.length];
-      if (chip) chip.textContent = sp.name;
-      if (tag) tag.textContent = sp.tag;
+      var useLive = liveCampaigns.length > 0;
+      var sp = useLive ? liveCampaigns[idx % liveCampaigns.length] : order[idx % order.length];
+      if (chip) {
+        chip.textContent = sp.name;
+        if (useLive) {
+          chip.setAttribute('title', 'LIVE CAMPAIGN — ' + sp.name);
+          if (sp.accent && /^#[0-9a-fA-F]{6}$/.test(sp.accent)) {
+            chip.style.backgroundColor = sp.accent;
+          } else {
+            chip.style.backgroundColor = '';
+          }
+        } else {
+          chip.setAttribute('title', 'Current winning sponsor');
+          chip.style.backgroundColor = '';
+        }
+      }
+      if (tag) {
+        // Micro-label before the tagline: "LIVE CAMPAIGN" when a real feed is
+        // connected, the fictional-sponsor title otherwise.
+        tag.textContent = '';
+        if (useLive) {
+          var label = document.createElement('span');
+          label.className = 'mb-live-label';
+          label.textContent = 'LIVE CAMPAIGN';
+          tag.appendChild(label);
+          tag.appendChild(document.createTextNode(sp.tag || ''));
+        } else {
+          tag.appendChild(document.createTextNode(sp.tag));
+        }
+      }
     }
 
     function renderClock() {
@@ -558,6 +712,48 @@
 
     startTimers();
 
+    // ---- Live campaign bridge (AD FEED CONTRACT) ---------------------------
+    // If a real advertiser feed is connected (profile page →
+    // freecoffee:v1 → profile.adFeedUrl), fetch it and rotate the chip/tag
+    // through the validated campaigns, updating the landing caption. Any
+    // failure leaves the fictional sponsors showing. Display only — the
+    // seeded ledger is never touched.
+    (function loadLiveCampaigns() {
+      var feedUrl = null;
+      try {
+        var raw = window.localStorage.getItem('freecoffee:v1');
+        var s = raw ? JSON.parse(raw) : null;
+        if (s && s.profile && typeof s.profile.adFeedUrl === 'string' && s.profile.adFeedUrl) {
+          feedUrl = s.profile.adFeedUrl;
+        }
+      } catch (e) { feedUrl = null; }
+      if (!feedUrl || typeof fetch !== 'function') return;
+      fetchLiveCampaigns(feedUrl).then(function (res) {
+        if (!res || res.error || !res.campaigns || !res.campaigns.length) return;
+        liveCampaigns = res.campaigns;
+        idx = 0;
+        renderChip();
+        // Landing-page caption + footnote go live-aware (index.html demo).
+        var demoBox = bar && bar.closest ? bar.closest('.menubar-demo') : null;
+        var note = demoBox ? demoBox.querySelector('.menubar-note') : null;
+        if (note) {
+          note.textContent = '';
+          var dot = document.createElement('span');
+          dot.className = 'live-dot';
+          dot.setAttribute('aria-hidden', 'true');
+          note.appendChild(dot);
+          note.appendChild(document.createTextNode(' LIVE — ' + liveCampaigns.length +
+            ' live campaign' + (liveCampaigns.length === 1 ? '' : 's') +
+            ' connected: this mock menu bar rotates your real feed.'));
+        }
+        var foot = demoBox ? demoBox.querySelector('.menubar-footnote') : null;
+        if (foot) {
+          foot.textContent = 'Sponsor chip rotates campaigns from your connected live feed (validated https URLs). ' +
+            'Live-campaign earnings settle once the platform backend is live — the demo ledger stays simulated.';
+        }
+      }).catch(function () { /* fetchLiveCampaigns never throws — belt and braces */ });
+    })();
+
     document.addEventListener('visibilitychange', function () {
       if (document.hidden) stopTimers(); else startTimers();
       renderClock(); markLive();
@@ -566,7 +762,15 @@
     return {
       pause: function () { paused = true; stopTimers(); markLive(); },
       resume: function () { paused = false; startTimers(); markLive(); },
-      isPaused: function () { return paused; }
+      isPaused: function () { return paused; },
+      /* Live-advertiser bridge: hand in validated campaigns (or []) to swap
+         the chip/tag rotation over to them (or back to the fictional
+         sponsors). Display only — the ledger is never touched. */
+      applyLiveCampaigns: function (campaigns) {
+        liveCampaigns = (Array.isArray(campaigns) && campaigns.length) ? campaigns.slice(0, 20) : [];
+        idx = 0;
+        renderChip();
+      }
     };
   }
 
@@ -660,6 +864,7 @@
     mulberry32: mulberry32,
     generateHistory: generateHistory,
     projectMonthly: projectMonthly,
+    fetchLiveCampaigns: fetchLiveCampaigns,
     cups: cups,
     initMenuBarDemo: initMenuBarDemo,
     initInstallUX: initInstallUX,
