@@ -5,14 +5,16 @@
      - precache (install):  the six pages + CSS + JS + icons, cache-first
      - navigations:         network-first, fall back to cache (then /index.html)
      - other same-origin GET: cache-first, runtime-cache misses
-     - cross-origin / non-GET: untouched (the demo has none, but be explicit)
+     - cross-origin / non-GET: untouched — this includes the platform
+       backend (POST /track, GET /earnings/…, GET /feed.json on a
+       workers.dev origin): dynamic, never precached, never cached.
 
    Version bump CACHE on any content change — activate() deletes old caches.
    ========================================================================== */
 /* eslint-disable no-restricted-globals */
 'use strict';
 
-var CACHE = 'freecoffee-v3';
+var CACHE = 'freecoffee-v4';
 
 var PRECACHE = [
   './',

@@ -822,6 +822,57 @@
   }
 
   /* ------------------------------------------------------------------
+     Platform-backend bridge (REAL earnings, not the demo ledger).
+
+     deviceId() — stable ANONYMOUS device id: a random UUID v4 created
+     once and kept in localStorage `freecoffee:device`. This is the only
+     identifier the backend ever sees — no account, no email, no PII.
+     Returns '' when storage is unavailable (node, private mode): real
+     tracking then silently stays off.
+
+     backendBase() — the configured platform-backend base URL
+     (profile page → freecoffee:v1 → profile.backendUrl), trimmed,
+     trailing slashes stripped, '' when unset. An empty value means the
+     site runs 100% offline-demo: nothing ever leaves the browser.
+
+     Both are browser-only by design — under `node` they return '' and
+     the demo engine is untouched.
+     ------------------------------------------------------------------ */
+  var DEVICE_STORE_KEY = 'freecoffee:device';
+
+  function deviceId() {
+    if (typeof window === 'undefined' || !window.localStorage) return '';
+    try {
+      var existing = window.localStorage.getItem(DEVICE_STORE_KEY);
+      if (existing && /^[a-f0-9-]{8,64}$/i.test(existing)) return existing;
+      var id;
+      if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+        id = window.crypto.randomUUID();
+      } else {
+        // RFC 4122 v4 fallback — Math.random is fine for a non-secret id.
+        id = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+          var r = Math.random() * 16 | 0;
+          var v = c === 'x' ? r : (r & 0x3 | 0x8);
+          return v.toString(16);
+        });
+      }
+      window.localStorage.setItem(DEVICE_STORE_KEY, id);
+      return id;
+    } catch (e) { return ''; }
+  }
+
+  function backendBase() {
+    if (typeof window === 'undefined' || !window.localStorage) return '';
+    try {
+      var raw = window.localStorage.getItem('freecoffee:v1');
+      var s = raw ? JSON.parse(raw) : null;
+      var url = (s && s.profile && typeof s.profile.backendUrl === 'string')
+        ? s.profile.backendUrl : '';
+      return url.replace(/^\s+|\s+$/g, '').replace(/\/+$/, '');
+    } catch (e) { return ''; }
+  }
+
+  /* ------------------------------------------------------------------
      PWA install UX (index.html hero + dashboard header). The #installBtn
      markup is hidden by default; it appears when beforeinstallprompt
      fires (captured + preventDefault'd), prompt() runs on click, and
@@ -913,11 +964,13 @@
     projectMonthly: projectMonthly,
     fetchLiveCampaigns: fetchLiveCampaigns,
     pickAd: pickAd,
+    deviceId: deviceId,
+    backendBase: backendBase,
     cups: cups,
     initMenuBarDemo: initMenuBarDemo,
     initInstallUX: initInstallUX,
     fmtTime: fmtTime,
     fmtDay: fmtDay,
-    version: '2.0.0-demo'
+    version: '2.1.0-demo'
   };
 });

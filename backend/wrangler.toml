@@ -1,0 +1,19 @@
+name = "freecoffee-backend"
+main = "src/worker.js"
+compatibility_date = "2026-01-01"
+
+# ── Fill these in (see README.md step ③) ─────────────────────────────────
+# Cloudflare dashboard → Workers & Pages → KV → Create a namespace →
+# copy its id here.
+account_id = "REPLACE_WITH_ACCOUNT_ID"
+
+[[kv_namespaces]]
+binding = "SITE_KV"
+id = "REPLACE_WITH_KV_ID"
+
+# ── Secrets (never committed) ─────────────────────────────────────────────
+# ADMIN_TOKEN  → `npx wrangler secret put ADMIN_TOKEN`
+#                (or dashboard → Worker → Settings → Variables → Encrypt)
+# ADAPTER_URL  → optional upstream feed URL; plain text var is fine, or a
+#                secret if the URL contains a key.
+# Variables reference: https://developers.cloudflare.com/workers/configuration/environment-variables/

@@ -581,6 +581,90 @@
   }
 
   /* ------------------------------------------------------------------
+     REAL EARNINGS (platform backend) — the live-money surface, kept
+     STRICTLY apart from the simulated ledger above. Active only when a
+     backend URL is configured (Profile → BACKEND API URL →
+     freecoffee:v1 → profile.backendUrl); hidden entirely otherwise.
+
+     Every 60 s while the page is visible and ads are not paused:
+       • POST {backend}/track   {deviceId, type:'impression',
+                                 campaignId:'demo', minutes:1}
+         (fire-and-forget, best-effort — failures are swallowed)
+       • GET  {backend}/earnings/{deviceId} → render the panel
+     All money math is server-side; this code only DISPLAYS what the
+     backend reports and never computes, caches, or fakes an amount.
+     It never touches state.history, balances, or the payout simulator.
+     ------------------------------------------------------------------ */
+  var REAL_EARN_NOTE = 'settles server-side via the platform backend — separate from the simulated ledger';
+  var REAL_EARN_INTERVAL_MS = 60000;
+
+  function initRealEarnings() {
+    var panel = $('realEarnPanel');
+    if (!panel) return;
+
+    var base = (D.backendBase && D.backendBase()) || '';
+    if (!base) { panel.hidden = true; return; }   // no backend → no panel at all
+
+    var dev = (D.deviceId && D.deviceId()) || '';
+    if (!dev) {
+      panel.hidden = false;
+      panel.style.opacity = '0.55';
+      $('realEarnNote').textContent = 'device id unavailable (storage blocked) — real tracking disabled';
+      return;
+    }
+    panel.hidden = false;
+
+    function trackImpression() {
+      if (state.paused || document.hidden) return;   // visible + not paused only
+      try {
+        fetch(base + '/track', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ deviceId: dev, type: 'impression', campaignId: 'demo', minutes: 1 })
+        }).catch(function () { /* best-effort — silent */ });
+      } catch (e) { /* best-effort — silent */ }
+    }
+
+    function renderEarnings(d) {
+      $('realEarnTotal').textContent = money(d.total);
+      $('realEarnToday').textContent = money(d.today && d.today.total);
+      $('realEarnMonthly').textContent = money(d.monthly && d.monthly.total);
+      $('realEarnImpressions').textContent = String(
+        (d.counters && Number(d.counters.impressions)) || 0);
+      $('realEarnClicks').textContent = String(
+        (d.counters && Number(d.counters.clicks)) || 0);
+    }
+
+    function fetchEarnings() {
+      try {
+        fetch(base + '/earnings/' + encodeURIComponent(dev))
+          .then(function (res) {
+            if (!res || !res.ok) throw new Error('HTTP ' + (res ? res.status : 'error'));
+            return res.json();
+          })
+          .then(function (d) {
+            if (!d || typeof d.total !== 'number') throw new Error('bad payload');
+            panel.style.opacity = '';                  // healthy again
+            $('realEarnNote').textContent = REAL_EARN_NOTE;
+            renderEarnings(d);
+          })
+          .catch(function () {
+            panel.style.opacity = '0.55';
+            $('realEarnNote').textContent =
+              'backend unreachable — check the URL in Profile, or redeploy the Worker (backend/README.md)';
+          });
+      } catch (e) { /* best-effort — silent */ }
+    }
+
+    trackImpression();
+    fetchEarnings();
+    window.setInterval(function () {
+      trackImpression();
+      fetchEarnings();
+    }, REAL_EARN_INTERVAL_MS);
+  }
+
+  /* ------------------------------------------------------------------
      Pause ads — stops earning ticks + demo cycler, updates status text.
      ------------------------------------------------------------------ */
   var menubarDemo = D.initMenuBarDemo();
@@ -719,6 +803,10 @@
     var disconnectBtn = $('liveDisconnectBtn');
     if (disconnectBtn) disconnectBtn.addEventListener('click', disconnectLiveFeed);
     initLiveFeed();
+
+    // Real-earnings bridge (platform backend): impression heartbeats +
+    // earnings poll, rendered into the separate REAL EARNINGS panel.
+    initRealEarnings();
 
     document.addEventListener('visibilitychange', function () {
       // Ticker naturally skips hidden tabs; re-render on return so the

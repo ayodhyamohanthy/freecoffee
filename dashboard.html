@@ -277,6 +277,40 @@
         </aside>
       </div>
 
+      <!-- ============ REAL EARNINGS (platform backend) ============
+           Hidden until a backend URL is configured in Profile →
+           BACKEND API URL. Shows ONLY what the FreeCoffee Worker
+           actually recorded — never mixed with the simulated ledger.
+           Populated/updated by dashboard.js → initRealEarnings(). -->
+      <section class="card sim" id="realEarnPanel" aria-label="Real earnings, settled server-side" hidden>
+        <h2>REAL EARNINGS (backend)</h2>
+        <p class="section-sub">Live placements reported to the platform backend — real, settled
+          server-side, and entirely separate from the simulated ledger above.</p>
+        <div style="margin-bottom:6px">
+          <p class="micro">Settled total</p>
+          <p class="balcard-total" id="realEarnTotal">$0.00</p>
+        </div>
+        <div class="balcard-divs">
+          <div class="balcell">
+            <p class="balcap">Today</p>
+            <p class="balnum" id="realEarnToday">$0.00</p>
+          </div>
+          <div class="balcell">
+            <p class="balcap">This month</p>
+            <p class="balnum" id="realEarnMonthly">$0.00</p>
+          </div>
+          <div class="balcell">
+            <p class="balcap">Impressions</p>
+            <p class="balnum" id="realEarnImpressions">0</p>
+          </div>
+          <div class="balcell">
+            <p class="balcap">Clicks</p>
+            <p class="balnum" id="realEarnClicks">0</p>
+          </div>
+        </div>
+        <p class="footnote" id="realEarnNote" style="margin-top:14px">settles server-side via the platform backend — separate from the simulated ledger</p>
+      </section>
+
       <!-- ============ PAYOUT SIMULATOR ============ -->
       <section class="card sim" aria-label="Payout simulator">
         <h2>Payout simulator</h2>
@@ -328,7 +362,7 @@
     </main>
 
     <footer class="shell-foot">
-      <p class="disclaimer" style="border-top:0;padding-top:0">FreeCoffee demo — simulated data. Not affiliated with SponsorBar or KickBot Inc.</p>
+      <p class="disclaimer" style="border-top:0;padding-top:0">FreeCoffee demo — simulated data. The REAL EARNINGS panel (when enabled) reports only what the platform backend records. Not affiliated with SponsorBar or KickBot Inc.</p>
     </footer>
   </div>
 </div>

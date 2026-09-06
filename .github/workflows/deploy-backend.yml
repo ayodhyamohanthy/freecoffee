@@ -1,0 +1,69 @@
+# FreeCoffee — deploy the backend Worker on every push that touches backend/.
+#
+# Two deployment paths exist (see backend/README.md):
+#   A. Cloudflare Workers Builds (dashboard "Connect to Git") — this workflow
+#      is then redundant; it will still run tests and stay green.
+#   B. This workflow — requires the CLOUDFLARE_API_TOKEN repo secret.
+#
+# The run NEVER fails when the secret is absent: secrets cannot be referenced
+# from `if:` directly, so the presence check is published to a step output via
+# an env var (the env-echo trick) and the deploy step keys off that output.
+
+name: Deploy backend
+
+on:
+  push:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/deploy-backend.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Unit tests (pure helpers, no network)
+        working-directory: backend
+        run: |
+          node --check src/worker.js
+          node test.mjs
+
+      # env-echo trick: secrets are not allowed in `if:`, but env vars are.
+      - name: Check for CLOUDFLARE_API_TOKEN
+        id: token
+        env:
+          HAS_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+        run: echo "has_token=$HAS_TOKEN" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy to Cloudflare Workers
+        if: steps.token.outputs.has_token == 'true'
+        working-directory: backend
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler@latest deploy
+
+      - name: Deploy skipped — how to enable auto-deploy
+        if: steps.token.outputs.has_token != 'true'
+        run: |
+          echo "Set CLOUDFLARE_API_TOKEN secret to enable auto-deploy (or use Workers Builds)."
+          echo ""
+          echo "  Option A (no token at all): dash.cloudflare.com → Workers & Pages →"
+          echo "    Create → Connect to Git → this repo, root directory: backend."
+          echo "  Option B (this workflow):"
+          echo "    1. dash.cloudflare.com → My Profile → API Tokens → Create Token →"
+          echo "       'Edit Cloudflare Workers' template → Create."
+          echo "    2. GitHub → this repo → Settings → Secrets and variables → Actions →"
+          echo "       New repository secret → Name: CLOUDFLARE_API_TOKEN."
+          echo "    3. Push again (or Actions → Deploy backend → Run workflow)."

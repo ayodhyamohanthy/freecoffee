@@ -1,0 +1,124 @@
+# FreeCoffee — bump the Homebrew tap (ayodhyamohanthy/freecoffee-tap).
+#
+# Run manually: Actions → "Bump Homebrew tap" → Run workflow → fill version
+# (+ optionally the DMG sha256 and URL).
+#
+# Honest behavior:
+#   • ALWAYS prints the exact updated Casks/freecoffee.rb content and the
+#     one-line `gh` commands a maintainer can paste to apply it by hand.
+#   • If the TAP_TOKEN repo secret exists (a PAT with Contents:write on the
+#     tap repo), the Cask is ALSO updated automatically via the gh CLI.
+#   • With no TAP_TOKEN the run stays green and simply prints instructions.
+
+name: Bump Homebrew tap
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Cask version, e.g. 1.0.1'
+        required: true
+      dmg_sha256:
+        description: 'sha256 of FreeCoffee.dmg (empty = compute from dmg_url)'
+        required: false
+        default: ''
+      dmg_url:
+        description: 'DMG download URL (empty = latest GitHub release asset)'
+        required: false
+        default: 'https://github.com/ayodhyamohanthy/freecoffee/releases/latest/download/FreeCoffee.dmg'
+
+permissions:
+  contents: read
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve inputs, compute sha256 if missing
+        id: meta
+        env:
+          VERSION_IN: ${{ inputs.version }}
+          SHA_IN: ${{ inputs.dmg_sha256 }}
+          URL_IN: ${{ inputs.dmg_url }}
+        run: |
+          set -eu
+          VERSION=$(echo "$VERSION_IN" | tr -d '[:space:]')
+          DMG_URL=$(echo "$URL_IN" | tr -d '[:space:]')
+          [ -n "$DMG_URL" ] || DMG_URL="https://github.com/ayodhyamohanthy/freecoffee/releases/latest/download/FreeCoffee.dmg"
+          echo "$VERSION" | grep -Eq '^[A-Za-z0-9._-]+$' || {
+            echo "::error::version must match [A-Za-z0-9._-]+ (got: $VERSION)"; exit 1; }
+          case "$DMG_URL" in
+            https://*) : ;;
+            *) echo "::error::dmg_url must be an https:// URL"; exit 1 ;;
+          esac
+          if [ -n "$SHA_IN" ]; then
+            SHA256=$(echo "$SHA_IN" | tr -d '[:space:]')
+          else
+            echo "dmg_sha256 empty — computing from $DMG_URL"
+            SHA256=$(curl -fsSL "$DMG_URL" | shasum -a 256 | cut -d' ' -f1)
+          fi
+          case "$SHA256" in
+            HEAD) : ;;
+            *) echo "$SHA256" | grep -Eq '^[0-9a-fA-F]{64}$' || {
+                 echo "::error::sha256 must be 64 hex chars (got: $SHA256)"; exit 1; } ;;
+          esac
+          {
+            echo "version=$VERSION"
+            echo "sha256=$SHA256"
+            echo "dmg_url=$DMG_URL"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Render exact Cask content
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          SHA256: ${{ steps.meta.outputs.sha256 }}
+          DMG_URL: ${{ steps.meta.outputs.dmg_url }}
+        run: |
+          cat > freecoffee.rb <<EOF
+          cask "freecoffee" do
+            version "${VERSION}"
+            sha256 "${SHA256}"
+
+            url "${DMG_URL}"
+            name "FreeCoffee"
+            desc "Menu-bar advertising demo — your menu bar buys the coffee"
+            homepage "https://ayodhyamohanthy.github.io/freecoffee/"
+
+            app "FreeCoffee.app"
+          end
+          EOF
+          echo "===== EXACT updated Casks/freecoffee.rb ====="
+          cat freecoffee.rb
+          echo "===== Manual one-line gh commands (no TAP_TOKEN needed) ====="
+          echo "# 1. If Casks/freecoffee.rb already exists, grab its blob sha (404 = first create, skip step 2):"
+          echo "gh api repos/ayodhyamohanthy/freecoffee-tap/contents/Casks/freecoffee.rb --jq .sha || true"
+          echo "# 2. Write the cask (append  -f sha=<sha from step 1>  when the file already existed):"
+          echo "gh api repos/ayodhyamohanthy/freecoffee-tap/contents/Casks/freecoffee.rb --method PUT -f message='freecoffee ${VERSION}' -f content=\"\$(base64 -w0 freecoffee.rb)\""
+
+      # env-echo trick: secrets are not allowed in `if:`, but env vars are.
+      - name: Check for TAP_TOKEN
+        id: token
+        env:
+          HAS_TOKEN: ${{ secrets.TAP_TOKEN != '' }}
+        run: echo "has_token=$HAS_TOKEN" >> "$GITHUB_OUTPUT"
+
+      - name: Push Cask update to ayodhyamohanthy/freecoffee-tap
+        if: steps.token.outputs.has_token == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.TAP_TOKEN }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          SHA256: ${{ steps.meta.outputs.sha256 }}
+          DMG_URL: ${{ steps.meta.outputs.dmg_url }}
+        run: |
+          CUR_SHA=$(gh api repos/ayodhyamohanthy/freecoffee-tap/contents/Casks/freecoffee.rb --jq '.sha' 2>/dev/null || true)
+          ARGS=(-f message="freecoffee ${VERSION}" -f content="$(base64 -w0 freecoffee.rb)")
+          if [ -n "$CUR_SHA" ]; then ARGS+=(-f sha="$CUR_SHA"); fi
+          gh api --method PUT repos/ayodhyamohanthy/freecoffee-tap/contents/Casks/freecoffee.rb "${ARGS[@]}" \
+            --jq '.commit.sha' | xargs -I{} echo "Cask committed to freecoffee-tap: {}"
+
+      - name: Auto-push skipped — TAP_TOKEN not set
+        if: steps.token.outputs.has_token != 'true'
+        run: |
+          echo "TAP_TOKEN secret not set — the Cask content above was printed, not pushed."
+          echo "Set a PAT (Contents: read/write on ayodhyamohanthy/freecoffee-tap) as the"
+          echo "TAP_TOKEN repository secret to make this workflow push the bump itself."
