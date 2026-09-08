@@ -28,14 +28,17 @@ That's it — any static file server works.
 | Page | What it is |
 |---|---|
 | `index.html` | Landing page: hero with a **live CSS/DOM mock of the macOS menu bar** (rotating sponsor chip, ticking clock, growing balance) **plus a mock of the menu-bar popover** (TOTAL BALANCE block with cups hint, caramel boost line, 7-day bar chart, footer buttons), how-it-works, FreeCoffee-vs-SponsorBar comparison, the privacy data boundary, FAQ. |
-| `dashboard.html` | App-shell page (**Earn › Overview**). Sidebar + breadcrumb shell, balance stat card (Total **$28.55** "≈ 5 cups", Available, Pending, This week, payout-progress toward the $2 minimum), a 14-day SVG area chart (caramel line, y-grid, dotted markers), the full ledger with winning bids and exact cuts, an "Action required" panel, a "Recent sponsors" list, and the live payout simulator. Dismissible Setup-guide and promo cards in the sidebar. `localStorage` key: `freecoffee:v1`. |
-| `payouts.html` | App-shell page (**Earn › Payouts**). The payout model in plain numbers: lever table, honesty policy, sustainability math (worked example), anti-fraud controls, payout rails. |
+| `dashboard.html` | App-shell page (**Earn › Overview**, light theme). Sidebar + breadcrumb shell, balance stat card (Total **$28.55** "≈ 5 cups", Available, Pending, This week, payout-progress toward the $2 minimum), a 14-day SVG area chart (slate-teal line `#4C7A8A` on fill `#DFE9ED`, y-grid, dotted markers), the full ledger with winning bids and exact cuts, an "Action required" panel, a "Recent sponsors" list, and the live payout simulator. Dismissible Setup-guide ("1 of 4 complete") and dark promo cards in the sidebar. `localStorage` key: `freecoffee:v1`. |
+| `payouts.html` | App-shell page (**Earn › Payouts**, light theme). Choose how you get paid: Stripe (gold gradient CTA) and Whop (orange gradient CTA) rails split by a divider — clicking marks `freecoffee:v1 → profile.payoutRail` connected (demo-only until the backend payout integration), a Balance 3-stat strip (Total/Available/Pending from the seeded ledger), and the Withdrawal history table fed by simulated `paidOut` records (empty state until the first simulated payout). |
+| `model.html` | App-shell page (**Account › Payout model**, light theme). The payout model in plain numbers: lever table, honesty policy, sustainability math (worked example), anti-fraud controls, payout rails. |
+| `campaigns.html` | App-shell page (**Advertise › Campaigns**, light theme). Advertiser-side management view with honest zeros (Active 0 / In review 0 / Total spend $0.00 / Impressions 0), working filter tabs (All/Running/In review/Paused/Archived + "N shown"), and the "No campaigns yet" empty state with a gold CTA to the advertiser pitch. |
 | `profile.html` | App-shell page (**Account › Profile**). Wide Account form (display name, email, coffee preference, email prefs → saved with a toast to `freecoffee:v1`) plus Payout account (Not set up + Set up), Connected Mac (green Connected pill, "This Mac · macOS 26", Unlink with confirm), and AI agents (Copy setup prompt → clipboard). |
 | `referrals.html` | App-shell page (**Earn › Referrals**). Referral link card (URL + Copy → clipboard), rewards cards, a 3-stat row (referred users **2** / referral earnings **$2.82** / next tier), and the referee table from the seeded ledger. |
-| `assets/js/demo.js` | Seeded PRNG (mulberry32, seed 42), history generator, projection math, cups helper, menu-bar demo + popover mock cycler. Also CommonJS-exported — `node` can `require` it. |
-| `assets/js/dashboard.js` | Dashboard rendering + interactions. All dynamic strings go through `textContent`/`createElement` — no `innerHTML` with dynamic data. |
+| `advertisers.html` | App-shell page (**Advertise › Campaigns**). The advertiser pitch + self-serve onboarding: hero, how-it-works (submit feed → review → live), the copyable feed contract JSON, the honesty box (what the client reports today vs what needs the platform backend), pricing (auction CPM with tier floors, $15 minimum, 65% to the user), and the contact card (`advertisers@freecoffee.tech`). |
+| `assets/js/demo.js` | Seeded PRNG (mulberry32, seed 42), history generator, projection math, cups helper, menu-bar demo + popover mock cycler, and the live-feed bridge (`fetchLiveCampaigns` — the AD FEED CONTRACT client). Also CommonJS-exported — `node` can `require` it. |
+| `assets/js/dashboard.js` | Dashboard rendering + interactions, plus the live-campaign surfaces (banner under the balance card, LIVE rows in Recent sponsors, disconnect). All dynamic strings go through `textContent`/`createElement` — no `innerHTML` with dynamic data. |
 | `assets/css/styles.css` | The whole design system: espresso darks, coffee-gold `#E0A93E` family, the app-shell (sidebar / breadcrumb / cards), popover panel, forms, tables, chips, toggles, sliders, toasts, the menu-bar mock, responsive stacking, `:focus-visible`, `prefers-reduced-motion`. |
-| `manifest.webmanifest` + `sw.js` | The PWA layer: installable manifest (standalone display, `#E0A93E` theme) and the service worker that precaches all five pages. See **PWA — installable web app** below. |
+| `manifest.webmanifest` + `sw.js` | The PWA layer: installable manifest (standalone display, `#E0A93E` theme) and the service worker that precaches all eight pages. See **PWA — installable web app** below. |
 | `assets/icons/` | Generated PWA icons (192, 512, 512 maskable) — same coffee-cup generator as the Mac app icon. |
 | `app/` | The Mac menu-bar app (see below). |
 
@@ -93,21 +96,21 @@ Items instead. Details: [`app/Info-howto.md`](app/Info-howto.md).
 
 The site is also a full PWA (works entirely offline after first visit — no backend anywhere).
 
-- **What works offline:** all five pages (`index.html`, `dashboard.html`, `payouts.html`,
-  `profile.html`, `referrals.html`), the stylesheet, both scripts, and the icons are precached at
-  install. The seeded demo engine is deterministic, so the dashboard renders identically offline;
-  the payout simulator, ledger, chart, profile form, and pause/payout interactions all work with
-  no network.
+- **What works offline:** all eight pages (`index.html`, `dashboard.html`, `payouts.html`, `model.html`,
+  `campaigns.html`, `profile.html`, `referrals.html`, `advertisers.html`), the stylesheet, both scripts, and the icons
+  are precached at install. The seeded demo engine is deterministic, so the dashboard renders
+  identically offline; the payout simulator, ledger, chart, profile form, and pause/payout
+  interactions all work with no network. A connected live feed needs the network for fresh fetches,
+  but the last-fetched campaigns are cached in `freecoffee:v1` and still render.
 - **Install on desktop Chrome/Edge:** the **Install app** button in the hero/dashboard (it appears
   when the browser fires `beforeinstallprompt`) or the browser's own install icon in the address bar.
 - **Install on iOS Safari:** iOS never fires the prompt event — use **Share → Add to Home
   Screen** (the site shows this hint line on iPhones). Requires HTTPS or localhost serving.
-- **Service worker caching behavior** (`sw.js`, cache `freecoffee-v1`): precached app shell is served
+- **Service worker caching behavior** (`sw.js`, cache `freecoffee-v5`): precached app shell is served
   cache-first; navigations are network-first with cache fallback (so content updates when you're
   online); other same-origin GETs are runtime-cached on first fetch; cross-origin and non-GET
-  requests are untouched. Bump `CACHE` to `freecoffee-v2` when changing content — `activate()`
-  deletes old caches automatically, and `skipWaiting`/`clients.claim` make updates take effect on
-  reload.
+  requests are untouched. Bump `CACHE` when changing content — `activate()` deletes old caches
+  automatically, and `skipWaiting`/`clients.claim` make updates take effect on reload.
 - Served over plain `python3 -m http.server`, the SW registers on `http://127.0.0.1:*` (localhost
   is a secure context). On `file://` the registration is skipped by design.
 - **Storage:** the demo persists to `localStorage` key **`freecoffee:v1`**. If an older demo wrote
@@ -135,6 +138,79 @@ The site is also a full PWA (works entirely offline after first visit — no bac
 SponsorBar comparisons on the site use only figures observed on sponsorbar.io, Sep 2026. SponsorBar's
 base share is not published and is never quoted or compared against — there is no "we pay more" claim.
 
+## Connecting real advertisers
+
+FreeCoffee has a pluggable ad-feed contract: when you obtain **any** real ad campaign — an affiliate
+feed, an offerwall, or a direct sponsor — it plugs in by pasting **one HTTPS URL**. No rebuild, no
+backend, no code changes. Campaigns from the feed render with a **LIVE** marker in the menu bar,
+on the dashboard, and on the landing demo; the honest labels say what is true: live campaigns are
+*connected*, but their **earnings settle once the platform backend is live** — they never inject
+anything into the simulated demo ledger.
+
+### The feed contract
+
+A feed is any HTTPS URL returning a JSON array of campaigns:
+
+```json
+[
+  {
+    "id": "camp_001",
+    "sponsor": "Acme Coffee Co.",
+    "tagline": "Single-origin beans — 20% off first bag",
+    "clickUrl": "https://advertiser.example/offer?utm_source=freecoffee",
+    "cpm": 6.0,
+    "logoText": "AC",
+    "accent": "#C98F4E"
+  }
+]
+```
+
+| Field | Type | Rules |
+|---|---|---|
+| `id` | string | Unique, max 40 chars; duplicates dropped. Optional (falls back to array position). |
+| `sponsor` | string | Brand name, trimmed, max 40 chars. **Required** — entries without it are skipped. |
+| `tagline` | string | One line of creative, trimmed, max 90 chars. Optional. |
+| `clickUrl` | string | Must be `https://`. Anything else is dropped; the campaign renders linkless. |
+| `cpm` | number | What the platform earns per 1,000 verified minutes. Coerced, clamped 0–100. |
+| `logoText` | string | 1–2 char monogram. Optional (initials derived from the sponsor name). |
+| `accent` | string | Optional `#RRGGBB` tile color; invalid values fall back to the default caramel. |
+
+Validation is identical on both clients (web: `assets/js/demo.js → fetchLiveCampaigns`; Mac app:
+`config.json → adFeedURL`): 8-second timeout, https-only URLs, trimmed/capped strings, deduped by
+`id`, capped at **20 campaigns**, invalid entries skipped — and a failed feed always falls back to
+the fictional demo sponsors without touching earnings math.
+
+### Where real campaigns come from (three realistic channels, ranked)
+
+1. **Affiliate feeds** — networks like **Impact** or **PartnerStack** expose offer feeds / APIs you
+   can transform into the JSON shape above with a small script hosted anywhere. Fastest route to a
+   real, varied inventory; you pick offers that fit a menu-bar audience.
+2. **Offerwall APIs** — **BitLabs**, **TapResearch**, and similar offerwall APIs return JSON offer
+   lists (surveys, app trials) with payout rates; map their fields to the contract (`cpm` ← their
+   payout rate) and the bridge does the rest.
+3. **Direct sponsors** — coffee brands are the natural pitch: a roaster's "20% off your first bag"
+   chip in the menu bar of people who literally measure their day in cups. One sponsor, one JSON
+   file on their CDN — the pitch page is [`advertisers.html`](advertisers.html).
+
+### The self-serve flow (advertisers.html)
+
+The **Advertise › Campaigns** page (`advertisers.html`) is the pitch + onboarding in one: the hero,
+how review works, the copyable feed spec, the honesty box, and the pricing card (auction CPM with
+the published tier floors, $15 minimum campaign spend, 65% to the user). The flow: host the JSON
+anywhere HTTPS (GitHub raw, your CDN, your server) → paste the URL into **Profile › Ad feed URL**
+(Test button verifies it) → campaigns appear in the menu bar and dashboard. Email
+`advertisers@freecoffee.tech` for the review step — every campaign is human-reviewed before it can
+reach other users.
+
+### Honesty note (read this before pitching)
+
+**The feed bridge is live today; payment collection and advertiser-facing reporting are not.** The
+client counts impressions/clicks locally (demo accounting on simulated numbers) and we do not
+pretend otherwise: no fabricated delivery dashboards, no invoices until the platform backend and
+payment rails exist. What you can honestly demo today is the full placement experience — your
+brand rotating in the menu bar, LIVE-marked everywhere, with the exact verification rules the
+production platform will bill on.
+
 ## Demo-data honesty
 
 - All sponsors are fictional: **Northline, Ledgerly, Fernhill Coffee, Breeze VPN, Kite Studio**.
@@ -145,6 +221,28 @@ base share is not published and is never quoted or compared against — there is
   **$28.55** and available + pending = lifetime, always.
 - No analytics, no network calls, no third-party code anywhere in this folder.
 
+
+## Going live for real money
+
+The site above stays a demo forever unless you flip one switch: the
+**production backend** in [`backend/`](backend/README.md) — a Cloudflare
+Worker + KV on the free plan that serves the validated feed (`/feed.json`),
+records impressions/clicks (`/track`), and settles a **real** per-device
+earnings ledger (`/earnings/{deviceId}`). Money math is server-side only;
+the client reports `minutes` + `type` and nothing else.
+
+**Honest separation, everywhere:** the REAL EARNINGS (backend) panel on the
+dashboard appears **only** when Profile → BACKEND API URL is set, shows only
+what the Worker actually recorded, and is labeled as separate from the
+simulated ledger. Empty URL = 100% offline demo; nothing ever leaves the
+browser. The two ledgers never mix.
+
+The account checklist — Cloudflare (free), a KV namespace, `ADMIN_TOKEN`,
+one free ad network, the optional CI token — with exact click-paths lives in
+[`backend/ACCOUNT-CHECKLIST.md`](backend/ACCOUNT-CHECKLIST.md). Deployment
+details (Workers Builds "Connect to Git" with zero tokens, or the included
+`.github/workflows/deploy-backend.yml` with `CLOUDFLARE_API_TOKEN`) are in
+[`backend/README.md`](backend/README.md).
 
 ## Hosting & domain
 
