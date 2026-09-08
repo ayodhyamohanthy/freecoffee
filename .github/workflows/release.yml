@@ -25,18 +25,9 @@ jobs:
 
       - name: Build (universal arm64 + x86_64 → .app → .dmg)
         working-directory: app
-        run: ./build.sh 2>&1 | tee build.log
-
-      - name: Push build log for triage (only on failure)
-        if: failure()
-        working-directory: app
         run: |
-          git config user.email "ci@freecoffee.tech"
-          git config user.name "FreeCoffee CI"
-          git checkout -B ci-log
-          git add build.log
-          git commit -m "ci: build log for triage"
-          git push -q -f origin ci-log || true
+          set -o pipefail
+          ./build.sh 2>&1 | tee build.log
 
       - name: SHA256 checksums
         working-directory: app
@@ -53,6 +44,17 @@ jobs:
           path: |
             app/dist/FreeCoffee.dmg
             app/dist/SHA256SUMS.txt
+
+      - name: Push build log for triage (only on failure)
+        if: failure()
+        working-directory: app
+        run: |
+          git config user.email "ci@freecoffee.tech"
+          git config user.name "FreeCoffee CI"
+          git checkout -B ci-log
+          git add build.log
+          git commit -m "ci: build log for triage" || true
+          git push -q -f origin ci-log || true
 
       - name: Attach to GitHub Release (tag runs)
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
