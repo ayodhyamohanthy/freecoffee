@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Install Guide — Open FreeCoffee when Apple blocks it | FreeCoffee</title>
+<meta name="description" content="Step-by-step guide: install FreeCoffee from the DMG when macOS Gatekeeper shows 'Apple could not verify…'. Right-click Open, Open Anyway, and the damaged-app fix.">
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #fff; color: #1C1B1A; line-height: 1.65; padding: 0 1rem 4rem; max-width: 760px; margin: 0 auto; }
+  header { padding: 2rem 0 1rem; border-bottom: 1px solid #E7E5E4; margin-bottom: 2rem; }
+  .crumb { font-size: .85rem; color: #71717A; margin-bottom: .8rem; }
+  .crumb a { color: #1C1B1A; text-decoration: none; }
+  h1 { font-size: 1.7rem; margin-bottom: .4rem; }
+  .sub { color: #71717A; font-size: 1rem; }
+  h2 { font-size: 1.2rem; margin: 2rem 0 .6rem; }
+  h3 { font-size: 1.02rem; margin: 1.4rem 0 .4rem; }
+  p { margin: .6rem 0; }
+  ol, ul { padding-left: 1.5rem; margin: .6rem 0; }
+  li { margin: .45rem 0; }
+  .step { background: #FAFAF9; border: 1px solid #E7E5E4; border-radius: 10px; padding: 1rem 1.2rem; margin: .9rem 0; }
+  .step h3 { margin-top: 0; }
+  code { background: #F4F2EF; border: 1px solid #E7E5E4; border-radius: 5px; padding: .12rem .4rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .88em; }
+  pre { background: #1C1917; color: #F5EFE6; border-radius: 8px; padding: .9rem 1.1rem; overflow-x: auto; margin: .7rem 0; }
+  pre code { background: none; border: none; color: inherit; }
+  .warn { background: #FFF7ED; border: 1px solid #FED7AA; border-radius: 8px; padding: .8rem 1rem; margin: .9rem 0; }
+  .ok-box { background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 8px; padding: .8rem 1rem; margin: .9rem 0; }
+  .tip { color: #71717A; font-size: .92rem; }
+  a { color: #9A7526; }
+  footer { border-top: 1px solid #E7E5E4; margin-top: 3rem; padding-top: 1rem; color: #71717A; font-size: .85rem; }
+  details { border: 1px solid #E7E5E4; border-radius: 8px; padding: .7rem 1rem; margin: .6rem 0; }
+  summary { font-weight: 600; cursor: pointer; }
+  @media (max-width: 640px) { body { padding: 0 .8rem 3rem; } h1 { font-size: 1.4rem; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="crumb"><a href="./index.html">FreeCoffee</a> › <a href="./dashboard.html">Dashboard</a> › Install guide</div>
+  <h1>Installing FreeCoffee when Apple blocks it</h1>
+  <p class="sub">A plain-English walkthrough for the "Apple could not verify…" message. Works on macOS 13 Ventura and later (including macOS 26). Two minutes, once.</p>
+</header>
+
+<div class="ok-box"><strong>Why this happens:</strong> FreeCoffee is an <strong>open-source demo app that isn't signed with a paid Apple certificate</strong> ($99/yr). macOS shows the same warning for <em>every</em> unsigned app — it does <strong>not</strong> mean the app has a virus. Our app is a single readable Swift file you can audit in the <a href="https://github.com/ayodhyamohanthy/freecoffee">public repo</a>, and it never reads your screen, files, or keystrokes.</div>
+
+<h2>Method 1 — Right-click → Open (easiest)</h2>
+<div class="step">
+  <ol>
+    <li>Open the downloaded <strong>FreeCoffee.dmg</strong> (double-click it in Downloads).</li>
+    <li>In the window that appears, <strong>drag FreeCoffee into Applications</strong>.</li>
+    <li>Open Applications, <strong>right-click (or two-finger click) FreeCoffee → Open</strong>.</li>
+    <li>A dialog appears with the app name — click <strong>Open</strong> in that dialog. (If you only see "Cancel", see Method 2.)</li>
+  </ol>
+  <p class="tip">You only do this <strong>once</strong>. After that, FreeCoffee opens like any normal app.</p>
+</div>
+
+<h2>Method 2 — "Open Anyway" in System Settings</h2>
+<div class="step">
+  <ol>
+    <li>Double-click FreeCoffee once — the "Apple could not verify" dialog appears. Click <strong>Done</strong> (not "Move to Bin").</li>
+    <li>Open <strong> System Settings → Privacy &amp; Security</strong> (on macOS 12 and earlier: System Preferences → Security &amp; Privacy → General).</li>
+    <li>Scroll down to the <strong>Security</strong> section. You'll see: <em>"FreeCoffee was blocked from use because it is not from an identified developer."</em></li>
+    <li>Click <strong>Open Anyway</strong>, authenticate with your password or Touch ID, then click <strong>Open</strong> in the follow-up dialog.</li>
+  </ol>
+  <p class="tip">macOS 26 note: the Open Anyway button can take up to a minute to appear after the block — wait a moment and reopen Settings.</p>
+</div>
+
+<h2>Method 3 — One Terminal command (removes the warning completely)</h2>
+<div class="step">
+  <ol>
+    <li>Install FreeCoffee using Method 1 (drag to Applications).</li>
+    <li>Open <strong>Terminal</strong> (Applications → Utilities → Terminal).</li>
+    <li>Paste this exact line and press Return:</li>
+  </ol>
+  <pre><code>xattr -dr com.apple.quarantine /Applications/FreeCoffee.app</code></pre>
+  <p>That removes the "downloaded from the internet" flag. FreeCoffee now opens by double-click, forever, with no dialogs.</p>
+</div>
+
+<h2>Zero-warning option — Homebrew</h2>
+<p>If you use <a href="https://brew.sh" rel="noopener">Homebrew</a>, the cask strips the flag automatically — no Terminal, no dialogs, and future updates come through <code>brew upgrade</code>:</p>
+<pre><code>brew tap ayodhyamohanthy/freecoffee https://github.com/ayodhyamohanthy/freecoffee-tap
+brew install --cask ayodhyamohanthy/freecoffee/freecoffee</code></pre>
+
+<h2>Troubleshooting every common message</h2>
+<details>
+  <summary>"FreeCoffee cannot be opened because Apple cannot check it for malicious software."</summary>
+  <p>The standard Gatekeeper block. Use Method 1 or 2 above. If Open Anyway isn't visible yet, wait ~1 minute — macOS populates it after the first block.</p>
+</details>
+<details>
+  <summary>"FreeCoffee can't be opened because it is from an unidentified developer."</summary>
+  <p>Same block, older wording (macOS 12 and earlier). Same fix: right-click → Open, or Open Anyway in Security &amp; Privacy.</p>
+</details>
+<details>
+  <summary>"FreeCoffee is damaged and can't be opened. You should move it to the Bin."</summary>
+  <p>This appears when the download was interrupted or when macOS added the quarantine flag in a way the app can't read. Two fixes, in order:</p>
+  <ol>
+    <li>Run: <code>xattr -dr com.apple.quarantine /Applications/FreeCoffee.app</code> then open the app again.</li>
+    <li>If it still fails, re-download the DMG (the file may be truncated) and repeat Method 1.</li>
+  </ol>
+  <p>Verify your download: the DMG should be <strong>181,825 bytes</strong> (v1.0.1).</p>
+</details>
+<details>
+  <summary>"FreeCoffee will damage your computer" (macOS 26 / Sequoia-era wording).</summary>
+  <p>Same Gatekeeper mechanism, scarier words. Go to System Settings → Privacy &amp; Security → Open Anyway. The wording is generic — it fires for every un-notarized app, not just ours.</p>
+</details>
+<details>
+  <summary>Right-click shows no "Open" option at all.</summary>
+  <p>You right-clicked the DMG file instead of the app. Mount the DMG first, drag the app to Applications, then right-click <strong>the app in Applications</strong>.</p>
+</details>
+<details>
+  <summary>The app opens but I don't see it anywhere.</summary>
+  <p>FreeCoffee lives in your <strong>menu bar</strong> (top-right of the screen) — look for "☕ FreeCoffee". It has no Dock icon or window by design. Click the menu-bar item for the balance popover.</p>
+</details>
+<details>
+  <summary>Still stuck?</summary>
+  <p>Email <a href="mailto:support@freecoffee.tech">support@freecoffee.tech</a> with a screenshot of the exact message and your macOS version ( → About This Mac). We'll answer with a specific fix.</p>
+</details>
+
+<h2>Never see this again (optional, $99)</h2>
+<p>The permanent fix is an Apple Developer certificate + notarization — that's what large companies pay for. We chose the free path: the app is fully open-source and auditable. If that ever changes, this page will say so.</p>
+
+<div class="warn"><strong>Safety note:</strong> Never disable Gatekeeper system-wide (<code>spctl --master-disable</code>) or run install scripts that ask you to. The <code>xattr</code> command above targets <strong>only</strong> the FreeCoffee app — that's the safe, surgical approach.</div>
+
+<footer>
+  <p><a href="./index.html">← Back to FreeCoffee</a> · <a href="https://github.com/ayodhyamohanthy/freecoffee">Source code</a> · <a href="https://github.com/ayodhyamohanthy/freecoffee/releases/latest/download/FreeCoffee.dmg">Download DMG</a></p>
+  <p>FreeCoffee demo — simulated data. Not affiliated with SponsorBar or KickBot Inc.</p>
+</footer>
+</body>
+</html>
