@@ -1,0 +1,56 @@
+① swiftc build (universal: arm64 + x86_64)…
+   (multi-arch toolchain unavailable — building for the host architecture)
+FreeCoffeeMenuBar.swift:358:17: error: value of optional type 'URL?' must be unwrapped to a value of type 'URL'
+356 | 
+357 |     @objc func openSettings() {
+358 |         openURL(URL(string: "http://127.0.0.1:8090/dashboard.html"))
+    |                 |- error: value of optional type 'URL?' must be unwrapped to a value of type 'URL'
+    |                 |- note: coalesce using '??' to provide a default when the optional value contains 'nil'
+    |                 `- note: force-unwrap using '!' to abort execution if the optional value contains 'nil'
+359 |     }
+360 |     @objc func openAccount() {
+
+FreeCoffeeMenuBar.swift:361:17: error: value of optional type 'URL?' must be unwrapped to a value of type 'URL'
+359 |     }
+360 |     @objc func openAccount() {
+361 |         openURL(URL(string: "http://127.0.0.1:8090/profile.html"))
+    |                 |- error: value of optional type 'URL?' must be unwrapped to a value of type 'URL'
+    |                 |- note: coalesce using '??' to provide a default when the optional value contains 'nil'
+    |                 `- note: force-unwrap using '!' to abort execution if the optional value contains 'nil'
+362 |     }
+363 |     private func openURL(_ url: URL) {
+
+FreeCoffeeMenuBar.swift:412:34: error: type 'NSWorkspace' has no member 'wakeNotification'
+410 |         }
+411 |         NSWorkspace.shared.notificationCenter.addObserver(
+412 |             forName: NSWorkspace.wakeNotification, object: nil, queue: .main
+    |                                  `- error: type 'NSWorkspace' has no member 'wakeNotification'
+413 |         ) { [weak self] _ in self?.controller.refresh(all: true) }
+414 |     }
+FreeCoffeeMenuBar.swift:358:17: error: value of optional type 'URL?' must be unwrapped to a value of type 'URL'
+356 | 
+357 |     @objc func openSettings() {
+358 |         openURL(URL(string: "http://127.0.0.1:8090/dashboard.html"))
+    |                 |- error: value of optional type 'URL?' must be unwrapped to a value of type 'URL'
+    |                 |- note: coalesce using '??' to provide a default when the optional value contains 'nil'
+    |                 `- note: force-unwrap using '!' to abort execution if the optional value contains 'nil'
+359 |     }
+360 |     @objc func openAccount() {
+
+FreeCoffeeMenuBar.swift:361:17: error: value of optional type 'URL?' must be unwrapped to a value of type 'URL'
+359 |     }
+360 |     @objc func openAccount() {
+361 |         openURL(URL(string: "http://127.0.0.1:8090/profile.html"))
+    |                 |- error: value of optional type 'URL?' must be unwrapped to a value of type 'URL'
+    |                 |- note: coalesce using '??' to provide a default when the optional value contains 'nil'
+    |                 `- note: force-unwrap using '!' to abort execution if the optional value contains 'nil'
+362 |     }
+363 |     private func openURL(_ url: URL) {
+
+FreeCoffeeMenuBar.swift:412:34: error: type 'NSWorkspace' has no member 'wakeNotification'
+410 |         }
+411 |         NSWorkspace.shared.notificationCenter.addObserver(
+412 |             forName: NSWorkspace.wakeNotification, object: nil, queue: .main
+    |                                  `- error: type 'NSWorkspace' has no member 'wakeNotification'
+413 |         ) { [weak self] _ in self?.controller.refresh(all: true) }
+414 |     }
