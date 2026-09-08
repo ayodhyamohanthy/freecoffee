@@ -37,7 +37,7 @@ final class Store {
     static let shared = Store()
     private let dir: URL
     private let file: URL
-    private(set) var ledger = Ledger()
+    var ledger = Ledger()   // internal setter: app mutates via tick/pause/snooze
 
     init() {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
