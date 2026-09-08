@@ -37,13 +37,16 @@ let rep = NSBitmapImageRep(data: img.tiffRepresentation!)!
 let png = rep.representation(using: .png, properties: [:])!
 try! png.write(to: URL(fileURLWithPath: CommandLine.arguments[1]))
 SWIFT
-swiftc -O /tmp/fc_make_icon.swift -o /tmp/fc_make_icon 2>/dev/null
-mkdir -p AppIcon.iconset
-for sz in 16 32 128 256 512; do
-  /tmp/fc_make_icon "AppIcon.iconset/icon_${sz}x${sz}.png"
-  cp "AppIcon.iconset/icon_${sz}x${sz}.png" "AppIcon.iconset/icon_${sz}x${sz}@2x.png"
-done
-iconutil -c icns AppIcon.iconset -o AppIcon.icns 2>/dev/null || echo "   (iconutil unavailable — continuing without icns)"
+swiftc -O /tmp/fc_make_icon.swift -o /tmp/fc_make_icon 2>/dev/null \
+  || echo "   (icon tool unavailable — continuing without icns)"
+if [ -x /tmp/fc_make_icon ]; then
+  mkdir -p AppIcon.iconset
+  for sz in 16 32 128 256 512; do
+    /tmp/fc_make_icon "AppIcon.iconset/icon_${sz}x${sz}.png" || true
+    cp "AppIcon.iconset/icon_${sz}x${sz}.png" "AppIcon.iconset/icon_${sz}x${sz}@2x.png" 2>/dev/null || true
+  done
+  iconutil -c icns AppIcon.iconset -o AppIcon.icns 2>/dev/null || echo "   (iconutil unavailable — continuing without icns)"
+fi
 
 echo "③ .app bundle…"
 CONTENTS="$DIST/$APP_NAME.app/Contents"

@@ -321,7 +321,7 @@ final class PopoverController: NSViewController, NSPopoverDelegate {
         for i in stride(from: 6, through: 0, by: -1) {
             let d = cal.date(byAdding: .day, value: -i, to: Date())!
             let wd = cal.component(.weekday, from: d)
-            days.append((Array("SMTWTFS")[wd - 1], l.history[dayKey(d)] ?? 0))
+            days.append((String(Array("SMTWTFS")[wd - 1]), l.history[dayKey(d)] ?? 0))
         }
         chart.values = days
         weekTotal.stringValue = money(days.reduce(0) { $0 + $1.1 })
