@@ -355,10 +355,10 @@ final class PopoverController: NSViewController, NSPopoverDelegate {
     // ---------------------------------------------------------- actions
 
     @objc func openSettings() {
-        openURL(URL(string: "http://127.0.0.1:8090/dashboard.html"))
+        if let u = URL(string: "http://127.0.0.1:8090/dashboard.html") { openURL(u) }
     }
     @objc func openAccount() {
-        openURL(URL(string: "http://127.0.0.1:8090/profile.html"))
+        if let u = URL(string: "http://127.0.0.1:8090/profile.html") { openURL(u) }
     }
     private func openURL(_ url: URL) {
         NSWorkspace.shared.open(url)
@@ -409,7 +409,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.earnTick()
         }
         NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.wakeNotification, object: nil, queue: .main
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
         ) { [weak self] _ in self?.controller.refresh(all: true) }
     }
 
