@@ -21,11 +21,22 @@
  *       tip line, a divider, and a footer with four buttons:
  *       Settings (opens the demo dashboard), Snooze (pause 30 min with a
  *       live countdown), Disable (persisted earning toggle), Account
- *       (opens the demo profile page).
+ *       (opens the demo profile page). Snooze pauses earning for a chosen
+ *       duration (30 minutes or 2 hours) with a live countdown; the
+ *       right-click menu carries the same choices as a submenu, plus
+ *       "Turn off snooze".
  *   • RIGHT-CLICK the status item → a menu: Sponsor (live feed only — opens
- *       the current campaign's https click URL), Pause toggle, Reload
+ *       the current campaign's https click URL), Pause toggle, Snooze
+ *       submenu (30 minutes / 2 hours / Turn off snooze), Reload
  *       campaigns (live feed only), Launch at Login (bundled app only),
  *       About, Quit.
+ *
+ * SNOOZE SEMANTICS: while snoozed the menu-bar chip reads
+ * "☕ FreeCoffee — snoozed until HH:MM", no earning ticks accrue, no live
+ * ad rotation happens, and the deadline auto-resumes earning via a
+ * Date-based check in the 60 s sponsor timer (plus the 1 s countdown
+ * heartbeat). The deadline persists to ledger.json as a snoozeUntil ISO
+ * field, so a relaunch mid-snooze resumes (and lifts) correctly.
  *
  * REAL-ADVERTISER BRIDGE (the only network code, opt-in):
  *   If ~/Library/Application Support/FreeCoffee/config.json contains
@@ -589,7 +600,9 @@ final class PopoverViewController: NSViewController {
         chartView.labels = state.weekLetters
         chartView.needsDisplay = true
 
-        // Snooze button shows the live countdown while snoozed.
+        // Snooze button: while snoozed it shows the live countdown; the
+        // next tap turns the snooze off. Not snoozed → "Snooze" starts
+        // the default 30-minute snooze.
         if let until = app.snoozeUntil, until > Date() {
             let secs = Int(until.timeIntervalSinceNow.rounded(.up))
             snoozeButton.title = String(format: "Snoozed %02d:%02d", secs / 60, secs % 60)
@@ -643,6 +656,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var popoverVC: PopoverViewController!
 
     private var menuPauseItem: NSMenuItem!
+    private var snooze30Item: NSMenuItem!
+    private var snooze2hItem: NSMenuItem!
+    private var snoozeOffItem: NSMenuItem!
     private var loginItem: NSMenuItem!
     private var countdownTimer: Timer?
 
@@ -763,9 +779,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func refreshUI() {
-        // Menu-bar chip: shows the current live sponsor when a feed is
+        // Menu-bar chip: while snoozed it reads "☕ FreeCoffee — snoozed
+        // until HH:MM"; otherwise the current live sponsor when a feed is
         // connected, the plain FreeCoffee brand otherwise.
-        if let camp = currentLiveCampaign {
+        if snoozed {
+            statusItem.button?.title = "☕ FreeCoffee — snoozed until \(snoozeEndTimeLabel())"
+            statusItem.button?.toolTip = "FreeCoffee — snoozed (no earning ticks, no ad rotation). " +
+                "Earning resumes automatically. Nothing is collected."
+        } else if let camp = currentLiveCampaign {
             statusItem.button?.title = "☕ " + truncateForBar(camp.sponsor)
             statusItem.button?.toolTip = "FreeCoffee — LIVE campaign: \(camp.sponsor). " +
                 "Nothing is collected; the configured feed URL is the only outbound request."
@@ -775,6 +796,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         popoverVC?.refresh()
         updateMenu()
+    }
+
+    /// "HH:MM" for the snooze deadline (local 24-hour clock, e.g. "14:05").
+    private func snoozeEndTimeLabel() -> String {
+        guard let until = snoozeUntil else { return "--:--" }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "HH:mm"
+        return formatter.string(from: until)
     }
 
     /// Chip-safe sponsor name: the menu bar is narrow.
@@ -828,6 +858,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menuPauseItem.target = self
         menu.addItem(menuPauseItem)
 
+        // Snooze submenu — the same choices as the popover button: pause
+        // earning for 30 minutes or 2 hours, or turn an active snooze off.
+        let snoozeSub = NSMenu()
+        snooze30Item = NSMenuItem(title: "Snooze 30 minutes",
+                                  action: #selector(snooze30(_:)), keyEquivalent: "s")
+        snooze30Item.target = self
+        snoozeSub.addItem(snooze30Item)
+        snooze2hItem = NSMenuItem(title: "Snooze 2 hours",
+                                  action: #selector(snooze2h(_:)), keyEquivalent: "")
+        snooze2hItem.target = self
+        snoozeSub.addItem(snooze2hItem)
+        snoozeOffItem = NSMenuItem(title: "Turn off snooze",
+                                   action: #selector(snoozeOff(_:)), keyEquivalent: "")
+        snoozeOffItem.target = self
+        snoozeOffItem.isEnabled = false
+        snoozeSub.addItem(snoozeOffItem)
+
+        let snoozeParent = NSMenuItem(title: "Snooze", action: nil, keyEquivalent: "")
+        snoozeParent.submenu = snoozeSub
+        menu.addItem(snoozeParent)
+
         // Launch at Login (SMAppService, macOS 13+). Only meaningful when
         // running from an .app bundle; updateMenu() disables the item for
         // the bare dev binary. See refreshLoginItem().
@@ -878,17 +929,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             sponsorMenuItem?.isHidden = true
             sponsorMenuItem?.title = "Sponsor: —"
         }
+        // Snooze submenu state: the duration items start a snooze; "Turn
+        // off snooze" is only enabled (and check-marked) while one is active.
+        let snoozing = snoozed
+        snooze30Item?.state = .off
+        snooze2hItem?.state = .off
+        snoozeOffItem?.isEnabled = snoozing
+        snoozeOffItem?.state = snoozing ? .on : .off
         reloadMenuItem?.isHidden = (adFeedURL == nil)
         refreshLoginItem()
     }
 
     /// NSMenuItem validation: the sponsor item is only clickable when the
-    /// current campaign carries a validated https clickUrl.
+    /// current campaign carries a validated https clickUrl, and "Turn off
+    /// snooze" is only enabled while a snooze is actually active (the
+    /// menu's auto-enabling asks here, so updateMenu's isEnabled alone
+    /// wouldn't stick).
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         if menuItem == sponsorMenuItem {
             guard let camp = currentLiveCampaign else { return false }
             return FeedValidate.httpsURL(camp.clickUrl) != nil
         }
+        if menuItem == snoozeOffItem { return snoozed }
         return true
     }
 
@@ -974,7 +1036,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func earnTick() {
-        guard !disabled, !paused, isAwake else { return }
+        // Snooze counts as paused — no earning ticks while snoozed.
+        guard !disabled, !paused, !snoozed, isAwake else { return }
         balanceCents += 1             // $0.01
         todayCents += 1
         history[dayKey(Date()), default: 0] += 1
@@ -1022,6 +1085,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func campaignRotateTick() {
+        // Snooze auto-resume — Date-based check on the 60 s sponsor timer,
+        // so the deadline lifts even if the 1 s countdown ever missed.
+        if let until = snoozeUntil, until <= Date() {
+            snoozeUntil = nil
+            paused = false
+            persist()
+        }
+        // No ad rotation while snoozed — the chip is in snooze mode.
+        guard !snoozed else { refreshUI(); return }
         guard liveCampaigns.count > 1 else { return }
         liveCampaignIndex = (liveCampaignIndex + 1) % liveCampaigns.count
         refreshUI()
@@ -1151,17 +1223,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         persist()
     }
 
-    /// Snooze = pause for 30 minutes with a live countdown.
+    /// Snooze = pause earning for a chosen duration with a live countdown.
+    /// The deadline persists to ledger.json (snoozeUntil, ISO date) and
+    /// auto-resumes via the Date-based checks in the timers.
     func snoozeToggled() {
         if snoozed {
-            snoozeUntil = nil
-            paused = false
+            snoozeOff()
         } else {
-            snoozeUntil = Date().addingTimeInterval(30 * 60)
-            paused = true
+            startSnooze(minutes: 30)
         }
+    }
+
+    /// Start a snooze of `minutes` (30 min from the popover, 30 min / 2 h
+    /// from the right-click submenu). While snoozed: no earning ticks, no
+    /// live-ad rotation, and the chip reads "snoozed until HH:MM".
+    func startSnooze(minutes: TimeInterval) {
+        snoozeUntil = Date().addingTimeInterval(minutes * 60)
+        paused = true
         refreshUI()
         persist()
+    }
+
+    /// Turn an active snooze off immediately (popover button or submenu).
+    func snoozeOff() {
+        snoozeUntil = nil
+        paused = false
+        refreshUI()
+        persist()
+    }
+
+    // MARK: Right-click menu actions (snooze submenu)
+
+    @objc private func snooze30(_ sender: NSMenuItem) {
+        startSnooze(minutes: 30)
+    }
+
+    @objc private func snooze2h(_ sender: NSMenuItem) {
+        startSnooze(minutes: 2 * 60)
+    }
+
+    @objc private func snoozeOff(_ sender: NSMenuItem) {
+        snoozeOff()
     }
 
     /// Disable = persisted earning kill-switch until re-enabled.

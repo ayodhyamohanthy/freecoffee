@@ -1313,3 +1313,105 @@ body.theme-light .codeblock { background: #FAFAF9; border-color: var(--line); }
 .camp-tab.active { color: #FFFFFF; background: #1C1917; border-color: #1C1917; }
 .camp-count { margin-left: auto; font-size: 0.84rem; color: var(--text-faint); white-space: nowrap; }
 @media (max-width: 720px) { .camp-count { margin-left: 0; width: 100%; } }
+
+/* ==========================================================================
+   COMPETITIVE-PARITY UPGRADES (Sep 2026) — landing social proof + agents page
+   Proof pills, live-price mini-card, tier distribution bars, voice cards,
+   and the MCP/code-block styles for agents.html. System fonts, no CDNs.
+   ========================================================================== */
+
+/* ---------- landing: proof pills row (under hero CTAs) ---------- */
+.proof-pills {
+  list-style: none; margin: 0 auto 34px; padding: 0;
+  display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;
+}
+.proof-pills li {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 0.8rem; font-weight: 600; color: var(--text-dim);
+  background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: 999px; padding: 6px 14px;
+}
+.proof-pills li::before { content: "✓"; color: var(--gold); font-weight: 700; }
+
+/* ---------- landing: live market price mini-card ---------- */
+.live-price-card {
+  display: inline-flex; align-items: center; gap: 16px;
+  background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 14px 22px;
+  margin: 0 auto 34px;
+  text-align: left;
+}
+.live-price-fig {
+  font-size: 1.9rem; font-weight: 700; color: var(--gold-bright);
+  font-variant-numeric: tabular-nums; line-height: 1;
+}
+.live-price-fig .live-price-unit { font-size: 0.85rem; font-weight: 600; color: var(--text-faint); }
+.live-price-meta { font-size: 0.8rem; color: var(--text-dim); max-width: 260px; margin: 0; line-height: 1.45; }
+.live-price-meta strong { color: var(--text); }
+@media (max-width: 640px) {
+  .live-price-card { flex-direction: column; gap: 8px; text-align: center; }
+  .live-price-meta { max-width: none; }
+}
+
+/* ---------- landing: tier distribution bars (demo distribution) ---------- */
+.tier-bars { max-width: 620px; margin: 18px auto 0; text-align: left; }
+.tier-row {
+  display: grid; grid-template-columns: minmax(170px, 220px) 1fr 52px;
+  gap: 12px; align-items: center; margin-bottom: 10px;
+  font-size: 0.86rem;
+}
+.tier-label { color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tier-track {
+  display: block; height: 12px;
+  background: var(--input-bg); border: 1px solid var(--line);
+  border-radius: 999px; overflow: hidden;
+}
+.tier-fill { display: block; height: 100%; border-radius: 999px; transition: width 0.4s ease; }
+.tier-f1 { background: linear-gradient(90deg, var(--gold), var(--gold-bright)); }
+.tier-f2 { background: var(--caramel); opacity: 0.85; }
+.tier-f3 { background: var(--text-faint); opacity: 0.55; }
+.tier-pct { text-align: right; font-variant-numeric: tabular-nums; color: var(--text); font-weight: 600; }
+@media (max-width: 640px) {
+  .tier-row { grid-template-columns: 1fr; gap: 4px; }
+  .tier-label { white-space: normal; }
+  .tier-pct { text-align: left; }
+}
+
+/* ---------- landing: what people say ---------- */
+.voice-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
+  margin-top: 22px;
+}
+.voice-card { text-align: left; padding: 18px 18px 16px; }
+.voice-quote { margin: 0 0 10px; color: var(--text); font-size: 0.94rem; line-height: 1.5; }
+.voice-handle {
+  color: var(--gold-bright); font-weight: 600; font-size: 0.84rem;
+  font-family: var(--mono);
+}
+.voice-caption { text-align: center; color: var(--text-faint); }
+@media (max-width: 960px) { .voice-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 640px) { .voice-grid { grid-template-columns: 1fr; } }
+
+/* ---------- agents.html — MCP cards + copyable code blocks ---------- */
+.agent-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
+  margin-top: 18px;
+}
+.agent-endpoint {
+  display: inline-block; font-family: var(--mono); font-size: 0.78rem;
+  font-weight: 600; color: var(--gold-bright);
+  background: var(--gold-dim); border: 1px solid var(--line);
+  border-radius: 6px; padding: 2px 8px; margin: 0 6px 6px 0;
+  white-space: nowrap;
+}
+@media (max-width: 960px) { .agent-grid { grid-template-columns: 1fr; } }
+
+.code-block { position: relative; margin-top: 14px; }
+.code-block pre {
+  margin: 0; padding: 16px; overflow-x: auto;
+  background: var(--input-bg); border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font-family: var(--mono); font-size: 0.82rem; line-height: 1.55;
+  color: var(--text);
+}
+.code-block .copy-btn { position: absolute; top: 8px; right: 8px; }

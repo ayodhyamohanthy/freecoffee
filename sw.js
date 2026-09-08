@@ -14,11 +14,12 @@
 /* eslint-disable no-restricted-globals */
 'use strict';
 
-var CACHE = 'freecoffee-v5';
+var CACHE = 'freecoffee-v6';
 
 var PRECACHE = [
   './',
   './index.html',
+  './agents.html',
   './dashboard.html',
   './payouts.html',
   './model.html',

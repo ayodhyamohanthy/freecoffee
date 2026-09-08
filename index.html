@@ -18,7 +18,8 @@
 <a class="skip-link" href="#main">Skip to content</a>
 
 <div class="announce">
-  <strong>Launch:</strong> 65% base share — publicly committed to 70% at $50k/mo 🚀
+  <span id="announceLive" hidden><strong id="adsServedTicker">Ads served:</strong> <span id="adsServedCount">0</span></span>
+  <span id="announceStatic"><strong>Launch:</strong> 65% base share — publicly committed to 70% at $50k/mo 🚀</span>
 </div>
 
 <header class="site-nav" id="top">
@@ -34,6 +35,7 @@
     <div class="nav-links">
       <a href="#how">How it works</a>
       <a href="#compare">Compare</a>
+      <a href="agents.html">Agents</a>
       <a href="dashboard.html">Dashboard</a>
       <a href="#download">Download</a>
     </div>
@@ -63,6 +65,27 @@
         <a class="btn btn-ghost btn-lg" href="dashboard.html">Open the demo dashboard</a>
       </div>
       <p class="footnote install-hint" id="installHint" hidden>On iPhone: Share → Add to Home Screen</p>
+
+      <!-- Proof pills — our three commitment proof points -->
+      <ul class="proof-pills" id="proofPills" aria-label="FreeCoffee commitments">
+        <li>No Gatekeeper prompt via brew</li>
+        <li>$2 min payout</li>
+        <li>65% base share published</li>
+      </ul>
+
+      <!-- Live market price mini-card — top CPM from the connected feed,
+           or the published Tier-1 floor when no feed is connected -->
+      <div class="live-price-card" id="livePriceCard" role="status">
+        <div>
+          <p class="micro">Live market price</p>
+          <p class="live-price-fig" id="livePriceValue">$4.00<span class="live-price-unit"> CPM</span></p>
+        </div>
+        <p class="live-price-meta" id="livePriceMeta">
+          Current top bid · recalculated when you connect a feed.
+          Until then this is the published Tier-1 floor
+          (<strong>$4.00 per 1,000 minute-long impressions</strong> — US, CA, UK, CH, EEA).
+        </p>
+      </div>
 
       <!-- ============ LIVE DEMO: CSS/DOM mock menu bar ============ -->
       <div class="menubar-demo" aria-label="Simulated macOS menu bar (demo)">
@@ -176,6 +199,39 @@
             within 24 hours, and the instant stablecoin option is free too. <a href="model.html">Payout model →</a></p>
         </li>
       </ol>
+    </div>
+  </section>
+
+  <!-- ============ TIER DISTRIBUTION (demo) ============ -->
+  <section class="section" id="distribution">
+    <div class="wrap">
+      <h2>Where the impressions come from</h2>
+      <p class="section-sub">
+        Every impression is priced by audience tier — Tier 1 (US, CA, UK, CH, EEA), Tier 2
+        (AU, NZ, JP, KR, SG, AE), Tier 3 (rest of world). The bars show how the last 7 days of
+        earnings split across tiers in this demo ledger.
+      </p>
+      <div class="tier-bars" id="tierBars" role="img"
+           aria-label="Demo distribution of the last 7 days of earnings across the three audience tiers">
+        <div class="tier-row">
+          <span class="tier-label">Tier 1 — US, CA, UK, CH, EEA</span>
+          <span class="tier-track"><span class="tier-fill tier-f1" id="tierBar1"></span></span>
+          <span class="tier-pct" id="tierPct1">–</span>
+        </div>
+        <div class="tier-row">
+          <span class="tier-label">Tier 2 — AU, NZ, JP, KR, SG, AE</span>
+          <span class="tier-track"><span class="tier-fill tier-f2" id="tierBar2"></span></span>
+          <span class="tier-pct" id="tierPct2">–</span>
+        </div>
+        <div class="tier-row">
+          <span class="tier-label">Tier 3 — rest of world</span>
+          <span class="tier-track"><span class="tier-fill tier-f3" id="tierBar3"></span></span>
+          <span class="tier-pct" id="tierPct3">–</span>
+        </div>
+      </div>
+      <p class="footnote" id="tierFootnote">Demo distribution — computed from the seeded demo ledger
+        (seed 42), not from live traffic. When a backend is configured, this chart reflects the
+        connected account's real 7-day ledger by tier.</p>
     </div>
   </section>
 
@@ -299,6 +355,42 @@
     </div>
   </section>
 
+  <!-- ============ WHAT PEOPLE SAY ============ -->
+  <section class="section section-alt" id="voices">
+    <div class="wrap">
+      <h2>What people say</h2>
+      <p class="section-sub">The reaction we're building for: install once, forget it, collect the coffee money.</p>
+      <div class="voice-grid">
+        <figure class="card voice-card">
+          <blockquote class="voice-quote">"Installed for the coffee money, stayed for the dashboard. Every winning bid is just… right there."</blockquote>
+          <figcaption class="voice-handle">@devkettle</figcaption>
+        </figure>
+        <figure class="card voice-card">
+          <blockquote class="voice-quote">"A text chip in the menu bar is the first ad format I've actually forgotten about. That's the compliment."</blockquote>
+          <figcaption class="voice-handle">@terminal_latte</figcaption>
+        </figure>
+        <figure class="card voice-card">
+          <blockquote class="voice-quote">"Read the whole app source in one sitting. Show me another ad network you can say that about."</blockquote>
+          <figcaption class="voice-handle">@buildshipbrew</figcaption>
+        </figure>
+        <figure class="card voice-card">
+          <blockquote class="voice-quote">"The ledger math checks out — I redid the 65% cut on my own rows before believing it."</blockquote>
+          <figcaption class="voice-handle">@quanta_drip</figcaption>
+        </figure>
+        <figure class="card voice-card">
+          <blockquote class="voice-quote">"Snoozed it during a screen-share, forgot to unsnooze, and it earned anyway by Friday. Set-and-forget."</blockquote>
+          <figcaption class="voice-handle">@espresso_ops</figcaption>
+        </figure>
+        <figure class="card voice-card">
+          <blockquote class="voice-quote">"Two-dollar cash-out threshold is the whole pitch. Everything else in this category makes you wait for $25."</blockquote>
+          <figcaption class="voice-handle">@coldbrew_dev</figcaption>
+        </figure>
+      </div>
+      <p class="footnote voice-caption" id="voiceCaption">Illustrative reactions — fictional handles, written to show the
+        experience we're aiming for. We don't publish paid or quoted testimonials.</p>
+    </div>
+  </section>
+
   <!-- ============ FAQ ============ -->
   <section class="section section-alt" id="faq">
     <div class="wrap">
@@ -407,6 +499,7 @@
       <a href="profile.html">Profile</a>
       <a href="referrals.html">Referrals</a>
       <a href="advertisers.html">For advertisers</a>
+      <a href="agents.html">Agents</a>
       <a href="#privacy">Privacy</a>
       <a href="app/dist/FreeCoffee.dmg">Mac app</a>
     </nav>
@@ -417,6 +510,81 @@
 <script src="assets/js/demo.js"></script>
 <script>
 FreeCoffeeDemo.initMenuBarDemo(); FreeCoffeeDemo.initInstallUX();
+
+/* Announce ticker + live-price card + tier bars — honest demo/live split.
+   Backend configured → real numbers from GET /health (impression counter)
+   and GET /feed.json (top CPM). No backend → the static launch line, the
+   published Tier-1 floor, and the seeded ledger's tier split stay showing. */
+(function () {
+  var D = window.FreeCoffeeDemo;
+  var base = D.backendBase();
+
+  /* Announce strip: "Ads served: N" only with a configured backend — N is
+     the real impression counter from that device's server-side ledger. */
+  function showTicker(count) {
+    var live = document.getElementById('announceLive');
+    var stat = document.getElementById('announceStatic');
+    if (!live || !stat) return;
+    document.getElementById('adsServedCount').textContent = String(count);
+    live.hidden = false;
+    stat.hidden = true;
+  }
+
+  /* Live-price mini-card: top CPM from the connected feed, floor otherwise. */
+  function setTopBid(cpm, live) {
+    var fig = document.getElementById('livePriceValue');
+    var meta = document.getElementById('livePriceMeta');
+    if (!fig || !isFinite(cpm) || cpm <= 0) return;
+    fig.innerHTML = '';
+    fig.appendChild(document.createTextNode('$' + cpm.toFixed(2)));
+    var unit = document.createElement('span');
+    unit.className = 'live-price-unit';
+    unit.textContent = ' CPM';
+    fig.appendChild(unit);
+    if (live && meta) {
+      meta.textContent = 'Current top bid · recalculated when you connect a feed. ' +
+        'Sourced from your connected advertiser feed right now — highest CPM wins the minute.';
+    }
+  }
+
+  /* Tier bars: 7-day ledger byTier (or the seeded ledger's split). */
+  function renderTierBars(byTier) {
+    var t1 = Number(byTier['1']) || 0, t2 = Number(byTier['2']) || 0, t3 = Number(byTier['3']) || 0;
+    var sum = t1 + t2 + t3;
+    if (sum <= 0) return;
+    var pct = [t1 / sum * 100, t2 / sum * 100, t3 / sum * 100];
+    var ids = ['tierBar1', 'tierBar2', 'tierBar3'];
+    var pcts = ['tierPct1', 'tierPct2', 'tierPct3'];
+    for (var i = 0; i < 3; i++) {
+      var bar = document.getElementById(ids[i]);
+      var label = document.getElementById(pcts[i]);
+      if (bar) bar.style.width = Math.max(1, pct[i]).toFixed(1) + '%';
+      if (label) label.textContent = pct[i].toFixed(0) + '%';
+    }
+  }
+
+  try {
+    renderTierBars(D.generateHistory(D.SEED).totals.byTier);   // demo distribution
+  } catch (e) { /* bars keep their placeholder dashes */ }
+
+  var dev = D.deviceId();
+  if (!base || !dev || typeof fetch !== 'function') return;    // 100% offline-demo mode
+
+  /* Real served-count from the configured backend's device ledger. */
+  fetch(base + '/earnings/' + encodeURIComponent(dev))
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (l) {
+      var n = l && l.counters && Number(l.counters.impressions);
+      if (isFinite(n) && n > 0) showTicker(n);
+    })
+    .catch(function () { /* backend absent — static line stays */ });
+
+  fetch(base + '/feed.json').then(function (r) { return r.ok ? r.json() : null; }).then(function (f) {
+    var top = D.pickAd(f && f.campaigns)[0];
+    if (top && Number(top.cpm) > 0) setTopBid(Number(top.cpm), true);
+  }).catch(function () { /* feed absent — floor figure stays */ });
+})();
+
 /* Popover mock buttons — Snooze/Disable flip the status line (demo only). */
 (function () {
   var status = document.getElementById('popStatus');
