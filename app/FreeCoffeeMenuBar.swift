@@ -402,7 +402,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.statusItem = item
         controller.paintTray()
 
-        buildMenu()
         controller.refresh(all: true)
 
         // the honest demo minute: +$0.01 per 90 s, only while awake & enabled
@@ -414,7 +413,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ) { [weak self] _ in self?.controller.refresh(all: true) }
     }
 
-    func buildMenu() {
+    func buildMenu() -> NSMenu {
         let menu = NSMenu()
         let pause = NSMenuItem(title: "Pause earning", action: #selector(togglePause), keyEquivalent: "p")
         pause.target = self
@@ -424,8 +423,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let login = NSMenuItem(title: "Launch at Login", action: #selector(toggleLogin), keyEquivalent: "")
         login.target = self
         let bundled = Bundle.main.bundlePath.hasSuffix(".app")
-        login.isEnabled = bundled && #available(macOS 13.0, *)
-        if #available(macOS 13.0, *), bundled {
+        login.isEnabled = false
+        if #available(macOS 13.0, *) {
+            login.isEnabled = bundled
             login.state = SMAppService.mainApp.status == .enabled ? .on : .off
         }
         menu.addItem(login)
@@ -437,16 +437,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let quit = NSMenuItem(title: "Quit FreeCoffee", action: #selector(quit), keyEquivalent: "q")
         quit.target = self
         menu.addItem(quit)
-        statusItem?.menu = menu
+        return menu
     }
 
     @objc func togglePopover() {
-        // right-click → the context menu handles it; left-click → popover
-        if NSApp.currentEvent?.type == .rightMouseUp { return }
+        guard let item = statusItem, let button = item.button else { return }
+        let event = NSApp.currentEvent
+        if event?.type == .rightMouseUp || event?.modifierFlags.contains(.control) == true {
+            // right-click → context menu (menu must be set only for the click,
+            // otherwise the item stops sending actions entirely)
+            item.menu = buildMenu()
+            button.performClick(nil)
+            item.menu = nil
+            return
+        }
         if controller.popover.isShown {
             controller.popover.performClose(nil)
         } else {
-            guard let button = statusItem?.button else { return }
             controller.popover.contentViewController = controller
             controller.popover.behavior = .transient
             controller.popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
@@ -459,7 +466,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if store.ledger.paused { store.ledger.snoozeUntil = nil }
         store.save()
         controller.refresh(all: true)
-        buildMenu()
     }
 
     @objc func toggleLogin() {
@@ -470,7 +476,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         default:
             try? SMAppService.mainApp.register()
         }
-        buildMenu()
     }
 
     @objc func about() {
