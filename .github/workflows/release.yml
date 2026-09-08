@@ -8,10 +8,14 @@ name: Release Mac app
 # ad-hoc signed (see app/build.sh); users get the one-time "Open Anyway"
 # step (app/Info-howto.md) and checksum-verified downloads. The existing
 # "Bump Homebrew tap" workflow consumes FreeCoffee.dmg from this Release.
+# (Release step uses the official gh CLI — no third-party actions.)
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   mac:
@@ -41,9 +45,13 @@ jobs:
 
       - name: Attach to GitHub Release (tag runs)
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-ghrelease@v2
-        with:
-          files: |
-            app/dist/FreeCoffee.dmg
-            app/dist/SHA256SUMS.txt
-          generate_release_notes: true
+        working-directory: app/dist
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "FreeCoffee ${GITHUB_REF_NAME}" \
+            --notes "FreeCoffee for macOS — menu bar app. Ad-hoc signed ($0 distribution): first launch → right-click → Open, or System Settings → Privacy & Security → Open Anyway. Verify with SHA256SUMS.txt." \
+            --verify-tag || true
+          gh release upload "${GITHUB_REF_NAME}" FreeCoffee.dmg SHA256SUMS.txt --clobber
+          echo "Release ${GITHUB_REF_NAME} ready."
