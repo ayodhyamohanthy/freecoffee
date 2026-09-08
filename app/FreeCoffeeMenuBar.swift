@@ -670,8 +670,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // Demo pages. In production these would be the signed-in web app; for the
     // demo they point at the local static server from README.md
     // (cd freecoffee && python3 -m http.server 8090).
-    private static let dashboardURL = URL(string: "http://127.0.0.1:8090/dashboard.html")!
-    private static let profileURL = URL(string: "http://127.0.0.1:8090/profile.html")!
+    private static let dashboardURL = URL(string: "http://127.0.0.1:8090/dashboard.html")
+    private static let profileURL = URL(string: "http://127.0.0.1:8090/profile.html")
 
     // First run is seeded to match the web demo's deterministic ledger
     // (seed 42 lifetime, $28.55), so both layers tell the same story.
@@ -1173,11 +1173,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func openDashboard() {
-        NSWorkspace.shared.open(Self.dashboardURL)
+        guard let dashURL = Self.dashboardURL else { return }; NSWorkspace.shared.open(dashURL)
     }
 
     func openAccount() {
-        NSWorkspace.shared.open(Self.profileURL)
+        guard let profURL = Self.profileURL else { return }; NSWorkspace.shared.open(profURL)
     }
 
     @objc private func showAbout(_ sender: NSMenuItem) {
