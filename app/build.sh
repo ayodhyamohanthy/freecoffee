@@ -19,7 +19,16 @@ rm -rf "$DIST" "$APP_NAME" FreeCoffeeMenuBar
 mkdir -p "$DIST"
 
 echo "① swiftc build (universal: arm64 + x86_64)…"
-swiftc -O -arch arm64 -arch x86_64 FreeCoffeeMenuBar.swift -o "$APP_NAME"
+if xcrun -sdk macosx swiftc -O -arch arm64 FreeCoffeeMenuBar.swift -o fc_arm64 2>/dev/null \
+   && xcrun -sdk macosx swiftc -O -arch x86_64 FreeCoffeeMenuBar.swift -o fc_x64 2>/dev/null \
+   && lipo -create -output "$APP_NAME" fc_arm64 fc_x64 2>/dev/null; then
+  echo "   universal binary ✓"
+else
+  echo "   (multi-arch toolchain unavailable — building for the host architecture)"
+  xcrun -sdk macosx swiftc -O FreeCoffeeMenuBar.swift -o "$APP_NAME" \
+    || swiftc -O FreeCoffeeMenuBar.swift -o "$APP_NAME"
+fi
+rm -f fc_arm64 fc_x64
 
 echo "② icon (AppIcon.icns from the cup glyph)…"
 cat > /tmp/fc_make_icon.swift <<'SWIFT'
