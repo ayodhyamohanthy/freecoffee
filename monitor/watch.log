@@ -1,0 +1,9 @@
+dup skipped: 1.0.13 2026-09-09
+digest written: /Users/ayodhyarammohanthy/Documents/GitHub/freecoffee/monitor/reports/digest-2026-09-09.md
+/Users/ayodhyarammohanthy/Documents/GitHub/freecoffee/monitor/state.py:6: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  state["lastCheck"] = datetime.datetime.utcnow().isoformat() + "Z"
+=== RUN SUMMARY ===
+status: true
+version: 1.0.13 (last: 1.0.13)
+ledger lines: 1
+report: /Users/ayodhyarammohanthy/Documents/GitHub/freecoffee/monitor/reports/digest-2026-09-09.md
