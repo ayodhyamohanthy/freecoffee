@@ -99,8 +99,9 @@ Items instead. Details: [`app/Info-howto.md`](app/Info-howto.md).
 
 The site is also a full PWA (works entirely offline after first visit — no backend anywhere).
 
-- **What works offline:** all eight pages (`index.html`, `dashboard.html`, `payouts.html`, `model.html`,
-  `campaigns.html`, `profile.html`, `referrals.html`, `advertisers.html`), the stylesheet, both scripts, and the icons
+- **What works offline:** all ten pages (`index.html`, `dashboard.html`, `payouts.html`, `model.html`,
+  `campaigns.html`, `profile.html`, `referrals.html`, `advertisers.html`, `agents.html`, `install-guide.html`),
+  the stylesheet, both scripts, and the icons
   are precached at install. The seeded demo engine is deterministic, so the dashboard renders
   identically offline; the payout simulator, ledger, chart, profile form, and pause/payout
   interactions all work with no network. A connected live feed needs the network for fresh fetches,
@@ -109,10 +110,12 @@ The site is also a full PWA (works entirely offline after first visit — no bac
   when the browser fires `beforeinstallprompt`) or the browser's own install icon in the address bar.
 - **Install on iOS Safari:** iOS never fires the prompt event — use **Share → Add to Home
   Screen** (the site shows this hint line on iPhones). Requires HTTPS or localhost serving.
-- **Service worker caching behavior** (`sw.js`, cache `freecoffee-v5`): precached app shell is served
+- **Service worker caching behavior** (`sw.js`, cache `freecoffee-v13`): precached app shell is served
   cache-first; navigations are network-first with cache fallback (so content updates when you're
-  online); other same-origin GETs are runtime-cached on first fetch; cross-origin and non-GET
-  requests are untouched. Bump `CACHE` when changing content — `activate()` deletes old caches
+  online); versioned assets (`assets/*?v=N`) are stale-while-revalidate — served from cache instantly
+  and refreshed in the background, so bumping `?v=` in the HTML always pulls the fresh asset; other
+  same-origin GETs are runtime-cached on first fetch; cross-origin and non-GET requests are untouched.
+  Bump `CACHE` **and** the `?v=` versions when changing assets — `activate()` deletes old caches
   automatically, and `skipWaiting`/`clients.claim` make updates take effect on reload.
 - Served over plain `python3 -m http.server`, the SW registers on `http://127.0.0.1:*` (localhost
   is a secure context). On `file://` the registration is skipped by design.

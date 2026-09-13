@@ -6,6 +6,9 @@
        cache-first. Each URL is added individually so one missing file
        can never fail the whole install (cache.addAll is atomic).
      - navigations:         network-first, fall back to cache (then index.html)
+     - versioned assets (?v=N): stale-while-revalidate — cached copy is served
+       instantly and refreshed in the background. A bumped ?v= is always a
+       cache miss, so new HTML can never pair with old CSS/JS.
      - other same-origin GET: cache-first, runtime-cache misses
      - cross-origin / non-GET: untouched — this includes the platform
        backend (POST /track, GET /earnings/…, GET /feed.json on a
@@ -16,7 +19,7 @@
 /* eslint-disable no-restricted-globals */
 'use strict';
 
-var CACHE = 'freecoffee-v12';
+var CACHE = 'freecoffee-v13';
 
 var PRECACHE = [
   './',
@@ -99,6 +102,25 @@ self.addEventListener('fetch', function (event) {
       }).catch(function () {
         return caches.match(request).then(function (cached) {
           return cached || caches.match(FALLBACK_URL);
+        });
+      })
+    );
+    return;
+  }
+
+  // Versioned assets (?v=N): stale-while-revalidate. The cached copy answers
+  // immediately; the network copy refreshes the cache for next time. Because
+  // the HTML references a new ?v= whenever assets change, a stale HTML/asset
+  // pairing is structurally impossible — the new URL is always a cache miss.
+  if (url.searchParams.get('v')) {
+    event.respondWith(
+      caches.open(CACHE).then(function (cache) {
+        return cache.match(request).then(function (cached) {
+          var refresh = fetch(request).then(function (response) {
+            if (response && response.ok) putSafe(cache, request, response.clone());
+            return response;
+          }).catch(function () { return null; });
+          return cached || refresh.then(function (response) { return response || Promise.reject(new Error('offline')); });
         });
       })
     );
