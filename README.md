@@ -281,9 +281,17 @@ contains verified placements from campaigns that actually exist.
 
 ## Hosting & domain
 
-- **Live:** https://ayodhyamohanthy.github.io/freecoffee/ (GitHub Pages, branch `main`, root)
+- **Live:** https://freecoffee.tech (GitHub Pages, branch `main`, root; repo
+  CNAME = `freecoffee.tech`) — also https://ayodhyamohanthy.github.io/freecoffee/
+  and https://freecoffee-at0.pages.dev/ (Cloudflare Pages mirror)
 - **Mac app download:** https://github.com/ayodhyamohanthy/freecoffee/releases/latest/download/FreeCoffee.dmg
-- **Custom domain (freecoffee.tech):** not registered yet. Once registered: add the zone to
-  Cloudflare → either connect a custom domain to Pages project `freecoffee` (freecoffee-at0.pages.dev,
-  already created) or add a CNAME `@ → ayodhyamohanthy.github.io` in GitHub Pages settings and
-  enforce HTTPS. The PWA uses only relative paths, so it runs at any host/subpath unchanged.
+- **Custom domain status:** DNS lives at the registrar (orderbox-dns, not
+  Cloudflare). Required records at the registrar: apex `A` → `185.199.108.153`,
+  `185.199.109.153`, `185.199.110.153`, `185.199.111.153` (replace the old
+  Framer `31.43.160.6` / `31.43.161.6`), and `CNAME www → ayodhyamohanthy.github.io`.
+  GitHub issues + auto-renews the `_github-pages-challenge-ayodhyamohanthy`
+  TXT while Pages is configured for the domain. MX (`zoho.in`), SPF, and the
+  Zoho verification TXT are untouched. The Framer waitlist page that
+  previously served the apex is retired; the app's join-waitlist surface
+  replaces it.
+- The PWA uses only relative paths, so it runs at any host/subpath unchanged.
