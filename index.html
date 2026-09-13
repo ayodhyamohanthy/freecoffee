@@ -509,10 +509,11 @@
           <div class="faq-body">
             <p>Yes. On launch the app asks the public GitHub Releases feed whether a newer build exists
               (one anonymous HTTPS request — no account, no identifier, no telemetry). A new version
-              downloads in the background, is verified by checksum, and is offered with an
-              <strong>Update &amp; Relaunch</strong> button in the app's menu; it also installs the next
-              time you open the app. Prefer to stay in control? <strong>Check for Updates</strong> is a
-              manual menu item, and nothing downloads without your click.</p>
+              downloads in the background, is verified against the published sha256 checksum, and is
+              offered with an <strong>Update &amp; Relaunch</strong> button in the app's menu; dismiss it
+              and the update simply applies the next time you open the app. Prefer to stay in control?
+              <strong>Skip this version</strong> declines a release for good, and
+              <strong>Check for Updates</strong> in the menu runs the same check on demand.</p>
           </div>
         </details>
       </div>

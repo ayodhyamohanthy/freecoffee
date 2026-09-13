@@ -16,7 +16,7 @@
 /* eslint-disable no-restricted-globals */
 'use strict';
 
-var CACHE = 'freecoffee-v11';
+var CACHE = 'freecoffee-v12';
 
 var PRECACHE = [
   './',

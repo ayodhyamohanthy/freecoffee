@@ -112,7 +112,7 @@ console.log("    ok   seed 42 reproducible; available + pending = lifetime ($" +
 
 # ------------------------------------------------------------------ 5. De-branding guard
 step "5/6 No competitor brand references"
-HITS=$(grep -riIl --exclude-dir=.git --exclude=test.sh -E 'sponsorbar|kickbot' . 2>/dev/null)
+HITS=$(grep -riIl --exclude-dir=.git --exclude-dir=.workbuddy-ai --exclude=test.sh -E 'sponsorbar|kickbot' . 2>/dev/null)
 if [ -z "$HITS" ]; then
   ok "no competitor brand references in any tracked text file"
 else

@@ -497,12 +497,17 @@ final class PopoverViewController: NSViewController {
         boostBox.translatesAutoresizingMaskIntoConstraints = false
         boost.translatesAutoresizingMaskIntoConstraints = false
         boostBox.addSubview(boost)
+        // NOTE: only constraints internal to boostBox are activated here.
+        // boostBox does not join the view hierarchy until it is added to `root`
+        // further down, and activating a constraint between two views that share
+        // no common ancestor makes NSLayoutConstraint.activate spin forever —
+        // which hangs the whole launch. The panel-width constraint is therefore
+        // installed after the addArrangedSubview(boostBox) call below.
         NSLayoutConstraint.activate([
             boost.leadingAnchor.constraint(equalTo: boostBox.leadingAnchor, constant: 10),
             boost.trailingAnchor.constraint(equalTo: boostBox.trailingAnchor, constant: -10),
             boost.topAnchor.constraint(equalTo: boostBox.topAnchor, constant: 6),
-            boost.bottomAnchor.constraint(equalTo: boostBox.bottomAnchor, constant: -6),
-            boostBox.widthAnchor.constraint(equalTo: root.widthAnchor, constant: -32)
+            boost.bottomAnchor.constraint(equalTo: boostBox.bottomAnchor, constant: -6)
         ])
 
         // ---- Earnings · 7 days + chart.
@@ -535,16 +540,18 @@ final class PopoverViewController: NSViewController {
         footer.distribution = .fillEqually
 
         root.addArrangedSubview(header)
-        root.addArrangedSubview(divider())
+        addDivider(to: root)
         root.addArrangedSubview(totalCaption)
         root.addArrangedSubview(balanceField)
         root.addArrangedSubview(splitLabel)
         root.addArrangedSubview(cupsLabel)
         root.addArrangedSubview(boostBox)
+        // Safe here: boostBox and root are now in the same hierarchy.
+        boostBox.widthAnchor.constraint(equalTo: root.widthAnchor, constant: -32).isActive = true
         root.addArrangedSubview(weekCaption)
         root.addArrangedSubview(chartView)
         root.addArrangedSubview(tip)
-        root.addArrangedSubview(divider())
+        addDivider(to: root)
         root.addArrangedSubview(footer)
 
         root.setCustomSpacing(10, after: header)
@@ -561,13 +568,19 @@ final class PopoverViewController: NSViewController {
         splitLabel.widthAnchor.constraint(equalTo: root.widthAnchor, constant: -32).isActive = true
     }
 
-    private func divider() -> NSView {
+    /// 1pt hairline spanning the panel. The line is added to `stack` here
+    /// rather than returned to the caller because the width constraint can only
+    /// be activated once the line and the stack share a hierarchy — activating
+    /// a constraint between unrelated views hangs NSLayoutConstraint.activate
+    /// (see the note in loadView).
+    private func addDivider(to stack: NSStackView) {
         let line = NSView()
         line.wantsLayer = true
         line.layer?.backgroundColor = Coffee.line.cgColor
+        line.translatesAutoresizingMaskIntoConstraints = false
         line.heightAnchor.constraint(equalToConstant: 1).isActive = true
-        line.widthAnchor.constraint(equalTo: view.widthAnchor, constant: -32).isActive = true
-        return line
+        stack.addArrangedSubview(line)
+        line.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -32).isActive = true
     }
 
     private func footerButton(_ symbol: String, _ title: String, _ action: Selector) -> NSButton {
@@ -713,11 +726,11 @@ final class UpdateEngine: NSObject {
 
     // MARK: Check (called on launch + every 6 h; also from the menu item)
 
-    func checkForUpdate(completion: ((Status) -> Void)? = nil) {
+    func checkForUpdate(force: Bool = false, completion: ((Status) -> Void)? = nil) {
         updateTask?.cancel()
         updateTask = Task { [weak self] in
             guard let self else { return }
-            let result = await self.check()
+            let result = await self.check(force: force)
             self.status = result
             completion?(result)
         }
@@ -732,7 +745,7 @@ final class UpdateEngine: NSObject {
         skippedVersion = version
     }
 
-    private func check() async -> Status {
+    private func check(force: Bool = false) async -> Status {
         status = .checking
         do {
             let (data, resp) = try await session.data(from: Self.releasesAPI)
@@ -747,6 +760,11 @@ final class UpdateEngine: NSObject {
             }
             let latest = tag.trimmingCharacters(in: CharacterSet(charactersIn: "v "))
             guard isNewer(latest, than: Self.version) else {
+                return .upToDate(current: Self.version)
+            }
+            // A version the user explicitly skipped never re-downloads on the
+            // silent path; a manual check (force) always offers it.
+            if !force && latest == skippedVersion {
                 return .upToDate(current: Self.version)
             }
             guard let assets = obj["assets"] as? [[String: Any]],
@@ -831,26 +849,68 @@ final class UpdateEngine: NSObject {
     static func applyPendingUpdateAndRelaunch() {
         let defaults = UserDefaults.standard
         guard let stagedPath = defaults.string(forKey: "FreeCoffeePendingUpdatePath") else { return }
-        defaults.removeObject(forKey: "FreeCoffeePendingUpdatePath")
+
         let fm = FileManager.default
-        guard fm.fileExists(atPath: stagedPath),
-              Bundle.main.bundleURL.pathExtension == "app" else {
-            try? fm.removeItem(atPath: stagedPath)
-            return
-        }
         let target = Bundle.main.bundleURL
-        // Replace the running bundle: move old aside → move staged in → delete old.
-        let trash = target.deletingLastPathComponent()
-            .appendingPathComponent(".FreeCoffee-old-\(ProcessInfo.processInfo.globallyUniqueString)")
-        do {
-            try fm.moveItem(at: target, to: trash)
-            try fm.moveItem(atPath: stagedPath, toPath: target.path)
-            try? fm.removeItem(at: trash)
-        } catch {
-            NSLog("FreeCoffee updater: swap failed: \(error.localizedDescription)")
-            try? fm.removeItem(atPath: stagedPath)
+        let staged = URL(fileURLWithPath: stagedPath, isDirectory: true)
+
+        /// Give up without touching the installed app. The pending marker is
+        /// cleared so the updater simply offers the release again later.
+        func abandon(_ reason: String) {
+            NSLog("FreeCoffee updater: staged update not applied — \(reason)")
+            defaults.removeObject(forKey: "FreeCoffeePendingUpdatePath")
+            try? fm.removeItem(at: staged)
+        }
+
+        // Refuse the swap when it cannot be done safely:
+        //  • running outside a bundle (bare dev binary) — there is nothing to swap;
+        //  • the bundle is App-Translocated. macOS relocates a quarantined app to
+        //    /private/var/folders/…/AppTranslocation/… on a read-only volume, so
+        //    neither the old nor the staged bundle can be moved into place;
+        //  • the staged copy is not a usable bundle;
+        //  • the folder holding the installed app is not writable.
+        guard target.pathExtension == "app" else {
+            abandon("running outside an app bundle")
             return
         }
+        guard !target.path.contains("/AppTranslocation/") else {
+            abandon("bundle is App-Translocated — reinstall from the DMG")
+            return
+        }
+        let stagedExecutable = staged.appendingPathComponent("Contents/MacOS/FreeCoffeeMenuBar")
+        guard fm.isExecutableFile(atPath: stagedExecutable.path) else {
+            abandon("staged copy is not a usable bundle")
+            return
+        }
+        let parent = target.deletingLastPathComponent()
+        guard fm.isWritableFile(atPath: parent.path) else {
+            abandon("\(parent.path) is not writable")
+            return
+        }
+
+        defaults.removeObject(forKey: "FreeCoffeePendingUpdatePath")
+
+        // Replace the running bundle: move old aside → move staged in → delete old.
+        // If the second move fails the old bundle is moved back, so a failed
+        // update can never leave /Applications without FreeCoffee.
+        let aside = parent.appendingPathComponent(
+            ".FreeCoffee-old-\(ProcessInfo.processInfo.globallyUniqueString)")
+        do {
+            try fm.moveItem(at: target, to: aside)
+        } catch {
+            NSLog("FreeCoffee updater: could not move the installed bundle aside: \(error.localizedDescription)")
+            abandon("installed bundle could not be moved")
+            return
+        }
+        do {
+            try fm.moveItem(at: staged, to: target)
+        } catch {
+            NSLog("FreeCoffee updater: swap failed, rolling back: \(error.localizedDescription)")
+            try? fm.moveItem(at: aside, to: target)   // the app must still exist
+            try? fm.removeItem(at: staged)
+            return
+        }
+        try? fm.removeItem(at: aside)
         NSWorkspace.shared.openApplication(at: target, configuration: NSWorkspace.OpenConfiguration()) { _, _ in }
         exit(0)
     }
@@ -1375,11 +1435,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
 
         case .ready(let version):
-            // Auto path completed: new app staged. Surface the one-click button.
-            if updateSeen != version { persist() }
-            dialog(title: "Update ready — v\(version)",
-                   body: "FreeCoffee v\(version) has been downloaded and verified (checksum OK).\n\nUpdate & Relaunch now, or keep working — the update applies automatically the next time you open the app.",
-                   button: "Update & Relaunch") { [weak self] in self?.updateAndRelaunchTapped() }
+            // Auto path completed: new app staged. Offer one-click install,
+            // skip-this-version, or dismiss (applies on next launch either way
+            // unless skipped — a skipped version is never re-downloaded).
+            if updateSeen != version { updateSeen = version; persist() }
+            let alert = NSAlert()
+            alert.messageText = "Update ready — v\(version)"
+            alert.informativeText = "FreeCoffee v\(version) has been downloaded and verified (checksum OK).\n\nUpdate & Relaunch now, or keep working — the update applies automatically the next time you open the app."
+            alert.alertStyle = .informational
+            alert.addButton(withTitle: "Update & Relaunch")
+            alert.addButton(withTitle: "Skip this version")
+            alert.addButton(withTitle: "Later")
+            let choice = alert.runModal()
+            if choice == .alertFirstButtonReturn {
+                updateAndRelaunchTapped()
+            } else if choice == .alertSecondButtonReturn {
+                updateEngine.skipCurrentVersion(version)
+                persist()
+            }
 
         case .checking, .downloading, .idle:
             break
@@ -1388,7 +1461,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func checkForUpdatesTapped(_ sender: NSMenuItem) {
         isManualCheck = true
-        updateEngine.checkForUpdate { [weak self] _ in
+        updateEngine.checkForUpdate(force: true) { [weak self] _ in
             self?.refreshUI()
         }
         refreshUI()
