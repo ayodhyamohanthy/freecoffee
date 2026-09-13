@@ -5,11 +5,11 @@ compatibility_date = "2026-01-01"
 # ── Fill these in (see README.md step ③) ─────────────────────────────────
 # Cloudflare dashboard → Workers & Pages → KV → Create a namespace →
 # copy its id here.
-account_id = "REPLACE_WITH_ACCOUNT_ID"
+account_id = "71102e7a2d820fb4ca21119099163dfc"
 
 [[kv_namespaces]]
 binding = "SITE_KV"
-id = "REPLACE_WITH_KV_ID"
+id = "bb9be563917f4bb38bb4809bd513cef5"
 
 # ── Secrets (never committed) ─────────────────────────────────────────────
 # ADMIN_TOKEN  → `npx wrangler secret put ADMIN_TOKEN`

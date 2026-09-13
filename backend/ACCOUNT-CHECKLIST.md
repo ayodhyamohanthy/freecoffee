@@ -1,5 +1,14 @@
 # FreeCoffee — go-live account checklist
 
+> **Status (2026-09-13):** ☑ Item 1 done — backend Worker `freecoffee-backend`
+> deployed at `https://freecoffee-backend.ayodhya-711.workers.dev`
+> (KV `freecoffee-kv` bound as `SITE_KV`, `ADMIN_TOKEN` secret set, endpoints
+> smoke-tested: `/health`, `/feed.json`, `/track`, `/earnings/{deviceId}`,
+> `/admin/feed` auth 401/200). Admin token saved locally at
+> `~/freecoffee-admin-token.txt` — never committed. Item 2 (Stripe) and
+> item 3 (ad-network adapter) remain open and optional until the first
+> real campaign needs them.
+
 Everything needed to take FreeCoffee from honest demo to real settled
 earnings. Every account below is **free** unless marked; nothing here needs
 a credit card until the two optional paid items at the end. Work top to

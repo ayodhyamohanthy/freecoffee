@@ -1,5 +1,14 @@
 # FreeCoffee backend — Cloudflare Worker + KV
 
+> **Deployment status (2026-09-13):** live at
+> **https://freecoffee-backend.ayodhya-711.workers.dev**. KV namespace
+> `freecoffee-kv` bound as `SITE_KV`; `ADMIN_TOKEN` secret set. The admin
+> token is saved locally at `~/freecoffee-admin-token.txt` (chmod 600) — it
+> is never committed. `wrangler.toml` now carries the real account + KV ids.
+> Feed is intentionally empty (`{"campaigns":[]}`) until the first real
+> campaign is pushed via `POST /admin/feed` (see the cold-start runbook in
+> the root README).
+
 The production backend for FreeCoffee's **real-earnings** layer: serves the
 validated ad feed (`/feed.json`), records impressions/clicks from the web
 dashboard, and keeps a per-device earnings ledger in Cloudflare KV. Runs on
