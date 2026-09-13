@@ -33,7 +33,7 @@ readable file.
      live countdown on the button), **Disable** (persisted earning toggle — the button becomes
      **Enable**), **Account** (opens the demo profile page).
 2. **Right-click** the status item: **Pause earning** (checkmark toggle), **Launch at Login**
-   (bundle only — see below), **About FreeCoffee demo**, **Quit FreeCoffee**.
+   (bundle only — see below), **Check for Updates…**, **About FreeCoffee demo**, **Quit FreeCoffee**.
 3. Earning ticks up **$0.01 every 90 s** while the Mac is awake and not paused/disabled; the
    7-day chart buckets update with it.
 4. State persists in `~/Library/Application Support/FreeCoffee/ledger.json` — delete that file
@@ -41,7 +41,28 @@ readable file.
 5. The demo pages it opens live at `http://127.0.0.1:8090/…` — start the server with
    `cd freecoffee && python3 -m http.server 8090`.
 6. Privacy: the app collects nothing (see the comment block at the top of `FreeCoffeeMenuBar.swift`).
+   The only network traffic is the opt-in advertiser-feed fetch and the anonymous GitHub Releases
+   update check — neither ever sends data back.
 7. All data is simulated. FreeCoffee demo — no real campaigns, no real payouts.
+
+## Updates
+
+The app keeps itself current, with zero telemetry:
+
+- **Check:** on launch and every 6 hours it asks the public GitHub Releases feed — one anonymous
+  request, nothing sent back. **Check for Updates…** in the right-click menu runs the same check
+  on demand and always tells you the outcome.
+- **Download + verify:** if a newer `FreeCoffee.dmg` exists, it downloads in the background and is
+  verified against the **sha256 checksum published in the release notes**; a mismatch is discarded
+  without ever touching the installed app, and an un-verifiable release is never auto-installed.
+- **Install:** on success the menu offers **Update &amp; Relaunch** — one click swaps the new bundle
+  in atomically and relaunches; your ledger is untouched. Dismiss it and the update still applies
+  the next time you open the app. **Skip this version** is remembered, so a declined release
+  never nags again.
+- **Manual path:** prefer full control? Install any release by hand from the releases page — the
+  auto-installer only runs from the bundle in `/Applications`. Updates only ever come from this
+  repository's releases; the bare dev binary can't self-swap and offers the releases page instead.
+
 
 ## Launch at Login
 
@@ -107,19 +128,6 @@ advertiser feed URL — the app reads it and sends nothing back; (2) the GitHub 
 (`api.github.com/…/releases/latest`) plus the DMG download when an update is offered. No identifiers,
 no telemetry, no impression data in either. Everything else in the privacy boundary (no screen,
 files, keystrokes, window titles) is unchanged.
-
-## Updates
-
-- The app checks the public GitHub Releases feed on launch and every 6 hours — one anonymous
-  request, nothing sent back. If a newer release exists, its DMG is downloaded in the background
-  and verified against the **sha256 checksum published in the release notes**; a mismatch is
-  discarded without ever touching the installed app.
-- On success the menu offers **Update &amp; Relaunch** (one click — the new bundle swaps in
-  atomically and the app relaunches; your ledger is untouched). If you dismiss it, the update
-  simply applies the next time you open the app. **Check for Updates…** in the menu runs the same
-  check on demand, and **Skip this version** is remembered so a declined release never nags.
-- Updates only ever come from this repository's releases. The bare dev binary (run outside an
-  `.app` bundle) can't self-swap and offers the releases page instead.
 
 ## Build from source / remove
 
