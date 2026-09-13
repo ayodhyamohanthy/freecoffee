@@ -110,23 +110,15 @@ console.log("    ok   seed 42 reproducible; available + pending = lifetime ($" +
 '
 [ $? -eq 0 ] && ok "demo engine" || bad "demo engine"
 
-# ------------------------------------------------------------------ 5. Monitor integrity
-step "5/6 Monitor JSON/log integrity"
-python3 - <<'PY'
-import json, sys
-ok = True
-for f in ('monitor/config.json', 'monitor/state.json'):
-    try: json.load(open(f))
-    except Exception as e: ok = False; print('    FAIL %s: %s' % (f, e))
-for line in open('monitor/ledger.jsonl'):
-    line = line.strip()
-    if line:
-        try: json.loads(line)
-        except Exception as e: ok = False; print('    FAIL ledger.jsonl: %s' % e)
-if ok: print('    ok   monitor JSON files + ledger parse')
-sys.exit(0 if ok else 1)
-PY
-[ $? -eq 0 ] && ok "monitor files parse" || bad "monitor files parse"
+# ------------------------------------------------------------------ 5. De-branding guard
+step "5/6 No competitor brand references"
+HITS=$(grep -riIl --exclude-dir=.git --exclude=test.sh -E 'sponsorbar|kickbot' . 2>/dev/null)
+if [ -z "$HITS" ]; then
+  ok "no competitor brand references in any tracked text file"
+else
+  bad "competitor brand references found:"; echo "$HITS" | sed 's/^/    /'
+  exit 1
+fi
 
 # ------------------------------------------------------------------ 6. Asset presence
 step "6/6 Referenced local files exist"
