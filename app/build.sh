@@ -28,8 +28,8 @@ cd "$(dirname "$0")"
 # (macOS ships it via the Xcode command-line tools).
 # ============================================================================
 
-APP_VERSION="1.1.0"
-APP_BUILD="2"
+APP_VERSION="1.1.1"
+APP_BUILD="3"
 
 echo "==> [1/6] Compiling universal binary (arm64 + x86_64)"
 BUILT_UNIVERSAL=0
@@ -118,11 +118,29 @@ rm -rf /tmp/fc-dmg-staging
 echo "==> [6/6] Artifacts"
 du -sh dist/FreeCoffee.app | awk '{print "  FreeCoffee.app:  " $1 "  (dist/FreeCoffee.app)"}'
 ls -l dist/FreeCoffee.dmg | awk '{printf "  FreeCoffee.dmg:  %s bytes\n", $5}'
+DMG_SHA=""
 if command -v shasum >/dev/null 2>&1; then
-  shasum -a 256 dist/FreeCoffee.dmg | awk '{print "  sha256: " $1}'
+  DMG_SHA=$(shasum -a 256 dist/FreeCoffee.dmg | awk '{print $1}')
+  echo "  sha256: $DMG_SHA"
 fi
 if command -v lipo >/dev/null 2>&1; then
   lipo -info dist/FreeCoffee.app/Contents/MacOS/FreeCoffeeMenuBar || true
+fi
+# Release notes template — paste this into the GitHub Release body. The app's
+# updater parses the "SHA256: <hex>" line to verify the download, so publishing
+# it is what makes checksum-verified auto-updates possible.
+if [ -n "$DMG_SHA" ]; then
+cat > dist/release-notes.md <<EOF
+FreeCoffee v${APP_VERSION} — menu-bar earnings demo.
+
+**Download:** FreeCoffee.dmg (universal binary, arm64 + x86_64)
+SHA256: ${DMG_SHA}
+
+Verify: shasum -a 256 FreeCoffee.dmg
+Install: open the DMG and drag FreeCoffee to Applications. Already installed?
+The app offers the update on its next launch — or use Check for Updates in its menu.
+EOF
+echo "  release notes: dist/release-notes.md  (paste into the GitHub Release body)"
 fi
 echo "  -> $(pwd)/dist/FreeCoffee.dmg"
 echo "Done."

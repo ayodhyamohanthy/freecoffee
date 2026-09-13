@@ -50,16 +50,33 @@
  *   and campaigns below the optional config.json "minCPM" floor (default 0)
  *   are filtered out entirely. Any failure falls back to the fictional
  *   demo sponsors. No identifiers or telemetry are sent — the configured
- *   feed URL is the single outbound request.
+ *   feed URL is the one outbound request the user opts into.
+ *
+ * UPDATER (the only other network code — anonymous, one-way):
+ *   On launch and every 6 hours the app asks the public GitHub Releases
+ *   API "what is the latest published release?" — a plain GET of
+ *   https://api.github.com/repos/ayodhyamohanthy/freecoffee/releases/latest,
+ *   with no token, no account, and no body. If that release's FreeCoffee.dmg
+ *   asset carries a CFBundleShortVersionString newer than the running one,
+ *   the DMG is downloaded, its sha256 is compared against the checksum in
+ *   the release's source-code link (SHA256: <hex>), and on match the app is
+ *   replaced atomically (extract in Application Support, swap in place,
+ *   relaunch via the new binary). Auto-download happens at most once per
+ *   release version and only while running from a .app bundle in
+ *   /Applications; the bare dev binary gets an "Open releases page" menu
+ *   item instead. The updater sends nothing anywhere — the request URL
+ *   itself carries no identifier, and there is no ping-back.
  *
  * ------------------------------------------------------------------------
  * PRIVACY BOUNDARY — the whole contract, in one paragraph:
  *
  * FreeCoffee collects nothing and sends nothing anywhere. The only network
- * code is the opt-in real-advertiser bridge described above: it reads the
- * one HTTPS feed URL the user configured, and sends nothing back — no
- * identifiers, no telemetry, no impression or earnings data. It never reads
- * screen contents, files, browser history, keystrokes, screenshots, or
+ * code is (a) the opt-in real-advertiser bridge described above — it reads
+ * the one HTTPS feed URL the user configured and sends nothing back — and
+ * (b) the anonymous one-way update check described above. Neither request
+ * carries an identifier, a token, or any payload; no telemetry, impression,
+ * or earnings data ever leaves the machine. The app never reads screen
+ * contents, files, browser history, keystrokes, screenshots, or
  * window titles — no such API is called from this process. The ONLY
  * signals it touches are:
  *   1. Whether the Mac is awake (NSWorkspace sleep/wake notifications), so
@@ -87,6 +104,8 @@ private struct FreeCoffeeState: Codable {
     var snoozeUntil: Date?
     var history: [String: Int]
     var lastTick: Date?
+    var updateSkipped: String?
+    var updateSeen: String?
 }
 
 // MARK: - Coffee palette (mirrors assets/css/styles.css)
@@ -637,6 +656,267 @@ final class PopoverViewController: NSViewController {
 
 // MARK: - App delegate
 
+// MARK: - Updater (anonymous GitHub Releases check + checksum-verified swap)
+
+/// Checks the public GitHub Releases API for a newer FreeCoffee.dmg,
+/// verifies its sha256 against the checksum published in the release body,
+/// and swaps the running app in place — all without any identifier or
+/// telemetry. See the UPDATER block in the file header for the contract.
+final class UpdateEngine: NSObject {
+
+    /// From the bundle's Info.plist (build.sh injects it); bare dev builds fall back.
+    static let version: String = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.1.0"
+
+    static let releasesAPI = URL(string: "https://api.github.com/repos/ayodhyamohanthy/freecoffee/releases/latest")!
+    static let releasesPage = URL(string: "https://github.com/ayodhyamohanthy/freecoffee/releases/latest")!
+    static let checkInterval: TimeInterval = 6 * 60 * 60   // re-check every 6 h
+
+    enum Status: Equatable {
+        case idle
+        case checking
+        case upToDate(current: String)
+        case available(version: String, notes: URL)          // dev binary or unverifiable release → manual path
+        case downloading
+        case ready(version: String)                          // installed — offered on next launch
+        case failed(reason: String)
+    }
+
+    var onStatusChange: ((Status) -> Void)?
+
+    private(set) var status: Status = .idle { didSet { onStatusChange?(status) } }
+    private var session: URLSession
+    private var updateTask: Task<Void, Never>?
+    private let fm = FileManager.default
+
+    override init() {
+        let config = URLSessionConfiguration.ephemeral          // nothing touches the shared cookie/data store
+        config.timeoutIntervalForRequest = 30
+        config.timeoutIntervalForResource = 10 * 60             // a slow DMG download shouldn't be cut off
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        config.httpAdditionalHeaders = ["Accept": "application/vnd.github+json"]
+        session = URLSession(configuration: config)
+        super.init()
+    }
+
+    var supportDir: URL {
+        let base = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? fm.homeDirectoryForCurrentUser
+        return base.appendingPathComponent("FreeCoffee", isDirectory: true)
+    }
+    private var pendingAppURL: URL { supportDir.appendingPathComponent("update/FreeCoffee.app", isDirectory: true) }
+
+    /// Which app bundle we're replacing. Dev runs of the bare binary have no
+    /// bundle to swap — they surface the releases page instead.
+    private var installedAppURL: URL? {
+        Bundle.main.bundleURL.pathExtension == "app" ? Bundle.main.bundleURL : nil
+    }
+
+    // MARK: Check (called on launch + every 6 h; also from the menu item)
+
+    func checkForUpdate(completion: ((Status) -> Void)? = nil) {
+        updateTask?.cancel()
+        updateTask = Task { [weak self] in
+            guard let self else { return }
+            let result = await self.check()
+            self.status = result
+            completion?(result)
+        }
+    }
+
+    // MARK: Update handling (see UpdateEngine — anonymous, checksum-verified)
+
+    /// Current "skip this version" choice (persisted in ledger.json).
+    var skippedVersion: String?
+
+    func skipCurrentVersion(_ version: String) {
+        skippedVersion = version
+    }
+
+    private func check() async -> Status {
+        status = .checking
+        do {
+            let (data, resp) = try await session.data(from: Self.releasesAPI)
+            guard let http = resp as? HTTPURLResponse, http.statusCode == 200 else {
+                return .failed(reason: "HTTP \((resp as? HTTPURLResponse)?.statusCode ?? 0)")
+            }
+            guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                return .failed(reason: "Malformed release feed")
+            }
+            guard let tag = obj["tag_name"] as? String else {
+                return .failed(reason: "Release feed has no tag")
+            }
+            let latest = tag.trimmingCharacters(in: CharacterSet(charactersIn: "v "))
+            guard isNewer(latest, than: Self.version) else {
+                return .upToDate(current: Self.version)
+            }
+            guard let assets = obj["assets"] as? [[String: Any]],
+                  let dmg = assets.first(where: { ($0["name"] as? String) == "FreeCoffee.dmg" }),
+                  let dmgURLString = dmg["browser_download_url"] as? String,
+                  let dmgURL = URL(string: dmgURLString) else {
+                return .failed(reason: "Release \(latest) has no FreeCoffee.dmg asset")
+            }
+            // Published checksum: the release body carries "SHA256: <64 hex>".
+            let body = (obj["body"] as? String) ?? ""
+            var expectedSHA = ""
+            if let range = body.range(of: "SHA256:[ ]*([0-9a-fA-F]{64})", options: .regularExpression) {
+                expectedSHA = String(body[range]).replacingOccurrences(of: " ", with: "")
+                    .replacingOccurrences(of: "SHA256:", with: "").lowercased()
+            }
+            guard expectedSHA.count == 64 else {
+                return .available(version: latest, notes: Self.releasesPage)   // can't verify → manual path
+            }
+            guard installedAppURL != nil else {
+                return .available(version: latest, notes: Self.releasesPage)   // dev binary → show page
+            }
+            status = .downloading
+            let (tmpURL, dlResp) = try await session.download(from: dmgURL)
+            guard let dlHTTP = dlResp as? HTTPURLResponse, dlHTTP.statusCode == 200 else {
+                try? fm.removeItem(at: tmpURL)
+                return .failed(reason: "Download HTTP \((dlResp as? HTTPURLResponse)?.statusCode ?? 0)")
+            }
+            let sha = sha256(fileURL: tmpURL)
+            guard sha == expectedSHA else {
+                try? fm.removeItem(at: tmpURL)
+                NSLog("FreeCoffee updater: checksum mismatch (\(sha.prefix(12))… != \(expectedSHA.prefix(12))…)")
+                return .failed(reason: "Checksum mismatch — download discarded")
+            }
+            if install(fromDMG: tmpURL) {
+                return .ready(version: latest)
+            }
+            try? fm.removeItem(at: tmpURL)
+            return .failed(reason: "Install failed — DMG could not be applied")
+        } catch is CancellationError {
+            return status
+        } catch {
+            return .failed(reason: error.localizedDescription)
+        }
+    }
+
+    // MARK: Version comparison (numeric segments: 1.2.10 > 1.2.9)
+
+    private func isNewer(_ candidate: String, than current: String) -> Bool {
+        let c = candidate.split(separator: ".").map { Int($0) ?? 0 }
+        let cur = current.split(separator: ".").map { Int($0) ?? 0 }
+        for i in 0..<max(c.count, cur.count) {
+            let a = i < c.count ? c[i] : 0
+            let b = i < cur.count ? cur[i] : 0
+            if a != b { return a > b }
+        }
+        return false
+    }
+
+    // MARK: Install — extract DMG in Application Support, stage bundle for relaunch
+
+    private func install(fromDMG dmgURL: URL) -> Bool {
+        guard let source = mount(dmgURL) else { return false }
+        defer { unmount(source.volume) }
+
+        let updateDir = supportDir.appendingPathComponent("update", isDirectory: true)
+        try? fm.removeItem(at: updateDir)
+        do {
+            try fm.createDirectory(at: updateDir, withIntermediateDirectories: true)
+            try fm.copyItem(at: source.appURL, to: pendingAppURL)
+        } catch {
+            NSLog("FreeCoffee updater: copy failed: \(error.localizedDescription)")
+            return false
+        }
+        // Stage the replacement; the relaunched process swaps old → new on boot
+        // (applyPendingUpdateAndRelaunch) and always opens the NEW binary.
+        UserDefaults.standard.set(pendingAppURL.path, forKey: "FreeCoffeePendingUpdatePath")
+        return true
+    }
+
+    /// Called by the AppDelegate at startup: if a staged update exists,
+    /// replace the installed bundle with it, then open the (new) app.
+    static func applyPendingUpdateAndRelaunch() {
+        let defaults = UserDefaults.standard
+        guard let stagedPath = defaults.string(forKey: "FreeCoffeePendingUpdatePath") else { return }
+        defaults.removeObject(forKey: "FreeCoffeePendingUpdatePath")
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: stagedPath),
+              Bundle.main.bundleURL.pathExtension == "app" else {
+            try? fm.removeItem(atPath: stagedPath)
+            return
+        }
+        let target = Bundle.main.bundleURL
+        // Replace the running bundle: move old aside → move staged in → delete old.
+        let trash = target.deletingLastPathComponent()
+            .appendingPathComponent(".FreeCoffee-old-\(ProcessInfo.processInfo.globallyUniqueString)")
+        do {
+            try fm.moveItem(at: target, to: trash)
+            try fm.moveItem(atPath: stagedPath, toPath: target.path)
+            try? fm.removeItem(at: trash)
+        } catch {
+            NSLog("FreeCoffee updater: swap failed: \(error.localizedDescription)")
+            try? fm.removeItem(atPath: stagedPath)
+            return
+        }
+        NSWorkspace.shared.openApplication(at: target, configuration: NSWorkspace.OpenConfiguration()) { _, _ in }
+        exit(0)
+    }
+
+    // MARK: hdiutil plumbing
+
+    private typealias Mount = (volume: URL, appURL: URL)
+
+    private func mount(_ dmg: URL) -> Mount? {
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
+        proc.arguments = ["attach", dmg.path, "-nobrowse", "-readonly", "-plist"]
+        let pipe = Pipe()
+        proc.standardOutput = pipe
+        proc.standardError = Pipe()
+        do { try proc.run() } catch { return nil }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        proc.waitUntilExit()
+        guard proc.terminationStatus == 0,
+              let plist = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any],
+              let entities = plist["system-entities"] as? [[String: Any]],
+              let entry = entities.first(where: { ($0["mount_point"] as? String)?.isEmpty == false }),
+              let mountPoint = entry["mount_point"] as? String else { return nil }
+        let volume = URL(fileURLWithPath: mountPoint)
+        let appURL = volume.appendingPathComponent("FreeCoffee.app", isDirectory: true)
+        guard fm.fileExists(atPath: appURL.path) else { return nil }
+        return (volume, appURL)
+    }
+
+    private func unmount(_ volume: URL) {
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
+        proc.arguments = ["detach", volume.path, "-force"]
+        try? proc.run()
+        proc.waitUntilExit()
+    }
+
+    // MARK: sha256 (streamed via CommonCrypto — no shasum subprocess)
+
+    private func sha256(fileURL: URL) -> String {
+        var context = CC_SHA256_CTX()
+        CC_SHA256_Init(&context)
+        guard let handle = try? FileHandle(forReadingFrom: fileURL) else { return "" }
+        defer { try? handle.close() }
+        while true {
+            let chunk = handle.readData(ofLength: 1 << 20)
+            if chunk.isEmpty { break }
+            chunk.withUnsafeBytes { ptr in
+                _ = CC_SHA256_Update(&context, ptr.baseAddress, CC_LONG(chunk.count))
+            }
+        }
+        var digest = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
+        CC_SHA256_Final(&digest, &context)
+        return digest.map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// Open the releases page (dev-binary path, "Skip", and "Release notes" routes).
+    func openReleasesPage() {
+        NSWorkspace.shared.open(Self.releasesPage)
+    }
+}
+
+#if canImport(Darwin)
+import CommonCrypto
+#endif
+
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: State (main thread only — timers and notifications are main-bound)
@@ -649,17 +929,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var isAwake = true
     private var history: [String: Int] = [:]   // yyyy-MM-dd → cents earned
     private var lastTick: Date?
+    private var updateSeen: String?             // release version already auto-staged once
+    private var isManualCheck = false           // menu-triggered check → dialog instead of silent policy
 
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let popover = NSPopover()
     private let menu = NSMenu()
     private var popoverVC: PopoverViewController!
+    private let updateEngine = UpdateEngine()
 
     private var menuPauseItem: NSMenuItem!
     private var snooze30Item: NSMenuItem!
     private var snooze2hItem: NSMenuItem!
     private var snoozeOffItem: NSMenuItem!
     private var loginItem: NSMenuItem!
+    private var updateMenuItem: NSMenuItem!
     private var countdownTimer: Timer?
 
     private var sleepObserver: NSObjectProtocol?
@@ -698,6 +982,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: Lifecycle
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        UpdateEngine.applyPendingUpdateAndRelaunch()   // staged updater swap, if any (exits when it runs)
         loadState()
 
         statusItem.button?.title = "☕ FreeCoffee"
@@ -717,6 +1002,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         observeSleepWake()
         scheduleTimers()
+        scheduleUpdateCheck()
 
         // Real-advertiser bridge: read config.json, prime the UI from the
         // cached last-good campaign list, then fetch fresh — and keep
@@ -887,6 +1173,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         loginItem.target = self
         menu.addItem(loginItem)
 
+        // Updater: manual check is always available; auto-download (when a
+        // verified DMG exists) is handled by the same engine on a 6 h timer.
+        updateMenuItem = NSMenuItem(title: "Check for Updates…",
+                                    action: #selector(checkForUpdatesTapped(_:)), keyEquivalent: "u")
+        updateMenuItem.target = self
+        menu.addItem(updateMenuItem)
+
         // Reload campaigns — visible only when a feed is configured.
         let reload = NSMenuItem(title: "Reload campaigns",
                                 action: #selector(reloadCampaigns(_:)), keyEquivalent: "r")
@@ -938,6 +1231,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         snoozeOffItem?.state = snoozing ? .on : .off
         reloadMenuItem?.isHidden = (adFeedURL == nil)
         refreshLoginItem()
+
+        // Updater item: reflects the live engine state (see UpdateEngine.Status).
+        switch updateEngine.status {
+        case .checking:
+            updateMenuItem?.title = "Checking for Updates…"
+            updateMenuItem?.isEnabled = false
+        case .downloading:
+            updateMenuItem?.title = "Downloading update…"
+            updateMenuItem?.isEnabled = false
+        case .available:
+            updateMenuItem?.title = "Update Available — Open Releases Page"
+            updateMenuItem?.isEnabled = true
+        case .ready:
+            updateMenuItem?.title = "Update & Relaunch"
+            updateMenuItem?.isEnabled = true
+        case .failed:
+            updateMenuItem?.title = "Update Check Failed — Try Again"
+            updateMenuItem?.isEnabled = true
+        case .upToDate, .idle:
+            updateMenuItem?.title = "Check for Updates…"
+            updateMenuItem?.isEnabled = true
+        }
     }
 
     /// NSMenuItem validation: the sponsor item is only clickable when the
@@ -1012,6 +1327,78 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         refreshLoginItem()
+    }
+
+    // MARK: Update handling (see UpdateEngine — anonymous, checksum-verified)
+
+    /// Silent check on launch + every 6 h. Auto-download only when a verified
+    /// DMG can be staged; a version the user "skipped" is never re-prompted.
+    private func scheduleUpdateCheck() {
+        updateEngine.onStatusChange = { [weak self] newStatus in
+            self?.handleUpdateStatus(newStatus)
+        }
+        updateEngine.checkForUpdate()
+        let timer = Timer.scheduledTimer(timeInterval: UpdateEngine.checkInterval, target: self,
+                                         selector: #selector(updateTimerTick), userInfo: nil, repeats: true)
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    @objc private func updateTimerTick() {
+        guard !isManualCheck else { return }
+        updateEngine.checkForUpdate()
+    }
+
+    private func handleUpdateStatus(_ newStatus: UpdateEngine.Status) {
+        refreshUI()
+        switch newStatus {
+        case .failed(let reason):
+            NSLog("FreeCoffee updater: \(reason)")
+            if isManualCheck {
+                isManualCheck = false
+                dialog(title: "Update check failed",
+                       body: "FreeCoffee could not check for updates:\n\(reason)\n\nYou can always download the latest build from the releases page.")
+            }
+
+        case .available(let version, _):
+            if isManualCheck {
+                isManualCheck = false
+                dialog(title: "Update available — v\(version)",
+                       body: "The latest release is v\(version). This dev build has no installed app bundle to update, so grab the new DMG from the releases page.",
+                       button: "Open Releases Page") { [weak self] in self?.updateEngine.openReleasesPage() }
+            }
+
+        case .upToDate(let current):
+            if isManualCheck {
+                isManualCheck = false
+                dialog(title: "You're up to date",
+                       body: "FreeCoffee v\(current) is the latest version.")
+            }
+
+        case .ready(let version):
+            // Auto path completed: new app staged. Surface the one-click button.
+            if updateSeen != version { persist() }
+            dialog(title: "Update ready — v\(version)",
+                   body: "FreeCoffee v\(version) has been downloaded and verified (checksum OK).\n\nUpdate & Relaunch now, or keep working — the update applies automatically the next time you open the app.",
+                   button: "Update & Relaunch") { [weak self] in self?.updateAndRelaunchTapped() }
+
+        case .checking, .downloading, .idle:
+            break
+        }
+    }
+
+    @objc private func checkForUpdatesTapped(_ sender: NSMenuItem) {
+        isManualCheck = true
+        updateEngine.checkForUpdate { [weak self] _ in
+            self?.refreshUI()
+        }
+        refreshUI()
+    }
+
+    @objc private func updateAndRelaunchTapped() {
+        UpdateEngine.applyPendingUpdateAndRelaunch()
+        // If we get here there was nothing staged (e.g. user acted after the
+        // temp dir was cleaned) — fall back to the releases page.
+        updateEngine.openReleasesPage()
     }
 
     // MARK: Timers
@@ -1291,8 +1678,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         no screen contents, files, browser history, keystrokes, screenshots, or window titles. \
         Optionally, config.json can point at an HTTPS advertiser feed — the app fetches that one \
         URL (nothing is sent back) and shows those campaigns marked LIVE; their earnings settle \
-        once the platform backend is live. Balances also read as "≈ N cups" (1 cup = $5).
+        once the platform backend is live. The app checks GitHub Releases for updates (anonymous, \
+        one-way) and installs checksum-verified updates with your click. Balances also read as \
+        "≈ N cups" (1 cup = $5).
         """
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+
+    /// Two-button alert: default button runs `action` when chosen.
+    private func dialog(title: String, body: String, button: String, action: @escaping () -> Void) {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = body
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: button)
+        alert.addButton(withTitle: "Later")
+        if alert.runModal() == .alertFirstButtonReturn { action() }
+    }
+
+    /// Single-button informational alert.
+    private func dialog(title: String, body: String) {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = body
         alert.alertStyle = .informational
         alert.addButton(withTitle: "OK")
         alert.runModal()
@@ -1344,7 +1754,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                         disabled: disabled,
                                         snoozeUntil: snoozeUntil,
                                         history: history,
-                                        lastTick: lastTick)
+                                        lastTick: lastTick,
+                                        updateSkipped: updateEngine.skippedVersion,
+                                        updateSeen: updateSeen)
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .iso8601
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -1370,6 +1782,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             snoozeUntil = state.snoozeUntil
             history = state.history
             lastTick = state.lastTick
+            updateSeen = state.updateSeen
+            updateEngine.skippedVersion = state.updateSkipped
             if let until = snoozeUntil, until <= Date() {
                 // Stale snooze from a previous run — start fresh.
                 snoozeUntil = nil
@@ -1384,6 +1798,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             disabled = false
             snoozeUntil = nil
             lastTick = nil
+            updateSeen = nil
             history = [:]
             let cal = Calendar.current
             for (offset, cents) in Self.demoSeedWeek.reversed().enumerated() {

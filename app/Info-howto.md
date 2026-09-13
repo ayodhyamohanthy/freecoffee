@@ -102,9 +102,24 @@ Behavior once configured:
   campaigns are display-only and their earnings settle once the platform backend is live.
 - Remove `config.json` (or clear `adFeedURL`) to go back to the pure simulated demo.
 
-Privacy: the configured feed URL is the app's **only** outbound request, and nothing is ever sent
-back to it — no identifiers, no telemetry, no impression data. Everything else in the privacy
-boundary (no screen, files, keystrokes, window titles) is unchanged.
+Privacy: there are exactly two outbound requests, both anonymous and one-way: (1) the configured
+advertiser feed URL — the app reads it and sends nothing back; (2) the GitHub Releases update check
+(`api.github.com/…/releases/latest`) plus the DMG download when an update is offered. No identifiers,
+no telemetry, no impression data in either. Everything else in the privacy boundary (no screen,
+files, keystrokes, window titles) is unchanged.
+
+## Updates
+
+- The app checks the public GitHub Releases feed on launch and every 6 hours — one anonymous
+  request, nothing sent back. If a newer release exists, its DMG is downloaded in the background
+  and verified against the **sha256 checksum published in the release notes**; a mismatch is
+  discarded without ever touching the installed app.
+- On success the menu offers **Update &amp; Relaunch** (one click — the new bundle swaps in
+  atomically and the app relaunches; your ledger is untouched). If you dismiss it, the update
+  simply applies the next time you open the app. **Check for Updates…** in the menu runs the same
+  check on demand, and **Skip this version** is remembered so a declined release never nags.
+- Updates only ever come from this repository's releases. The bare dev binary (run outside an
+  `.app` bundle) can't self-swap and offers the releases page instead.
 
 ## Build from source / remove
 

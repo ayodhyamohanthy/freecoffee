@@ -19,7 +19,7 @@
 
 <div class="announce">
   <span id="announceLive" hidden><strong id="adsServedTicker">Ads served:</strong> <span id="adsServedCount">0</span></span>
-  <span id="announceStatic"><strong>Launch:</strong> 65% base share — publicly committed to 70% at $50k/mo 🚀</span>
+  <span id="announceStatic"><strong>Launch:</strong> 65% base share — publicly committed to 70% at $50k/mo · $2 minimum payout · pause anytime 🚀</span>
 </div>
 
 <header class="site-nav" id="top">
@@ -35,6 +35,7 @@
     <div class="nav-links">
       <a href="#how">How it works</a>
       <a href="#privacy">Privacy</a>
+      <a href="advertisers.html">Advertise</a>
       <a href="agents.html">Agents</a>
       <a href="dashboard.html">Dashboard</a>
       <a href="#download">Download</a>
@@ -55,9 +56,9 @@
       <p class="eyebrow">Menu-bar advertising · Mac · simulated demo</p>
       <h1>Your menu bar buys the&nbsp;coffee.</h1>
       <p class="hero-sub">
-        Advertisers bid in a real-time auction for minute-long placements in the empty stretch
-        of your menu bar. Install FreeCoffee, ignore it, and get paid — you see every winning bid
-        and your exact cut. Five dollars is a coffee; the bar earns it while you work.
+        Advertisers bid for minute-long placements in the empty stretch of your menu bar.
+        Install FreeCoffee, keep working, and watch the balance tick up — every winning bid and
+        your exact 65% cut is visible in the ledger, and cash-out starts at just $2.
         <strong>Day zero:</strong> the network is new, so early users shape the auction — and early
         advertisers get it with zero competition (see the
         <a href="advertisers.html#launchOffer" style="color:inherit">launch offer</a>).
@@ -174,6 +175,29 @@
         <li><strong>24h</strong><span>standard payout rail</span></li>
         <li><strong>$5</strong><span>= one coffee ☕</span></li>
       </ul>
+
+      <!-- Balance panel — shows the shape of an account: available now,
+           pending this week, lifetime. Same ledger math as the dashboard. -->
+      <div class="earn-panel" role="img" aria-label="Example account panel: $25.30 available, $3.25 pending, $28.55 lifetime">
+        <div class="earn-avail">
+          <p class="micro">Available</p>
+          <p class="earn-big">$25.30</p>
+          <p class="footnote">Cash out any time over $2 — standard rail lands within 24 hours.</p>
+        </div>
+        <div class="earn-pend">
+          <p class="micro">Pending · this week</p>
+          <p class="earn-big earn-pending">$3.25</p>
+          <p class="footnote">Verified minutes settle into available on their payout day.</p>
+        </div>
+        <div class="earn-life">
+          <p class="micro">Lifetime earnings</p>
+          <p class="earn-big">$28.55</p>
+          <p class="footnote">≈ 5 cups of coffee ☕ — every row shows the winning bid and your cut.</p>
+        </div>
+      </div>
+      <p class="footnote earn-note">Example figures from the public demo ledger (seed 42) — open the
+        <a href="dashboard.html">dashboard</a> to inspect every row. Real earnings begin when the
+        first campaigns clear review; the math you see is the math you get.</p>
     </div>
   </section>
 
@@ -235,6 +259,36 @@
       <p class="footnote" id="tierFootnote">Demo distribution — computed from the seeded demo ledger
         (seed 42), not from live traffic. When a backend is configured, this chart reflects the
         connected account's real 7-day ledger by tier.</p>
+    </div>
+  </section>
+
+  <!-- ============ PAUSE / CONTROL ============ -->
+  <section class="section" id="pause">
+    <div class="wrap">
+      <h2>You're in control of the bar</h2>
+      <p class="section-sub">
+        About to screen-share or present? Snooze FreeCoffee for 30 minutes or 2 hours —
+        right from the menu-bar menu, with a live countdown. While snoozed nothing is shown
+        and nothing is earned, and it resumes on its own. You can also pause earning
+        indefinitely, or hide the chip from your menu bar entirely.
+      </p>
+      <div class="grid-3">
+        <div class="card">
+          <h3>☕ Snooze</h3>
+          <p>30 minutes or 2 hours, one click. A countdown shows on the chip, and earning
+            resumes automatically when it ends — no settings to dig through.</p>
+        </div>
+        <div class="card">
+          <h3>⏻ Pause</h3>
+          <p>Pause earning for as long as you like from the same menu. The app keeps your
+            history and settings; nothing is shown while paused.</p>
+        </div>
+        <div class="card">
+          <h3>🗑 Remove</h3>
+          <p>Quit and delete the app — done. Your ledger lives in one folder in your home
+            directory; delete it and every trace of the demo is gone.</p>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -330,6 +384,25 @@
     </div>
   </section>
 
+  <!-- ============ FOR ADVERTISERS (strip) ============ -->
+  <section class="section" id="advertisers">
+    <div class="wrap">
+      <h2>Advertising on FreeCoffee</h2>
+      <p class="section-sub">
+        Reach active Mac users with minute-long text placements on their most-watched screen.
+        Start with a <strong>$15 minimum spend</strong>, get human review within 48 hours, and track
+        impressions, clicks, and spend in a report you can audit row by row.
+      </p>
+      <div class="card" style="margin-top:14px">
+        <p class="micro">Launch offer — first advertisers only</p>
+        <p style="margin:6px 0 8px">Your first $100 runs with <strong>no platform cut</strong>, and your bid is
+          the top bid until the auction fills. Tier floors today: T1 $4.00 · T2 $2.50 · T3 $1.25 CPM.</p>
+        <a class="btn btn-primary" href="advertisers.html">Advertise — see the launch offer</a>
+        <a class="btn btn-ghost" href="agents.html" style="margin-left:8px">Automate it with the agent API</a>
+      </div>
+    </div>
+  </section>
+
   <!-- ============ FAQ ============ -->
   <section class="section section-alt" id="faq">
     <div class="wrap">
@@ -370,7 +443,7 @@
           <summary>How do referrals work?</summary>
           <div class="faq-body">
             <p>You earn <strong>10% of your referee's base earnings for 12 months</strong> — double
-              the referral rate claim in the comparison above. It's gated on real activity: your referee
+              the 5% rate that's typical in this category. It's gated on real activity: your referee
               needs at least <strong>60 verified minutes in their first 30 days</strong> before the referral
               starts paying. No gate-passing, no payout — which keeps the program worth funding.</p>
           </div>
@@ -431,6 +504,17 @@
               simply don't serve your creative. See <a href="advertisers.html">For advertisers</a>.</p>
           </div>
         </details>
+        <details>
+          <summary>Does the app update itself?</summary>
+          <div class="faq-body">
+            <p>Yes. On launch the app asks the public GitHub Releases feed whether a newer build exists
+              (one anonymous HTTPS request — no account, no identifier, no telemetry). A new version
+              downloads in the background, is verified by checksum, and is offered with an
+              <strong>Update &amp; Relaunch</strong> button in the app's menu; it also installs the next
+              time you open the app. Prefer to stay in control? <strong>Check for Updates</strong> is a
+              manual menu item, and nothing downloads without your click.</p>
+          </div>
+        </details>
       </div>
     </div>
   </section>
@@ -467,12 +551,15 @@
   <section class="section cta-section" id="download">
     <div class="wrap">
       <h2>Put your menu bar to work</h2>
-      <p class="section-sub">A single-file Mac app, readable before you run it.</p>
+      <p class="section-sub">A single-file Mac app, readable before you run it. Updates are automatic
+        — every release ships with a published sha256 checksum the app verifies before installing.</p>
       <div class="hero-cta">
         <a class="btn btn-primary btn-lg" href="https://github.com/ayodhyamohanthy/freecoffee/releases/latest/download/FreeCoffee.dmg">Download for Mac (.dmg)</a>
         <a class="btn btn-ghost btn-lg" href="dashboard.html">Open dashboard</a>
       </div>
       <p class="footnote install-hint">Unsigned demo build — right-click the app to open it the first time (Gatekeeper).
+        Already installed? The app <strong>checks for updates on every launch</strong> and installs the new
+        version with one click — or use <strong>Check for Updates</strong> in its menu any time.
         Prefer to build it yourself? <code>cd freecoffee/app &amp;&amp; ./build.sh</code> — requires macOS 13+
         with the Xcode command-line tools. See <a href="app/Info-howto.md">the how-to</a>.</p>
     </div>
@@ -500,7 +587,7 @@
       <a href="#privacy">Privacy</a>
       <a href="https://github.com/ayodhyamohanthy/freecoffee/releases/latest/download/FreeCoffee.dmg">Mac app</a>
     </nav>
-    <p class="disclaimer"><a href="install-guide.html">Apple blocked the app? Install guide</a> · FreeCoffee demo — simulated data.</p>
+    <p class="disclaimer"><a href="install-guide.html">Apple blocked the app? Install guide</a> · FreeCoffee demo — simulated data · auto-updates via GitHub Releases.</p>
   </div>
 </footer>
 

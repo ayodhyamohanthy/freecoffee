@@ -69,13 +69,16 @@ cd freecoffee/app
     Disable toggles the persisted earning kill-switch,
     Account opens the demo profile page.
 - **Right-click** → menu: **Pause earning** toggle, **Launch at Login** (bundled app only),
-  **About FreeCoffee demo**, **Quit FreeCoffee**.
+  **Check for Updates…**, **About FreeCoffee demo**, **Quit FreeCoffee**.
 - Earning ticks up $0.01 every 90 s while your Mac is awake.
-- Persists `{balance, today, paused, disabled, snoozeUntil, history, lastTick}` to
-  `~/Library/Application Support/FreeCoffee/ledger.json` (created on first run; delete it to reset).
+- **Auto-updates:** checks GitHub Releases on launch and every 6 h (one anonymous request);
+  downloads + sha256-verifies the new DMG and offers **Update & Relaunch**. One-click install,
+  applies on next launch if dismissed — details in [`app/Info-howto.md`](app/Info-howto.md#updates).
+- Persists `{balance, today, paused, disabled, snoozeUntil, history, lastTick, updateSeen, updateSkipped}`
+  to `~/Library/Application Support/FreeCoffee/ledger.json` (created on first run; delete it to reset).
 - Privacy: the app collects nothing — no screen, file, keystroke, or window-title access. The only
-  signals it touches are awake/asleep state and its own timers. See the comment block at the top of
-  `FreeCoffeeMenuBar.swift`.
+  outbound traffic is the opt-in advertiser-feed fetch and the anonymous GitHub Releases update
+  check; nothing is ever sent back. See the comment block at the top of `FreeCoffeeMenuBar.swift`.
 
 ### Install the app (DMG)
 
