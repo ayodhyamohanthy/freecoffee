@@ -9,7 +9,7 @@ This repository is a **complete local demo** — a static marketing/demo site pl
 macOS menu-bar app. Everything runs on your machine: no backend, no frameworks, no build step for
 the web layer, no CDNs, no external fonts, no npm.
 
-> **FreeCoffee demo — simulated data. Not affiliated with SponsorBar or KickBot Inc.**
+> **FreeCoffee demo — simulated data.**
 
 ---
 
@@ -27,7 +27,7 @@ That's it — any static file server works.
 
 | Page | What it is |
 |---|---|
-| `index.html` | Landing page: hero with a **live CSS/DOM mock of the macOS menu bar** (rotating sponsor chip, ticking clock, growing balance) **plus a mock of the menu-bar popover** (TOTAL BALANCE block with cups hint, caramel boost line, 7-day bar chart, footer buttons), how-it-works, FreeCoffee-vs-SponsorBar comparison, the privacy data boundary, FAQ. |
+| `index.html` | Landing page: hero with a **live CSS/DOM mock of the macOS menu bar** (rotating sponsor chip, ticking clock, growing balance) **plus a mock of the menu-bar popover** (TOTAL BALANCE block with cups hint, caramel boost line, 7-day bar chart, footer buttons), how-it-works, the privacy data boundary, FAQ. |
 | `dashboard.html` | App-shell page (**Earn › Overview**, light theme). Sidebar + breadcrumb shell, balance stat card (Total **$28.55** "≈ 5 cups", Available, Pending, This week, payout-progress toward the $2 minimum), a 14-day SVG area chart (slate-teal line `#4C7A8A` on fill `#DFE9ED`, y-grid, dotted markers), the full ledger with winning bids and exact cuts, an "Action required" panel, a "Recent sponsors" list, and the live payout simulator. Dismissible Setup-guide ("1 of 4 complete") and dark promo cards in the sidebar. `localStorage` key: `freecoffee:v1`. |
 | `payouts.html` | App-shell page (**Earn › Payouts**, light theme). Choose how you get paid: Stripe (gold gradient CTA) and Whop (orange gradient CTA) rails split by a divider — clicking marks `freecoffee:v1 → profile.payoutRail` connected (demo-only until the backend payout integration), a Balance 3-stat strip (Total/Available/Pending from the seeded ledger), and the Withdrawal history table fed by simulated `paidOut` records (empty state until the first simulated payout). |
 | `model.html` | App-shell page (**Account › Payout model**, light theme). The payout model in plain numbers: lever table, honesty policy, sustainability math (worked example), anti-fraud controls, payout rails. |
@@ -135,9 +135,8 @@ The site is also a full PWA (works entirely offline after first visit — no bac
   Worked example: 1,000 impressions @ $6 CPM = $6.00 → user base $3.90 → bounded bonuses ≤$0.55 →
   platform keeps ≥ ~$1.55.
 
-SponsorBar comparisons on the site use only figures observed on sponsorbar.io (homepage, /advertise,
-/faq, /agents), Sep 2026 — re-checked Sep 12, 2026. Their base share IS published (70%, per their FAQ),
-so the honest line is a tie on paper + our written 65%→70% ratchet — never a "we pay more" claim.
+No competitor comparisons appear anywhere on the site or in copy — the product stands on its own
+published economics: the 65%→70% ratchet, the $2 payout floor, and the tier floors.
 
 ## Connecting real advertisers
 
@@ -257,8 +256,8 @@ make that day come faster — each item is a channel, not a guess.
    $15 minimum and the platform cut on the first $100 for the first 10. Prospect list to work by
    hand (email `advertisers@freecoffee.tech` is already on the page): indie macOS app makers
    (they're your natural audience — they ship on Macs), developer-tool SaaS, coffee/desk brands,
-   and the companies already advertising on SponsorBar (that list = proven buyers of this exact
-   format). Each gets a two-minute pitch: "menu bar, 1 minute, your CPM, your dashboard — 0
+   and any brand already buying menu-bar or desktop placements elsewhere (proven buyers of this
+   exact format). Each gets a two-minute pitch: "menu bar, 1 minute, your CPM, your dashboard — 0
    competition today because the room is empty."
 2. **Ship the universal DMG + Homebrew tap before pitching.** `app/build.sh` now builds
    arm64+x86_64 with a `/Applications` link in the DMG; a `v1.1.0` release makes the download

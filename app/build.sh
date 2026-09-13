@@ -87,7 +87,7 @@ cat > dist/FreeCoffee.app/Contents/Info.plist <<'PLIST'
 	<key>CFBundleIconFile</key>
 	<string>AppIcon</string>
 	<key>NSHumanReadableCopyright</key>
-	<string>Demo — not affiliated with SponsorBar or KickBot Inc.</string>
+	<string>Demo — simulated data. No real campaigns, no real payouts.</string>
 	<key>CFBundleExecutable</key>
 	<string>FreeCoffeeMenuBar</string>
 	<key>CFBundlePackageType</key>

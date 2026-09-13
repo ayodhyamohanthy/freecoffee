@@ -1291,8 +1291,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         no screen contents, files, browser history, keystrokes, screenshots, or window titles. \
         Optionally, config.json can point at an HTTPS advertiser feed — the app fetches that one \
         URL (nothing is sent back) and shows those campaigns marked LIVE; their earnings settle \
-        once the platform backend is live. Balances also read as "≈ N cups" (1 cup = $5). \
-        Not affiliated with SponsorBar or KickBot Inc.
+        once the platform backend is live. Balances also read as "≈ N cups" (1 cup = $5).
         """
         alert.alertStyle = .informational
         alert.addButton(withTitle: "OK")

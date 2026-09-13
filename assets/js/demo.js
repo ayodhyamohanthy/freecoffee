@@ -83,17 +83,9 @@
       marginAt2CPM: 20,           // ≈20% platform margin at $2 CPM
       breakevenCPM: 0.70          // break-even ≈ $0.70 CPM
     },
-    // The ONLY SponsorBar numbers allowed in copy (observed on sponsorbar.io, Sep 2026).
-    SPONSORBAR_OBSERVED: {
-      launchCPM: 6,
-      launchBoostPct: 10,
-      referralRate: 0.05,
-      referralAttributionDays: 14,
-      payoutThreshold: 5,
-      payoutCadence: 'weekly',
-      countries: 'US/CA/UK/CH/EEA',
-      advertiserMinimum: 15
-    }
+    // Competitor benchmark block removed from copy — the product stands on
+    // its own published economics (AD_ECON + SUSTAINABILITY above).
+    BENCHMARKS_REMOVED: true
   };
 
   /* ------------------------------------------------------------------ */

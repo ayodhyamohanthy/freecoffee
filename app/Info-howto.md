@@ -41,7 +41,7 @@ readable file.
 5. The demo pages it opens live at `http://127.0.0.1:8090/…` — start the server with
    `cd freecoffee && python3 -m http.server 8090`.
 6. Privacy: the app collects nothing (see the comment block at the top of `FreeCoffeeMenuBar.swift`).
-7. All data is simulated. FreeCoffee demo — not affiliated with SponsorBar or KickBot Inc.
+7. All data is simulated. FreeCoffee demo — no real campaigns, no real payouts.
 
 ## Launch at Login
 

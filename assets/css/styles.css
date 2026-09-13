@@ -1085,7 +1085,7 @@ a.sp-row:hover .sp-name { color: var(--gold-bright); }
 .spec-comment { color: var(--text-faint); }
 
 /* ==========================================================================
-   LIGHT SHELL THEME — SponsorBar-style light dashboard (body.theme-light).
+   LIGHT SHELL THEME — light dashboard (body.theme-light).
    Applied ONLY to the app-shell pages (dashboard, payouts, model, campaigns,
    profile, referrals, advertisers). index.html keeps the dark marketing look.
    Approach: the same custom-property NAMES are re-pointed to light values on

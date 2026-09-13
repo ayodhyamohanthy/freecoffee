@@ -1,3 +1,4 @@
 # Build artifacts that shouldn't bloat the repo (DMG/app distributed via GitHub Releases)
 app/dist/
 .DS_Store
+.backups/
