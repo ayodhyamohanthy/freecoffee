@@ -2,8 +2,10 @@
    FreeCoffee demo service worker — plain ES2018, no transpiler, no imports.
 
    Caching strategy:
-     - precache (install):  the eight pages + CSS + JS + icons, cache-first
-     - navigations:         network-first, fall back to cache (then /index.html)
+     - precache (install):  all ten pages + CSS + JS + icons + manifest,
+       cache-first. Each URL is added individually so one missing file
+       can never fail the whole install (cache.addAll is atomic).
+     - navigations:         network-first, fall back to cache (then index.html)
      - other same-origin GET: cache-first, runtime-cache misses
      - cross-origin / non-GET: untouched — this includes the platform
        backend (POST /track, GET /earnings/…, GET /feed.json on a
@@ -14,7 +16,7 @@
 /* eslint-disable no-restricted-globals */
 'use strict';
 
-var CACHE = 'freecoffee-v7';
+var CACHE = 'freecoffee-v9';
 
 var PRECACHE = [
   './',
@@ -22,23 +24,40 @@ var PRECACHE = [
   './agents.html',
   './dashboard.html',
   './payouts.html',
-  './model.html', './install-guide.html',
+  './model.html',
+  './install-guide.html',
   './campaigns.html',
   './profile.html',
   './referrals.html',
   './advertisers.html',
+  './manifest.webmanifest',
   './assets/css/styles.css',
   './assets/js/demo.js',
   './assets/js/dashboard.js',
   './assets/icons/icon-192.png',
-  './assets/icons/icon-512.png'
+  './assets/icons/icon-512.png',
+  './assets/icons/icon-maskable-512.png'
 ];
+
+var FALLBACK_URL = new URL('./index.html', self.location.href).toString();
+
+function putSafe(cache, request, response) {
+  try {
+    if (!response || !response.ok) return;
+    cache.put(request, response);
+  } catch (e) { /* opaque or oversized — non-fatal */ }
+}
 
 /* ---------- install: precache everything, take over immediately ---------- */
 self.addEventListener('install', function (event) {
   event.waitUntil(
     caches.open(CACHE).then(function (cache) {
-      return cache.addAll(PRECACHE);
+      var adds = PRECACHE.map(function (url) {
+        return cache.add(new URL(url, self.location.href).toString()).catch(function () {
+          return null; // one bad URL must never fail the whole install
+        });
+      });
+      return Promise.all(adds);
     }).then(function () {
       return self.skipWaiting();
     })
@@ -67,17 +86,19 @@ self.addEventListener('fetch', function (event) {
   if (url.origin !== self.location.origin) return;
 
   // Navigation requests (HTML pages): network-first, fallback to cache,
-  // final fallback to the cached shell (index.html).
+  // final fallback to the cached app shell (index.html).
   if (request.mode === 'navigate' ||
       (request.headers.get('accept') || '').indexOf('text/html') !== -1) {
     event.respondWith(
       fetch(request).then(function (response) {
-        var copy = response.clone();
-        caches.open(CACHE).then(function (cache) { cache.put(request, copy); });
+        if (response && response.ok) {
+          var copy = response.clone();
+          caches.open(CACHE).then(function (cache) { putSafe(cache, request, copy); });
+        }
         return response;
       }).catch(function () {
         return caches.match(request).then(function (cached) {
-          return cached || caches.match('./index.html');
+          return cached || caches.match(FALLBACK_URL);
         });
       })
     );
@@ -91,9 +112,13 @@ self.addEventListener('fetch', function (event) {
       return fetch(request).then(function (response) {
         if (response && response.ok) {
           var copy = response.clone();
-          caches.open(CACHE).then(function (cache) { cache.put(request, copy); });
+          caches.open(CACHE).then(function (cache) { putSafe(cache, request, copy); });
         }
         return response;
+      }).catch(function (err) {
+        // Offline and not in cache: surface the network error so the
+        // page's own offline handling applies. Never synthesize content.
+        throw err;
       });
     })
   );

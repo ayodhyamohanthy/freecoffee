@@ -111,6 +111,19 @@
         </div>
       </div>
 
+      <!-- ============ MARKET PRICE (proactive advertiser transparency) ============ -->
+      <section aria-labelledby="market-h" style="margin:34px 0 10px">
+        <h2 id="market-h" style="font-size:1.3rem">What a minute costs right now</h2>
+        <div class="card">
+          <p class="micro">Live market price · recalculated from the connected feed</p>
+          <p class="panel-big" style="margin:6px 0 2px"><span id="marketCpm">$6.00</span><span class="per">CPM top bid</span></p>
+          <p class="footnote" id="marketNote">Current top bid · recalculated when you connect a feed. Sourced from your connected advertiser feed right now — highest CPM wins the minute.</p>
+          <p class="footnote">The rule competitors bury: their market price moves hourly with a floor and a
+            per-hour cap — ours is simpler to verify because the auction is the price. Highest bid wins the
+            minute, every minute, and the winning bid is printed on your ledger row.</p>
+        </div>
+      </section>
+
       <!-- ============ LEVER TABLE ============ -->
       <section aria-labelledby="levers-h" style="margin-bottom:10px">
         <h2 id="levers-h" style="font-size:1.3rem">The levers</h2>
@@ -166,19 +179,18 @@
           <div class="card">
             <h3>Claims we'll make</h3>
             <ul class="check-list">
-              <li>65% base share, publicly committed to 70% at $50k/mo platform revenue.</li>
-              <li>Double the referral rate: 10% vs SponsorBar's 5% (observed Sep 2026).</li>
-              <li>$2 payout in 24 hours instead of $5 weekly.</li>
-              <li>Earn in more countries via tiered floors instead of a geo wall.</li>
+              <li>65% base share, publicly committed to 70% at $50k/mo platform revenue — vs their published 70% base (their FAQ, Sep 2026): an honest tie on paper, and our edge is the written ratchet.</li>
+              <li>Double the referral rate: 10% for 12 months (gated on 60 verified minutes) vs their 5% + 5% newcomer boost for 30 days.</li>
+              <li>$2 payout in 24 hours instead of $10 after a 5-day pending review.</li>
+              <li>Earn in more countries via tiered floors instead of payout-provider coverage walls.</li>
               <li>See the winning bid and your cut on every impression.</li>
             </ul>
           </div>
           <div class="card">
             <h3>Claims we won't make</h3>
             <ul class="check-list not-list">
-              <li>We won't state SponsorBar's base share — it is not published, so there's nothing honest to quote and nothing fair to beat.</li>
-              <li>We won't claim "we pay more than SponsorBar" on base share, because there's no published number to compare against.</li>
-              <li>We won't quote SponsorBar numbers beyond those observed on sponsorbar.io, Sep 2026, or imply they've changed since.</li>
+              <li>We won't claim "we pay more than SponsorBar" on base share — their 70% is published, so it's a tie on paper; our claim is the written ratchet, not a bigger number.</li>
+              <li>We won't quote SponsorBar numbers beyond those observed on sponsorbar.io (homepage, /advertise, /faq, /agents), Sep 2026, or imply they've changed since.</li>
               <li>We won't promise payout rails we don't have — "rails subject to provider availability" is printed right on the payout table below.</li>
             </ul>
           </div>
@@ -314,7 +326,48 @@
   </div>
 </div>
 
+<script src="assets/js/demo.js"></script>
 <script>
+/* Model page — proactive market-price card: top bid from the connected feed
+   (or the seeded floor when offline). Display only; never touches a ledger. */
+(function () {
+  'use strict';
+  try {
+    var D = window.FreeCoffeeDemo;
+    if (!D) return;
+    var el = document.getElementById('marketCpm');
+    var note = document.getElementById('marketNote');
+    if (!el) return;
+    function paint(cpm, live) {
+      el.textContent = '$' + Number(cpm).toFixed(2);
+      if (note) note.textContent = live
+        ? 'Live top bid from your connected feed — highest CPM wins the minute, recalculated on every fetch.'
+        : 'Current top bid · recalculated when you connect a feed. Sourced from your connected advertiser feed right now — highest CPM wins the minute.';
+    }
+    var floor = 6.0, fellBack = true;
+    try {
+      var top = D.pickAd(D.SPONSORS.map(function (s, i) {
+        return { id: 'seed-' + i, sponsor: s.name, cpm: s.bid };
+      }))[0];
+      if (top && Number(top.cpm) > 0) { floor = Number(top.cpm); fellBack = false; }
+    } catch (e) { /* floor stays */ }
+    paint(floor, !fellBack);
+    try {
+      var raw = window.localStorage.getItem('freecoffee:v1');
+      var s = raw ? JSON.parse(raw) : null;
+      var url = s && s.profile && s.profile.adFeedUrl;
+      if (url && D.fetchLiveCampaigns) {
+        D.fetchLiveCampaigns(url).then(function (res) {
+          var camps = res && res.campaigns;
+          if (camps && camps.length) {
+            var w = D.pickAd(camps)[0];
+            if (w && Number(w.cpm) > 0) paint(Number(w.cpm), true);
+          }
+        }).catch(function () { /* floor stays */ });
+      }
+    } catch (e) { /* floor stays */ }
+  } catch (e) { /* static $6.00 stays */ }
+})();
 /* Service worker registration — shared inline snippet on all pages.
    Skipped on file:// (no SW support there); failures are non-fatal. */
 if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {

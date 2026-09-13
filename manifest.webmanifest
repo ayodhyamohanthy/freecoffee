@@ -3,10 +3,11 @@
   "short_name": "FreeCoffee",
   "description": "Menu-bar advertising demo: advertisers bid for minute-long placements, you keep 65%, and the balance reads in cups of coffee. Simulated data — free demo.",
   "start_url": "./index.html",
+  "id": "./index.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#14100D",
-  "theme_color": "#E0A93E",
+  "theme_color": "#14100D",
   "icons": [
     {
       "src": "assets/icons/icon-192.png",

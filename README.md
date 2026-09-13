@@ -135,8 +135,9 @@ The site is also a full PWA (works entirely offline after first visit — no bac
   Worked example: 1,000 impressions @ $6 CPM = $6.00 → user base $3.90 → bounded bonuses ≤$0.55 →
   platform keeps ≥ ~$1.55.
 
-SponsorBar comparisons on the site use only figures observed on sponsorbar.io, Sep 2026. SponsorBar's
-base share is not published and is never quoted or compared against — there is no "we pay more" claim.
+SponsorBar comparisons on the site use only figures observed on sponsorbar.io (homepage, /advertise,
+/faq, /agents), Sep 2026 — re-checked Sep 12, 2026. Their base share IS published (70%, per their FAQ),
+so the honest line is a tie on paper + our written 65%→70% ratchet — never a "we pay more" claim.
 
 ## Connecting real advertisers
 
@@ -243,6 +244,40 @@ one free ad network, the optional CI token — with exact click-paths lives in
 details (Workers Builds "Connect to Git" with zero tokens, or the included
 `.github/workflows/deploy-backend.yml` with `CLOUDFLARE_API_TOKEN`) are in
 [`backend/README.md`](backend/README.md).
+
+## Cold start: zero users, zero advertisers — the honest plan
+
+The honest position today is **0 paying campaigns, 0 settled dollars** — and the site says so on the
+landing ("Day zero"), on `advertisers.html` ("Live network status / 0 live campaigns"), and on
+`campaigns.html` (no campaign rows). No staged counters, no seeded "X users joined" claims. The
+counter moves the day a real campaign clears review, by hand, with a reference. This is the plan to
+make that day come faster — each item is a channel, not a guess.
+
+1. **Sell the first 10 advertisers, not impressions.** `advertisers.html#launchOffer` waives the
+   $15 minimum and the platform cut on the first $100 for the first 10. Prospect list to work by
+   hand (email `advertisers@freecoffee.tech` is already on the page): indie macOS app makers
+   (they're your natural audience — they ship on Macs), developer-tool SaaS, coffee/desk brands,
+   and the companies already advertising on SponsorBar (that list = proven buyers of this exact
+   format). Each gets a two-minute pitch: "menu bar, 1 minute, your CPM, your dashboard — 0
+   competition today because the room is empty."
+2. **Ship the universal DMG + Homebrew tap before pitching.** `app/build.sh` now builds
+   arm64+x86_64 with a `/Applications` link in the DMG; a `v1.1.0` release makes the download
+   buttons real. Nothing converts a sponsor faster than a working install.
+3. **Deploy the backend (30 minutes, free):** follow `backend/ACCOUNT-CHECKLIST.md` exactly —
+   Cloudflare Worker + KV + `ADMIN_TOKEN`. Once `/feed.json` and `/earnings/{deviceId}` are live,
+   "your campaign went live" is a curl, not an engineering promise.
+4. **First-slot bait:** when the first paid campaign clears review, the honest network counters
+   (index `#netCount`, advertisers `#liveCount`) flip from 0 to 1 — that's the "auction is filling"
+   signal every subsequent prospect and user sees on the live site. Say exactly "the first campaign
+   went live", never "N users joined".
+5. **User-side cold start is by design:** $2 minimum, 24-hour rail, 65%→70% ratchet, and referral
+   terms are all published *before* the auction fills. The install pitch is "lock in the rules;
+   earnings start the day campaign #1 clears review." No fake day-one income.
+
+Anti-patterns this repo actively refuses: seeding fake campaign rows, freezing the demo ledger as
+"real earnings", showing "X advertisers joined" counters, or prepending house ads to `/feed.json`
+(that minted an unsustainable liability — a fictional CPM on the real ledger). The ledger only ever
+contains verified placements from campaigns that actually exist.
 
 ## Hosting & domain
 

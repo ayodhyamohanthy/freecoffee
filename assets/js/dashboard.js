@@ -741,6 +741,7 @@
      ------------------------------------------------------------------ */
   function bindSim() {
     var minutes = $('simMinutes'), cpm = $('simCpm'), ctr = $('simCtr'), streak = $('simStreak');
+    if (!minutes || !cpm || !ctr || !streak) return; // simulator markup absent
     function recompute() {
       var p = D.projectMonthly({
         minutes: Number(minutes.value),

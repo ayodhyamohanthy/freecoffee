@@ -41,7 +41,7 @@
     </div>
     <div class="nav-cta">
       <a class="btn btn-ghost" href="dashboard.html">Open dashboard</a>
-      <a class="btn btn-primary" href="app/dist/FreeCoffee.dmg">Download for Mac</a>
+      <a class="btn btn-primary" href="https://github.com/ayodhyamohanthy/freecoffee/releases/latest/download/FreeCoffee.dmg">Download for Mac</a>
     </div>
   </nav>
   <p class="nav-note">Prefer source? Build from source: <code>freecoffee/app/build.sh</code> · The .dmg is an unsigned demo — right-click to open the first time.</p>
@@ -58,9 +58,12 @@
         Advertisers bid in a real-time auction for minute-long placements in the empty stretch
         of your menu bar. Install FreeCoffee, ignore it, and get paid — you see every winning bid
         and your exact cut. Five dollars is a coffee; the bar earns it while you work.
+        <strong>Day zero:</strong> the network is new, so early users shape the auction — and early
+        advertisers get it with zero competition (see the
+        <a href="advertisers.html#launchOffer" style="color:inherit">launch offer</a>).
       </p>
       <div class="hero-cta">
-        <a class="btn btn-primary btn-lg" href="app/dist/FreeCoffee.dmg">Download for Mac (.dmg)</a>
+        <a class="btn btn-primary btn-lg" href="https://github.com/ayodhyamohanthy/freecoffee/releases/latest/download/FreeCoffee.dmg">Download for Mac (.dmg)</a>
         <button type="button" id="installBtn" class="btn btn-ghost btn-lg" hidden>Install app</button>
         <a class="btn btn-ghost btn-lg" href="dashboard.html">Open the demo dashboard</a>
       </div>
@@ -245,57 +248,70 @@
       </p>
       <div class="table-scroll">
         <table class="compare-table">
-          <caption class="visually-hidden">Comparison of FreeCoffee and SponsorBar on referral rate, payout threshold, payout speed, country availability, and ledger transparency</caption>
+          <caption class="visually-hidden">Comparison of FreeCoffee and SponsorBar on referrals, payout terms, coverage, transparency, share, CPM, pause control, and advertiser entry</caption>
           <thead>
             <tr><th scope="col">What matters</th><th scope="col">FreeCoffee</th><th scope="col">SponsorBar¹</th></tr>
           </thead>
           <tbody>
             <tr>
               <th scope="row">Referral rate</th>
-              <td class="good">10% for 12 months</td>
-              <td>5% with 14-day last-click attribution</td>
+              <td class="good">10% for 12 months, gated on 60 verified minutes</td>
+              <td>5% of referee base + 5% newcomer boost for 30 days, 14-day last-click window (per their FAQ)</td>
             </tr>
             <tr>
               <th scope="row">Payout minimum</th>
               <td class="good">$2</td>
-              <td>$5</td>
+              <td>$10 available to withdraw (per their FAQ, Sep 2026)</td>
+            </tr>
+            <tr>
+              <th scope="row">Pending → available</th>
+              <td class="good">Demo settles visibly in-ledger; production target 24h</td>
+              <td>5-day pending review (per their FAQ)</td>
             </tr>
             <tr>
               <th scope="row">Payout speed</th>
-              <td class="good">24-hour rail, instant stablecoin option</td>
-              <td>Weekly payouts</td>
+              <td class="good">24-hour rail, instant stablecoin option, $0 fees</td>
+              <td>Stripe to bank / Whop balance after review; SponsorBar covers Stripe's $0.25 + 0.25% (per their FAQ)</td>
             </tr>
             <tr>
               <th scope="row">Where you can earn</th>
               <td class="good">Tiered floors — Tier 1 (US, CA, UK, CH, EEA), Tier 2 (AU, NZ, JP, KR, SG, AE), Tier 3 (rest of world)</td>
-              <td>Paid participation in US/CA/UK/CH/EEA</td>
+              <td>Stripe direct-to-bank in 34 countries · Whop in 200+ (per their FAQ)</td>
             </tr>
             <tr>
               <th scope="row">Ledger transparency</th>
               <td class="good">Winning bid + your exact cut on every impression</td>
-              <td>—</td>
+              <td>Price + split recorded per impression (per their FAQ)</td>
             </tr>
             <tr>
               <th scope="row">Base revenue share</th>
               <td class="good">65%, publicly committed to 70% at $50k/mo</td>
-              <td>Not published²</td>
+              <td>70% base (per their FAQ, Sep 2026 — even match on paper, ours commits higher in writing)</td>
             </tr>
             <tr>
               <th scope="row">Launch CPM</th>
               <td>Auction-based, tier floors below</td>
-              <td>$6 per 1,000 minute-long impressions, +10% launch boost</td>
+              <td>$2 market CPM, $2 floor, 10% launch boost (their FAQ, Sep 2026)</td>
+            </tr>
+            <tr>
+              <th scope="row">Pause control</th>
+              <td class="good">Pause + 30-min / 2-hour snooze with countdown, persisted across relaunches</td>
+              <td>Snooze 30 min / 2 h / 6 h / rest of day, or hide indefinitely (per their FAQ)</td>
             </tr>
             <tr>
               <th scope="row">Advertiser minimum</th>
-              <td>—</td>
+              <td class="good">$15 — same entry point, but campaigns can run on your own machine free via the self-serve feed today</td>
               <td>$15</td>
             </tr>
           </tbody>
         </table>
       </div>
       <p class="footnote">
-        ¹ Observed on sponsorbar.io, Sep 2026. ² SponsorBar's base share is not published — we won't
-        guess it for them, and we don't claim to beat what they haven't stated. We just publish ours.
+        ¹ Observed on sponsorbar.io (homepage, /advertise, /faq, /agents), Sep 2026 — their numbers move
+        (launch boosts, market CPM); we re-check and update this table rather than freeze a flattering
+        snapshot. ² Their base share <em>is</em> published (70% per their FAQ) — so this is an honest tie
+        on paper, and our edge is the written commitment: 65% today, 70% at $50k/mo platform revenue,
+        on <a href="model.html">the payout model page</a>.
       </p>
     </div>
   </section>
@@ -349,8 +365,9 @@
           <li><strong>Awake / unlocked status</strong> — so impressions only count while you're actually there.</li>
           <li><strong>Recent activity</strong> — a coarse "was the machine in use this minute" signal, nothing more granular.</li>
           <li><strong>Verified ad clicks</strong> — ≥10s after the impression, ≥2s dwell, so clicks are real.</li>
+          <li><strong>Placement visibility</strong> — the chip must be rendered in a valid, visible menu-bar position (notch and safe-area aware); an uncertain minute is never billed. Same eligibility bar, stated up front.</li>
         </ul>
-        <p class="footnote">That's the whole list. The <a href="app/Info-howto.md">app source</a> is a single Swift file you can read in one sitting.</p>
+        <p class="footnote">That's the whole list. No Screen Recording, Accessibility, or Input Monitoring permission — ever. The <a href="app/Info-howto.md">app source</a> is a single Swift file you can read in one sitting.</p>
       </div>
     </div>
   </section>
@@ -456,12 +473,70 @@
         <details>
           <summary>What data does FreeCoffee check about my activity?</summary>
           <div class="faq-body">
-            <p>Three things, and that's the complete list: awake/unlocked status, coarse recent-activity
-              (a yes/no signal per minute), and verified ad clicks. Never captured: screen contents,
-              files &amp; browser history, keystrokes &amp; screenshots, window titles. The Mac app is one
+            <p>Four things, and that's the complete list: awake/unlocked status, coarse recent-activity
+              (a yes/no signal per minute), placement visibility (is the chip actually rendered and
+              visible — notch and safe-area aware), and verified ad clicks. Never captured: screen contents,
+              files &amp; browser history, keystrokes &amp; screenshots, window titles. No Screen Recording,
+              Accessibility, or Input Monitoring permission — ever. The Mac app is one
               readable Swift file with a comment block at the top stating exactly this boundary.</p>
           </div>
         </details>
+        <details>
+          <summary>What happens when a minute is interrupted — sleep, lock, screen-share?</summary>
+          <div class="faq-body">
+            <p>It doesn't count, and you're not charged (advertisers) or credited (earners) for it.
+              When the system is unsure whether the placement was visible for the full minute, the minute
+              is not billed — that's the rule, stated before you install, not discovered after payout.
+              Snooze the bar before a meeting (30 min / 2 h, with a countdown) and it resumes on its own.</p>
+          </div>
+        </details>
+        <details>
+          <summary>There are no advertisers yet — what do I earn on day one?</summary>
+          <div class="faq-body">
+            <p>Honestly: the demo ledger is simulated until paying campaigns clear review — nothing here
+              pretends otherwise. What day zero buys you is position: the payout rules ($2 minimum, 24-hour
+              rail, 65% base + written 70% ratchet) are locked before the auction fills, referrals accrue
+              from your first invite, and the first advertisers bid against an empty room — which is exactly
+              why the <a href="advertisers.html#launchOffer">launch offer</a> exists.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Can advertisers target countries or set a max bid?</summary>
+          <div class="faq-body">
+            <p>Country targeting ships with the platform backend; today the self-serve feed is worldwide
+              with tiered CPM floors (T1 $4.00 · T2 $2.50 · T3 $1.25) doing the geographic work. Maximum
+              bids are the auction itself: the highest CPM wins each minute, and minutes below your floor
+              simply don't serve your creative. See <a href="advertisers.html">For advertisers</a>.</p>
+          </div>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ DAY ZERO ============ -->
+  <section class="section" id="dayzero">
+    <div class="wrap">
+      <p class="eyebrow">Day zero, stated plainly</p>
+      <h2>Zero advertisers. Zero pretense.</h2>
+      <div class="grid-2" style="margin-top:14px">
+        <div class="card">
+          <h3>For users</h3>
+          <p>With 0 paying advertisers, the honest answer is: the demo ledger is simulated, and real
+            earnings start when the first campaigns clear review. What you lock in by installing now —
+            payout rules, referral position, the auction math — is all published before the money arrives,
+            not after. When the counter below moves, your app is already showing the real feed.</p>
+        </div>
+        <div class="card">
+          <h3>For advertisers</h3>
+          <p>Zero competition for the minute: your bid is the top bid until the auction fills, every
+            verified minute is yours at the tier floor, and the first $100 runs with no platform cut
+            under the <a href="advertisers.html#launchOffer">launch offer</a>. Human review inside 48 hours.</p>
+        </div>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <p class="micro">Live network status</p>
+        <p class="panel-big" style="margin:6px 0 2px"><span id="netCount">0</span><span class="per">live campaigns</span></p>
+        <p class="footnote" id="netNote">No paying campaigns yet — this counter moves the day the first review passes.</p>
       </div>
     </div>
   </section>
@@ -472,7 +547,7 @@
       <h2>Put your menu bar to work</h2>
       <p class="section-sub">A single-file Mac app, readable before you run it.</p>
       <div class="hero-cta">
-        <a class="btn btn-primary btn-lg" href="app/dist/FreeCoffee.dmg">Download for Mac (.dmg)</a>
+        <a class="btn btn-primary btn-lg" href="https://github.com/ayodhyamohanthy/freecoffee/releases/latest/download/FreeCoffee.dmg">Download for Mac (.dmg)</a>
         <a class="btn btn-ghost btn-lg" href="dashboard.html">Open dashboard</a>
       </div>
       <p class="footnote install-hint">Unsigned demo build — right-click the app to open it the first time (Gatekeeper).
@@ -501,7 +576,7 @@
       <a href="advertisers.html">For advertisers</a>
       <a href="agents.html">Agents</a>
       <a href="#privacy">Privacy</a>
-      <a href="app/dist/FreeCoffee.dmg">Mac app</a>
+      <a href="https://github.com/ayodhyamohanthy/freecoffee/releases/latest/download/FreeCoffee.dmg">Mac app</a>
     </nav>
     <p class="disclaimer"><a href="install-guide.html">Apple blocked the app? Install guide</a> · FreeCoffee demo — simulated data. Not affiliated with SponsorBar or KickBot Inc.</p>
   </div>
@@ -568,7 +643,39 @@ FreeCoffeeDemo.initMenuBarDemo(); FreeCoffeeDemo.initInstallUX();
   } catch (e) { /* bars keep their placeholder dashes */ }
 
   var dev = D.deviceId();
-  if (!base || !dev || typeof fetch !== 'function') return;    // 100% offline-demo mode
+  if (typeof fetch !== 'function') return;
+
+  /* Day-zero network counter: connected feed or backend → live count.
+     Nothing connected → honest 0 stays. Display only. */
+  (function () {
+    var el = document.getElementById('netCount');
+    var note = document.getElementById('netNote');
+    if (!el) return;
+    function paint(n) {
+      el.textContent = String(n);
+      if (note) note.textContent = n > 0
+        ? n + ' live campaign' + (n === 1 ? '' : 's') + ' connected — the auction is filling.'
+        : 'No paying campaigns yet — this counter moves the day the first review passes.';
+    }
+    try {
+      var raw = window.localStorage.getItem('freecoffee:v1');
+      var s = raw ? JSON.parse(raw) : null;
+      var url = s && s.profile && s.profile.adFeedUrl;
+      if (url && D.fetchLiveCampaigns) {
+        D.fetchLiveCampaigns(url).then(function (res) {
+          if (res && !res.error && res.campaigns) paint(res.campaigns.length);
+        }).catch(function () { /* 0 stays */ });
+        return;
+      }
+    } catch (e) { /* 0 stays */ }
+    if (!base) return;    // 100% offline-demo mode for the rest
+    fetch(base + '/feed.json').then(function (r) { return r.ok ? r.json() : null; }).then(function (f) {
+      var n = f && f.campaigns && f.campaigns.length;
+      if (typeof n === 'number') paint(n);
+    }).catch(function () { /* 0 stays */ });
+  })();
+
+  if (!base || !dev) return;    // 100% offline-demo mode for the rest
 
   /* Real served-count from the configured backend's device ledger. */
   fetch(base + '/earnings/' + encodeURIComponent(dev))

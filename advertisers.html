@@ -221,6 +221,22 @@
       <!-- ============ PRICING ============ -->
       <section aria-labelledby="pricing-h" style="margin:34px 0 10px">
         <h2 id="pricing-h" style="font-size:1.3rem">Pricing</h2>
+        <div class="card try-it" style="margin-top:14px" id="launchOffer">
+          <h3 style="margin-top:0">Launch offer — first 10 advertisers</h3>
+          <p style="margin:10px auto 0; max-width:560px">No minimum spend, no platform cut on your first
+            $100 of media, and a human review inside 48 hours. You bring a real product and an
+            <code>https://</code> page — we bring the placement, the verification, and the public ledger math.</p>
+          <ol class="math-list" style="margin-top:12px; text-align:left">
+            <li><span>Minimum campaign spend</span><span class="num">waived → $0 to start</span></li>
+            <li><span>Platform cut on first $100</span><span class="num good">0% (user still gets 65%+)</span></li>
+            <li><span>Review turnaround</span><span class="num">≤ 48 hours</span></li>
+            <li><span>After the first $100</span><span class="num">$15 min · standard share</span></li>
+          </ol>
+          <a class="btn btn-primary btn-lg" style="margin-top:14px" href="mailto:advertisers@freecoffee.tech?subject=FreeCoffee%20launch%20offer%20—%20first%2010">Claim a launch slot →</a>
+          <p class="footnote" id="launchSlots">Launch offer: first 10 advertisers · 0 claimed so far —
+            this line changes the day a campaign clears review, by hand, with a reference
+            (no staged counters pretending the room is fuller than it is).</p>
+        </div>
         <div class="dash-cols" style="grid-template-columns: 1.4fr 1fr; margin-top:14px">
           <section class="card" aria-label="Auction CPM and tier floors">
             <h3 style="margin-top:0">Auction CPM with tier floors</h3>
@@ -256,6 +272,84 @@
         </div>
       </section>
 
+      <!-- ============ CREATIVE PREVIEW ============ -->
+      <section aria-labelledby="preview-h" style="margin:34px 0 10px">
+        <h2 id="preview-h" style="font-size:1.3rem">See it at real size, before review</h2>
+        <p class="section-sub" style="margin-bottom:12px">Type your sponsor name, tagline, and bid —
+          the menu-bar chip below renders at the real compact scale, with the same field rules the
+          app enforces (40-char sponsor, 90-char tagline, https-only link).</p>
+        <div class="card">
+          <div class="grid-2" style="margin-top:0">
+            <div>
+              <label class="field-label" for="prevSponsor">Company name</label>
+              <input class="input" id="prevSponsor" maxlength="40" value="Acme Coffee Co." autocomplete="off">
+              <label class="field-label" for="prevTagline" style="margin-top:10px">Short description</label>
+              <input class="input" id="prevTagline" maxlength="90" value="Single-origin beans — 20% off first bag" autocomplete="off">
+              <label class="field-label" for="prevCpm" style="margin-top:10px">Your CPM bid ($)</label>
+              <input class="input" id="prevCpm" type="number" min="0" max="100" step="0.5" value="6.00">
+              <p class="footnote" id="prevNote" style="margin-top:10px">Winning math preview vs Tier 1 floor ($4.00):
+                bid $6.00 → user base $3.90 per 1,000 verified minutes.</p>
+            </div>
+            <div>
+              <p class="micro">Live preview — menu-bar scale</p>
+              <div class="menubar-frame" aria-label="Menu-bar creative preview" style="margin-top:8px">
+                <div class="menubar">
+                  <span class="mb-left"><span class="mb-item mb-strong">☕ FreeCoffee</span></span>
+                  <span class="mb-sponsor" id="prevChip"><span id="prevLogo">AC</span> · <span id="prevText">Acme Coffee Co. · Single-origin beans — 20% off first bag</span></span>
+                  <span class="mb-right"><span class="mb-item mb-clock" id="prevClock">9:41 AM</span></span>
+                </div>
+              </div>
+              <p class="footnote">Same readability rule as review: the chip keeps your name, message, and
+                color; text colors are chosen for contrast at this size.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ AD POLICY ============ -->
+      <section aria-labelledby="policy-h" style="margin:34px 0 10px">
+        <h2 id="policy-h" style="font-size:1.3rem">What can run — the review bar</h2>
+        <div class="grid-2" style="margin-top:14px">
+          <div class="card">
+            <h3>Required for approval</h3>
+            <ul class="check-list">
+              <li>A real company or product name — no impersonation, no fake system alerts.</li>
+              <li>A short, accurate tagline that matches the destination page.</li>
+              <li>An <code>https://</code> destination you control or are authorized for — loads without a forced download.</li>
+              <li>Readable creative at menu-bar scale — no misleading macOS-interface mimicry.</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Never accepted</h3>
+            <ul class="check-list not-list">
+              <li>Adult, gambling, weapons, malware/surveillance, or deception (financial, health, income claims).</li>
+              <li>Political persuasion, hate, harassment, or graphic content.</li>
+              <li>Phishing, forced downloads, or destinations unrelated to the advertised product.</li>
+            </ul>
+          </div>
+        </div>
+        <p class="footnote">Review can approve, request changes, reject, pause, or end a campaign — and
+          unspent credit stays with the advertiser account. Same bar for self-serve feeds and managed campaigns.</p>
+      </section>
+
+      <!-- ============ ZERO-STATE HONESTY ============ -->
+      <section aria-labelledby="zerostate-h" style="margin:34px 0 10px">
+        <h2 id="zerostate-h" style="font-size:1.3rem">Where we are: day zero</h2>
+        <div class="card">
+          <p class="micro">Live network status</p>
+          <p class="panel-big" style="margin:6px 0 2px"><span id="liveCount">0</span><span class="per">live campaigns</span></p>
+          <p class="footnote" id="liveNote">No paying campaigns yet — the placements above are the seeded demo set.
+            Your feed goes live the moment review passes, and this counter moves the same day.</p>
+          <ol class="math-list" style="margin-top:12px">
+            <li><span>Live campaigns right now</span><span class="num" id="liveCount2">0</span></li>
+            <li><span>Verified minutes served</span><span class="num">0</span></li>
+            <li><span>Advertiser dollars settled</span><span class="num">$0.00</span></li>
+          </ol>
+          <p class="footnote">Why this is good for the first 10: zero competition for the minute. Your bid
+            is the top bid until the auction fills — every verified minute is yours at the tier floor.</p>
+        </div>
+      </section>
+
       <!-- ============ CONTACT ============ -->
       <section aria-labelledby="contact-h" style="margin:34px 0 10px">
         <h2 id="contact-h" style="font-size:1.3rem">Start a campaign</h2>
@@ -282,6 +376,7 @@
 
 <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="false"></div>
 
+<script src="assets/js/demo.js"></script>
 <script>
 /* Advertisers page — copy the feed spec (same clipboard pattern as referrals). */
 (function () {
@@ -325,6 +420,77 @@
     $('copyFeedBtn').addEventListener('click', function () {
       copyText($('feedSpec').textContent, 'Feed spec copied — host it as JSON at any HTTPS URL.');
     });
+
+    // Live network counter: connected feed → real campaign count in both
+    // slots. No feed / fetch failure → honest zeros stay. Display only.
+    (function () {
+      var a = $('liveCount'), b = $('liveCount2'), note = $('liveNote');
+      if (!a && !b) return;
+      var D = window.FreeCoffeeDemo;
+      if (!D || typeof D.fetchLiveCampaigns !== 'function') return;
+      var url = null;
+      try {
+        var raw = window.localStorage.getItem('freecoffee:v1');
+        var s = raw ? JSON.parse(raw) : null;
+        if (s && s.profile && typeof s.profile.adFeedUrl === 'string' && s.profile.adFeedUrl) {
+          url = s.profile.adFeedUrl;
+        }
+      } catch (e) { url = null; }
+      // Backend feed counts too — one honest number wherever campaigns live.
+      var base = null;
+      try { base = D.backendBase(); } catch (e) { base = null; }
+      function paint(n, live) {
+        if (a) a.textContent = String(n);
+        if (b) b.textContent = String(n);
+        if (note && live) note.textContent = n + ' live campaign' + (n === 1 ? '' : 's') +
+          ' connected — the placements above include your real feed.';
+      }
+      if (url) {
+        D.fetchLiveCampaigns(url).then(function (res) {
+          if (res && !res.error && res.campaigns) paint(res.campaigns.length, true);
+        }).catch(function () { /* zeros stay */ });
+      } else if (base && typeof fetch === 'function') {
+        fetch(base + '/feed.json').then(function (r) { return r.ok ? r.json() : null; }).then(function (f) {
+          var n = f && f.campaigns && f.campaigns.length;
+          if (typeof n === 'number') paint(n, true);
+        }).catch(function () { /* zeros stay */ });
+      }
+    })();
+
+    // Live creative preview — same field rules the app enforces, rendered at
+    // menu-bar scale. Pure display: no network, no state writes.
+    (function () {
+      var sponsor = $('prevSponsor'), tagline = $('prevTagline'), cpm = $('prevCpm');
+      var logo = $('prevLogo'), text = $('prevText'), note = $('prevNote');
+      if (!sponsor || !tagline || !cpm || !logo || !text) return;
+      function initials(name) {
+        var parts = String(name || '').split(/\s+/).filter(Boolean);
+        var s = parts.map(function (w) { return w.charAt(0); }).join('').slice(0, 2).toUpperCase();
+        return s || 'FC';
+      }
+      function repaint() {
+        var s = String(sponsor.value || '').slice(0, 40) || 'Your brand';
+        var t = String(tagline.value || '').slice(0, 90);
+        logo.textContent = initials(s);
+        text.textContent = t ? (s + ' · ' + t) : s;
+        var bid = Number(cpm.value);
+        if (note) {
+          if (isFinite(bid) && bid > 0) {
+            var base = Math.round(bid * 0.65 * 100) / 100;
+            var verdict = bid >= 4 ? 'clears the Tier 1 floor ($4.00)' : 'below the Tier 1 floor ($4.00) — raises to Tier 2/3 floors or outbid minutes';
+            note.textContent = 'Winning math preview vs Tier 1 floor ($4.00): bid $' +
+              bid.toFixed(2) + ' → user base $' + base.toFixed(2) +
+              ' per 1,000 verified minutes — ' + verdict + '.';
+          } else {
+            note.textContent = 'Enter a CPM bid above $0 to preview the winning math.';
+          }
+        }
+      }
+      sponsor.addEventListener('input', repaint);
+      tagline.addEventListener('input', repaint);
+      cpm.addEventListener('input', repaint);
+      repaint();
+    })();
   }
 
   if (document.readyState === 'loading') {
