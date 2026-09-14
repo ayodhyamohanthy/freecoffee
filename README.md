@@ -64,10 +64,10 @@ cd freecoffee/app
     persisted per-day history by a custom `NSView`),
   - the gray **"Tip: Hold ⌘ and drag menu-bar items to rearrange them."** line,
   - divider → footer **Settings · Snooze · Disable · Account** buttons:
-    Settings opens the demo dashboard (`http://127.0.0.1:8090/dashboard.html`),
+    Settings opens the live dashboard (`https://freecoffee.tech/dashboard.html`),
     Snooze pauses earning for 30 minutes with a live countdown,
     Disable toggles the persisted earning kill-switch,
-    Account opens the demo profile page.
+    Account opens the live profile page.
 - **Right-click** → menu: **Pause earning** toggle, **Launch at Login** (bundled app only),
   **Check for Updates…**, **About FreeCoffee demo**, **Quit FreeCoffee**.
 - Earning ticks up $0.01 every 90 s while your Mac is awake.

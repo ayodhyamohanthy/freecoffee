@@ -11,8 +11,11 @@
  * running as the bare dev binary that menu item shows a disabled state.
  *
  * Interaction model (matches the web reference):
- *   • LEFT-CLICK  the status item → an NSPopover opens with the earnings panel:
- *       header row (icon, name + subtitle, status dot "Earning"/"Waiting"),
+  *   • LEFT-CLICK  the status item → an NSPopover opens with the earnings panel:
+  *       header row (brand tile, name + dynamic description line — live
+  *       sponsor, "No sponsors available", or demo sponsor — plus an
+  *       Advertise-here button when the feed is empty; status dot
+  *       "Earning"/"Waiting"),
  *       divider, TOTAL BALANCE block (oversized mono figure + cups hint +
  *       right-aligned available/pending), the caramel "65% base share —
  *       always on" boost line, an "Earnings · 7 days" inset bar chart
@@ -460,16 +463,26 @@ final class PopoverViewController: NSViewController {
         root.layer?.masksToBounds = true
         view = root
 
-        // ---- Header row: icon tile, name + subtitle, status dot + label.
+        // ---- Header row: brand tile, name + dynamic description line.
+        // The tile shows the real AppIcon when the bundle resource resolves,
+        // falling back to the gold cup glyph (e.g. bare dev runs).
         let iconTile = NSView()
         iconTile.wantsLayer = true
-        iconTile.layer?.backgroundColor = Coffee.gold.cgColor
         iconTile.layer?.cornerRadius = 8
         iconTile.translatesAutoresizingMaskIntoConstraints = false
         let iconView = NSImageView()
-        iconView.image = NSImage(systemSymbolName: "cup.and.saucer.fill",
-                                 accessibilityDescription: "FreeCoffee")
-        iconView.contentTintColor = Coffee.panel
+        var glyphSize: CGFloat = 17
+        if let iconURL = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
+           let brandMark = NSImage(contentsOf: iconURL) {
+            iconTile.layer?.backgroundColor = NSColor.clear.cgColor
+            iconView.image = brandMark
+            glyphSize = 26
+        } else {
+            iconTile.layer?.backgroundColor = Coffee.gold.cgColor
+            iconView.image = NSImage(systemSymbolName: "cup.and.saucer.fill",
+                                     accessibilityDescription: "FreeCoffee")
+            iconView.contentTintColor = Coffee.panel
+        }
         iconView.translatesAutoresizingMaskIntoConstraints = false
         iconTile.addSubview(iconView)
         NSLayoutConstraint.activate([
@@ -477,8 +490,8 @@ final class PopoverViewController: NSViewController {
             iconTile.heightAnchor.constraint(equalToConstant: 30),
             iconView.centerXAnchor.constraint(equalTo: iconTile.centerXAnchor),
             iconView.centerYAnchor.constraint(equalTo: iconTile.centerYAnchor),
-            iconView.widthAnchor.constraint(equalToConstant: 17),
-            iconView.heightAnchor.constraint(equalToConstant: 17)
+            iconView.widthAnchor.constraint(equalToConstant: glyphSize),
+            iconView.heightAnchor.constraint(equalToConstant: glyphSize)
         ])
 
         let nameStack = NSStackView()
@@ -488,16 +501,11 @@ final class PopoverViewController: NSViewController {
         let name = NSTextField(labelWithString: "☕ FreeCoffee")
         name.font = NSFont.systemFont(ofSize: 13, weight: .bold)
         name.textColor = Coffee.text
-        let subtitle = NSTextField(labelWithString: "Menu-bar advertising · demo")
-        subtitle.font = NSFont.systemFont(ofSize: 9.5)
-        subtitle.textColor = Coffee.textFaint
-        // Popover header sponsor line — carries the live campaign
-        // (sponsor + tagline) when a feed is configured, hidden otherwise.
-        sponsorLine.font = NSFont.systemFont(ofSize: 9.5, weight: .medium)
-        sponsorLine.textColor = Coffee.goldBright
-        sponsorLine.isHidden = true
+        // Description line (second row, like the reference): the live
+        // campaign, the empty state, or the demo sponsor — set in refresh().
+        sponsorLine.font = NSFont.systemFont(ofSize: 9.5)
+        sponsorLine.textColor = Coffee.textFaint
         nameStack.addArrangedSubview(name)
-        nameStack.addArrangedSubview(subtitle)
         nameStack.addArrangedSubview(sponsorLine)
         // Empty-inventory CTA — hidden unless the feed is configured but
         // yields nothing (see refresh). Opens the advertiser pitch.
@@ -670,16 +678,22 @@ final class PopoverViewController: NSViewController {
             statusLabel.stringValue = label + " · LIVE"
             sponsorLine.stringValue = "LIVE · \(camp.sponsor)" +
                 (camp.tagline.isEmpty ? "" : " — \(camp.tagline)")
+            sponsorLine.font = NSFont.systemFont(ofSize: 9.5, weight: .medium)
+            sponsorLine.textColor = Coffee.goldBright
             sponsorLine.isHidden = false
             advertiseButton.isHidden = true
         } else if app.awaitingSponsors {
             statusLabel.stringValue = label
-            sponsorLine.stringValue = "No sponsors right now — this slot is open."
+            sponsorLine.stringValue = "No sponsors available"
+            sponsorLine.font = NSFont.systemFont(ofSize: 9.5)
+            sponsorLine.textColor = Coffee.textDim
             sponsorLine.isHidden = false
             advertiseButton.isHidden = false
         } else {
             statusLabel.stringValue = label
             sponsorLine.stringValue = "Demo · \(app.demoSponsor) (fictional)"
+            sponsorLine.font = NSFont.systemFont(ofSize: 9.5)
+            sponsorLine.textColor = Coffee.textFaint
             sponsorLine.isHidden = false
             advertiseButton.isHidden = true
         }
@@ -1162,11 +1176,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return liveCampaigns[liveCampaignIndex % liveCampaigns.count]
     }
 
-    // Demo pages. In production these would be the signed-in web app; for the
-    // demo they point at the local static server from README.md
-    // (cd freecoffee && python3 -m http.server 8090).
-    private static let dashboardURL = URL(string: "http://127.0.0.1:8090/dashboard.html")
-    private static let profileURL = URL(string: "http://127.0.0.1:8090/profile.html")
+    // Dashboard + profile open the live site (always reachable for an
+    // installed app). Developers hacking on the pages locally can still use
+    // http://127.0.0.1:8090/… via a static server — these constants are the
+    // only place that choice lives.
+    private static let dashboardURL = URL(string: "https://freecoffee.tech/dashboard.html")
+    private static let profileURL = URL(string: "https://freecoffee.tech/profile.html")
     private static let advertiseURL = URL(string: "https://freecoffee.tech/advertisers.html")
 
     // First run is seeded to match the web demo's deterministic ledger
@@ -1302,7 +1317,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: Status item click routing (left → popover, right → menu)
 
     @objc private func statusItemClicked(_ sender: Any) {
-        NSLog("DBG statusItemClicked: event=\(String(describing: NSApp.currentEvent?.type.rawValue))")
         guard let event = NSApp.currentEvent else {
             togglePopover()
             return
@@ -1315,7 +1329,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func togglePopover() {
-        NSLog("DBG toggle: isShown=\(popover.isShown) button=\(statusItem.button != nil) inWindow=\(statusItem.button?.window != nil) vc=\(popover.contentViewController != nil)")
         if popover.isShown {
             popover.performClose(nil)
         } else if statusItem.button != nil {
@@ -1328,15 +1341,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.activate(ignoringOtherApps: true)
             DispatchQueue.main.async { [weak self] in
                 guard let self, let button = self.statusItem.button,
-                      !self.popover.isShown else {
-                    NSLog("DBG async: skipped (button gone or already shown)")
-                    return
-                }
+                      !self.popover.isShown else { return }
                 self.popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-                NSLog("DBG async: show called, isShown=\(self.popover.isShown)")
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    NSLog("DBG after show: isShown=\(self.popover.isShown)")
-                }
             }
         }
     }
@@ -1948,7 +1954,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let dashURL = Self.dashboardURL else { return }
         if !NSWorkspace.shared.open(dashURL) {
             dialog(title: "Dashboard unavailable",
-                   body: "FreeCoffee couldn't open the demo dashboard. Start the demo server first:\n\ncd freecoffee && python3 -m http.server 8090")
+                   body: "FreeCoffee couldn't open the dashboard. Visit https://freecoffee.tech/dashboard.html in your browser.")
         }
     }
 
@@ -1956,7 +1962,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let profURL = Self.profileURL else { return }
         if !NSWorkspace.shared.open(profURL) {
             dialog(title: "Profile unavailable",
-                   body: "FreeCoffee couldn't open the demo profile page. Start the demo server first:\n\ncd freecoffee && python3 -m http.server 8090")
+                   body: "FreeCoffee couldn't open the profile page. Visit https://freecoffee.tech/profile.html in your browser.")
         }
     }
 

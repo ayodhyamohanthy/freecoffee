@@ -55,8 +55,8 @@ cd "$(dirname "$0")"
 # (macOS ships it via the Xcode command-line tools).
 # ============================================================================
 
-APP_VERSION="1.1.4"
-APP_BUILD="6"
+APP_VERSION="1.1.7"
+APP_BUILD="9"
 
 DIST="dist"
 BUNDLE="FreeCoffee.app"
