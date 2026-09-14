@@ -72,13 +72,16 @@ Subject: 1-line pitch: your product on a Mac menu bar for $99
 ## When someone says yes — first-campaign runbook
 
 1. Agree creative + destination URL + budget. Review for malware/claims yourself.
-2. Push the campaign (edit ids/fields first — never use QA ids on live):
+2. Push the campaign (edit ids/fields first — never use QA ids on live).
+   Fast path: `backend/publish-campaign.sh feeds/my-real-sponsor.json`
+   (fixture guard + backend-rules validation + POST + live verify). Manual
+   equivalent:
 
    ```bash
    export ADMIN_TOKEN=$(cat ~/freecoffee-admin-token.txt)
    curl -s -X POST https://freecoffee-backend.ayodhya-711.workers.dev/admin/feed \
-     -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
-     --data-binary @feeds/first-campaign-template.json
+        -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
+        --data-binary @feeds/first-campaign-template.json
    ```
 
    (Fill in the advertiser's real fields first. Same schema as
