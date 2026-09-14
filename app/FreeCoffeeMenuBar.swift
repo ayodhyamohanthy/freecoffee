@@ -1747,6 +1747,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                              selector: #selector(countdownTick),
                                              userInfo: nil, repeats: true)
         RunLoop.main.add(countdown, forMode: .common)
+
+        // Sponsor rotation every 60 s (chip + popover header) — live
+        // campaigns with a feed, fictional demo sponsors without one.
+        let rotate = Timer.scheduledTimer(timeInterval: 60,
+                                          target: self,
+                                          selector: #selector(campaignRotateTick),
+                                          userInfo: nil, repeats: true)
+        RunLoop.main.add(rotate, forMode: .common)
+        campaignRotateTimer = rotate
     }
 
     private var snoozed: Bool {
@@ -1765,13 +1774,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func countdownTick() {
-        guard snoozeUntil != nil else { return }
-        if let until = snoozeUntil, until <= Date() {
-            // Snooze window elapsed — resume earning.
-            snoozeUntil = nil
-            paused = false
-            persist()
+        if snoozeUntil != nil {
+            if let until = snoozeUntil, until <= Date() {
+                // Snooze window elapsed — resume earning.
+                snoozeUntil = nil
+                paused = false
+                persist()
+            }
+        } else if !popover.isShown {
+            // Idle heartbeat: nothing snoozed and no popover to keep live.
+            return
         }
+        // Snoozed countdown, or a live open popover (balance, chart,
+        // sponsor, CTA states refresh in place, no reopen needed).
         refreshUI()
     }
 
@@ -1782,20 +1797,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Refresh the feed every 30 minutes. The fetch itself runs on the
         // URLSession background queue; only the UI update lands on main.
+        // (The 60 s rotation tick lives in scheduleTimers — it also drives
+        // the demo-sponsor rotation when no feed is configured.)
         let refresh = Timer.scheduledTimer(timeInterval: FeedLimits.refreshInterval,
                                            target: self,
                                            selector: #selector(feedRefreshTick),
                                            userInfo: nil, repeats: true)
         RunLoop.main.add(refresh, forMode: .common)
         feedRefreshTimer = refresh
-
-        // Rotate the shown campaign every 60 s (chip + popover header).
-        let rotate = Timer.scheduledTimer(timeInterval: 60,
-                                          target: self,
-                                          selector: #selector(campaignRotateTick),
-                                          userInfo: nil, repeats: true)
-        RunLoop.main.add(rotate, forMode: .common)
-        campaignRotateTimer = rotate
     }
 
     @objc private func feedRefreshTick() {
