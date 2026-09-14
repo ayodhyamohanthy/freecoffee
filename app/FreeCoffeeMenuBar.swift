@@ -37,12 +37,14 @@
   *
   * NO-SPONSOR BEHAVIOR (the bar is never a dead end):
   *   • No feed configured (demo): the chip rotates fictional demo sponsors
-  *     (same cast as the web demo), clearly marked simulated — display only,
-  *     the earning tick stays the flat demo rate.
+  *     as logo tile + headline (same cast as the web demo), clearly marked
+  *     simulated — display only, the earning tick stays the flat demo rate.
   *   • Feed configured but nothing usable (empty feed, all below the floor,
   *     fetch failing on an empty cache): the chip becomes an acquisition
-  *     slot, "✨ Your brand here", and the popover + menu offer "Advertise
-  *     here", opening the public advertiser pitch. Zero earnings impact.
+  *     slot, megaphone + "Your brand here", and the popover + menu offer
+  *     "Advertise here", opening the public advertiser pitch. The full
+  *     description lives in the tooltip on hover and the popover header —
+  *     two lines can't fit the menu bar. Zero earnings impact.
  *
  * SNOOZE SEMANTICS: while snoozed the menu-bar chip reads
  * "☕ FreeCoffee — snoozed until HH:MM", no earning ticks accrue, no live
@@ -1280,19 +1282,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // connected; acquisition slot when the feed is empty; otherwise the
         // rotating fictional demo sponsors (simulated, display only).
         if snoozed {
+            statusItem.button?.image = nil
             statusItem.button?.title = "☕ FreeCoffee — snoozed until \(snoozeEndTimeLabel())"
             statusItem.button?.toolTip = "FreeCoffee — snoozed (no earning ticks, no ad rotation). " +
                 "Earning resumes automatically. Nothing is collected."
         } else if let camp = currentLiveCampaign {
-            statusItem.button?.title = "☕ " + truncateForBar(camp.sponsor)
-            statusItem.button?.toolTip = "FreeCoffee — LIVE campaign: \(camp.sponsor). " +
-                "Nothing is collected; the configured feed URL is the only outbound request."
+            statusItem.button?.image = chipTile(
+                monogram: chipMonogram(logoText: camp.logoText, sponsor: camp.sponsor),
+                accentHex: camp.accent)
+            statusItem.button?.title = truncateForBar(camp.sponsor)
+            statusItem.button?.toolTip = "FreeCoffee — LIVE: \(camp.sponsor)" +
+                (camp.tagline.isEmpty ? "" : " — \(camp.tagline)") + ". Nothing is collected."
         } else if awaitingSponsors {
-            statusItem.button?.title = "✨ Your brand here"
+            statusItem.button?.image = NSImage(systemSymbolName: "megaphone",
+                                               accessibilityDescription: "Advertise")
+            statusItem.button?.title = "Your brand here"
             statusItem.button?.toolTip = "No sponsors right now — put your brand in this menu bar. " +
                 "Click for details."
         } else {
-            statusItem.button?.title = "☕ " + truncateForBar(demoSponsor)
+            statusItem.button?.image = chipTile(
+                monogram: chipMonogram(logoText: "", sponsor: demoSponsor),
+                accentHex: "#E0A93E")
+            statusItem.button?.title = truncateForBar(demoSponsor)
             statusItem.button?.toolTip = "FreeCoffee demo sponsor (simulated) — no real campaign, " +
                 "nothing is collected."
         }
@@ -1312,6 +1323,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Chip-safe sponsor name: the menu bar is narrow.
     private func truncateForBar(_ s: String) -> String {
         s.count <= 20 ? s : String(s.prefix(19)) + "…"
+    }
+
+    /// Menu-bar tile: accent rounded square + monogram, i.e. the reference
+    /// pill's logo + headline (a description line can't fit the bar — it
+    /// lives in the tooltip on hover and in the popover header instead).
+    private static var tileCache: [String: NSImage] = [:]
+
+    private static func hexToColor(_ hex: String) -> NSColor? {
+        var h = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+        if h.hasPrefix("#") { h.removeFirst() }
+        guard h.count == 6, let v = UInt32(h, radix: 16) else { return nil }
+        return NSColor(srgbRed: CGFloat((v >> 16) & 0xFF) / 255.0,
+                       green: CGFloat((v >> 8) & 0xFF) / 255.0,
+                       blue: CGFloat(v & 0xFF) / 255.0, alpha: 1)
+    }
+
+    private func chipTile(monogram: String, accentHex: String) -> NSImage? {
+        let mono = monogram.isEmpty ? "☕" : monogram
+        let key = mono + "|" + accentHex
+        if let cached = Self.tileCache[key] { return cached }
+        let pt: CGFloat = 18
+        // Drawing-handler initializer: resolution-independent, crisp on Retina.
+        let img = NSImage(size: NSSize(width: pt, height: pt), flipped: false) { dst in
+            let path = NSBezierPath(roundedRect: dst, xRadius: pt * 0.3, yRadius: pt * 0.3)
+            (Self.hexToColor(accentHex) ?? Coffee.gold).setFill()
+            path.fill()
+            let fs: CGFloat = mono.count > 1 ? pt * 0.4 : pt * 0.52
+            let attrs: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: fs, weight: .bold),
+                .foregroundColor: NSColor.white
+            ]
+            let s = mono as NSString
+            let ts = s.size(withAttributes: attrs)
+            s.draw(at: NSPoint(x: dst.midX - ts.width / 2, y: dst.midY - ts.height / 2 - 0.5),
+                   withAttributes: attrs)
+            return true
+        }
+        img.isTemplate = false
+        Self.tileCache[key] = img
+        return img
+    }
+
+    /// Monogram for the tile: campaign logoText, else initials like the web.
+    private func chipMonogram(logoText: String, sponsor: String) -> String {
+        let t = logoText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !t.isEmpty { return String(t.prefix(2)).uppercased() }
+        let initials = sponsor.split(separator: " ").compactMap { $0.first }.map(String.init).joined()
+        return String(initials.prefix(2)).uppercased()
     }
 
     // MARK: Status item click routing (left → popover, right → menu)
