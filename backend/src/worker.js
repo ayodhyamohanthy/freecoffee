@@ -133,6 +133,7 @@ function validateCampaigns(raw) {
 function pickRoute(method, pathname) {
   if (method === 'OPTIONS') return { handled: true, route: 'preflight' };
   if (method === 'GET' && pathname === '/feed.json') return { handled: true, route: 'feed' };
+  if (method === 'GET' && pathname === '/stats') return { handled: true, route: 'stats' };
   if (method === 'GET' && pathname === '/health') return { handled: true, route: 'health' };
   if (method === 'POST' && pathname === '/track') return { handled: true, route: 'track' };
   if (method === 'POST' && pathname === '/admin/feed') return { handled: true, route: 'adminFeed' };
@@ -232,7 +233,9 @@ function applyEarnings(ledger, report, campaigns, now) {
     l.today.total = round4((Number(l.today.total) || 0) + earned);
     l.monthly.total = round4((Number(l.monthly.total) || 0) + earned);
     l.monthly.impressions = monthImpressions + minutes;
-    l.rows.push({ t: ts, type: type, campaignId: campaignId, amount: earned });
+    // minutes rides along so delivery reporting can sum verified minutes
+    // per campaign (rows written before v1.1.3 lack it and count as 1).
+    l.rows.push({ t: ts, type: type, campaignId: campaignId, amount: earned, minutes: minutes });
     l.counters.impressions = (Number(l.counters.impressions) || 0) + minutes;
   } else {
     /* Click: flat $0.05 when the campaign allows AND both caps allow.
@@ -281,6 +284,65 @@ function ledgerView(ledger) {
       todayClicks: (counters.todayClicks && typeof counters.todayClicks === 'object')
         ? counters.todayClicks : { date: '', count: 0 }
     }
+  };
+}
+
+/* ------------------------- delivery reporting ---------------------------
+   GET /stats (PUBLIC, aggregate-only): per-campaign delivery rolled up
+   across every stored ledger — verified minutes, reported clicks, and
+   user-share spend — plus network totals and the served feed size. No
+   device ids, no rows, no per-device anything ever leaves this endpoint,
+   so the advertiser page calls it directly with no token. KV scanning is
+   capped (STATS_MAX_KEYS) to bound the work on the free tier. */
+var STATS_MAX_KEYS = 1000;
+
+function aggregateStats(ledgers, feed) {
+  var names = {};
+  var f = Array.isArray(feed) ? feed : [];
+  for (var i = 0; i < f.length; i++) {
+    if (f[i] && typeof f[i].id === 'string') {
+      names[f[i].id] = (typeof f[i].sponsor === 'string') ? f[i].sponsor : '';
+    }
+  }
+  var per = Object.create(null);   // campaign ids can be "__proto__" etc.
+  var earners = 0;
+  for (var d = 0; d < ledgers.length; d++) {
+    var l = ledgers[d];
+    if (!l || typeof l !== 'object') continue;
+    earners++;
+    var rows = Array.isArray(l.rows) ? l.rows : [];
+    for (var r = 0; r < rows.length; r++) {
+      var row = rows[r] || {};
+      var id = (typeof row.campaignId === 'string') ? row.campaignId : '';
+      if (!id) continue;
+      var e = per[id] || (per[id] = { id: id, sponsor: names[id] || '', impressions: 0, clicks: 0, spend: 0 });
+      var amt = round4(Number(row.amount) || 0);
+      if (row.type === 'click') {
+        e.clicks += 1;   // reported clicks (paid or not — caps burn quota)
+      } else {
+        var m = Math.floor(Number(row.minutes));
+        e.impressions += (isFinite(m) && m > 0) ? m : 1;
+      }
+      e.spend = round4(e.spend + amt);
+    }
+  }
+  var campaigns = [];
+  var tI = 0, tC = 0, tS = 0;
+  for (var k in per) {
+    if (!Object.prototype.hasOwnProperty.call(per, k)) continue;
+    var c = per[k];
+    c.spend = round2(c.spend);
+    campaigns.push(c);
+    tI += c.impressions; tC += c.clicks; tS += c.spend;
+  }
+  campaigns.sort(function (a, b) {
+    if (b.spend !== a.spend) return b.spend - a.spend;
+    return a.id < b.id ? -1 : (a.id > b.id ? 1 : 0);
+  });
+  return {
+    campaigns: campaigns,
+    totals: { impressions: tI, clicks: tC, spend: round2(tS), earners: earners },
+    served: f.length
   };
 }
 
@@ -371,6 +433,35 @@ async function handleFeed(env) {
   return json({ campaigns: feed.campaigns }, 200, { 'cache-control': 'public, max-age=60' });
 }
 
+async function handleStats(env) {
+  var feed = await getFeed(env);
+  var zeros = { campaigns: [], totals: { impressions: 0, clicks: 0, spend: 0, earners: 0 }, served: feed.campaigns.length };
+  if (!env || !env.SITE_KV || typeof env.SITE_KV.list !== 'function') {
+    return json(zeros, 200, { 'cache-control': 'public, max-age=60' });
+  }
+  try {
+    var ledgers = [];
+    var cursor = undefined;
+    for (var pages = 0; pages < 20; pages++) {
+      var page = await env.SITE_KV.list({ prefix: 'earn:', limit: 100, cursor: cursor });
+      if (!page || !Array.isArray(page.keys)) break;
+      for (var i = 0; i < page.keys.length && ledgers.length < STATS_MAX_KEYS; i++) {
+        try {
+          var raw = await env.SITE_KV.get(page.keys[i].name);
+          if (raw) { try { ledgers.push(JSON.parse(raw)); } catch (e) { /* skip corrupt */ } }
+        } catch (e2) { /* skip unreadable */ }
+      }
+      if (page.list_complete || !page.cursor) break;
+      cursor = page.cursor;
+    }
+    var agg = aggregateStats(ledgers, feed.campaigns);
+    agg.served = feed.campaigns.length;
+    return json(agg, 200, { 'cache-control': 'public, max-age=60' });
+  } catch (e3) {
+    return json({ ok: false, error: 'stats unavailable' }, 503);
+  }
+}
+
 async function handleTrack(req, env) {
   if (!env || !env.SITE_KV) return json({ ok: false, error: 'KV not configured (SITE_KV binding missing)' }, 503);
 
@@ -458,6 +549,8 @@ async function handleFetch(request, env, ctx) {
         return new Response(null, { status: 204, headers: corsHeaders() });
       case 'feed':
         return await handleFeed(env);
+      case 'stats':
+        return await handleStats(env);
       case 'track':
         return await handleTrack(request, env);
       case 'earnings': {
@@ -496,6 +589,7 @@ export {
   handleFetch as workerFetch,
   validateCampaigns,
   applyEarnings,
+  aggregateStats,
   pickRoute,
   ledgerView,
   freshLedger,

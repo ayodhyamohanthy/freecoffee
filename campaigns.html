@@ -106,9 +106,10 @@
           <h1>Campaigns</h1>
           <p class="dash-sub">Manage your menu-bar campaigns — create, review, pause, and measure.
             <strong>Demo:</strong> no advertiser account is connected, so the numbers below are
-            honest zeros. Campaign creation and delivery reporting ship with the platform backend;
-            the <a href="advertisers.html">feed bridge</a> is live today — and the
-            <a href="advertisers.html#launchOffer">launch offer</a> waives the $15 minimum for the first 10.</p>
+            honest zeros. Connect a backend (Profile → BACKEND API URL) and this page reports
+            live aggregate delivery instead; the <a href="advertisers.html">feed bridge</a> is live
+            today — and the <a href="advertisers.html#launchOffer">launch offer</a> waives the $15
+            minimum for the first 10.</p>
         </div>
       </div>
 
@@ -219,6 +220,79 @@
   });
 
   apply('all');
+})();
+</script>
+<script>
+/* Live delivery report — backend configured (Profile → BACKEND API URL) →
+   GET /stats (public, aggregate-only: no device data, no token needed).
+   Rows carry data-status="running" so the filter tabs above work unchanged;
+   the empty state hides itself once rows exist. No backend → honest zeros. */
+(function () {
+  'use strict';
+  function $(id) { return document.getElementById(id); }
+  function money(n) {
+    var v = Math.round(Number(n) * 100) / 100;
+    return '$' + (isFinite(v) ? v : 0).toFixed(2);
+  }
+  var base = '';
+  try {
+    var raw = window.localStorage.getItem('freecoffee:v1');
+    var s = raw ? JSON.parse(raw) : null;
+    base = (s && s.profile && typeof s.profile.backendUrl === 'string') ? s.profile.backendUrl : '';
+  } catch (e) { base = ''; }
+  if (!base || typeof fetch !== 'function') return;
+
+  var req;
+  if (typeof AbortController !== 'undefined') {
+    var ctrl = new AbortController();
+    var timer = setTimeout(function () { try { ctrl.abort(); } catch (e) { /* noop */ } }, 8000);
+    req = fetch(base + '/stats', { signal: ctrl.signal }).then(function (res) {
+      clearTimeout(timer);
+      return res;
+    }, function (err) {
+      clearTimeout(timer);
+      throw err;
+    });
+  } else {
+    req = fetch(base + '/stats');
+  }
+
+  req.then(function (res) {
+    return (res && res.ok) ? res.json() : null;
+  }).then(function (d) {
+    if (!d || !d.totals) return;
+    $('campActive').textContent = String(d.served || 0);
+    $('campSpend').textContent = money(d.totals.spend);
+    $('campImpressions').textContent = String(d.totals.impressions || 0);
+    var list = $('campList');
+    if (!list) return;
+    var rows = (d.campaigns && d.campaigns.slice(0, 20)) || [];
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i] || {};
+      var row = document.createElement('div');
+      row.className = 'sp-row';
+      row.setAttribute('data-status', 'running');
+      var meta = document.createElement('div');
+      var name = document.createElement('strong');
+      name.textContent = r.sponsor || r.id || 'campaign';
+      meta.appendChild(name);
+      var sub = document.createElement('div');
+      sub.className = 'balfoot';
+      sub.textContent = (r.impressions || 0) + ' verified minutes · ' +
+        (r.clicks || 0) + ' clicks · ' + money(r.spend) + ' user share paid';
+      meta.appendChild(sub);
+      row.appendChild(meta);
+      list.appendChild(row);
+    }
+    // Recount so the tabs + empty state reflect live rows.
+    var all = document.querySelector('.camp-tab[data-filter="all"]');
+    if (all) all.click();
+    var note = $('campStatsNote');
+    if (note && (rows.length || d.served)) {
+      note.textContent = 'Live numbers from your connected backend — aggregate delivery only, ' +
+        'no device data. Zero means zero.';
+    }
+  }).catch(function () { /* zeros stay */ });
 })();
 </script>
 <script>

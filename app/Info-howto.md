@@ -36,8 +36,8 @@ in the repo; without them the build stays ad-hoc and step 6 says so.
    - **Earnings · 7 days** inset bar chart — weekday letters M T W T F S S with value labels,
      drawn from the app's persisted per-day history;
    - the gray **"Tip: Hold ⌘ and drag menu-bar items to rearrange them."** line;
-   - footer buttons: **Settings** (opens the demo dashboard), **Snooze** (pause 30 min with a
-     live countdown on the button), **Disable** (persisted earning toggle — the button becomes
+    - footer buttons: **Settings** (opens the demo dashboard), **Snooze** (pause 30 min with a
+      live countdown on the button — 2 hours and 6 hours are in the right-click menu), **Disable** (persisted earning toggle — the button becomes
      **Enable**), **Account** (opens the demo profile page).
 2. **Right-click** the status item: **Pause earning** (checkmark toggle), **Launch at Login**
    (bundle only — see below), **Check for Updates…**, **About FreeCoffee demo**, **Quit FreeCoffee**.

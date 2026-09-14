@@ -21,13 +21,13 @@
  *       tip line, a divider, and a footer with four buttons:
  *       Settings (opens the demo dashboard), Snooze (pause 30 min with a
  *       live countdown), Disable (persisted earning toggle), Account
- *       (opens the demo profile page). Snooze pauses earning for a chosen
- *       duration (30 minutes or 2 hours) with a live countdown; the
- *       right-click menu carries the same choices as a submenu, plus
- *       "Turn off snooze".
- *   • RIGHT-CLICK the status item → a menu: Sponsor (live feed only — opens
- *       the current campaign's https click URL), Pause toggle, Snooze
- *       submenu (30 minutes / 2 hours / Turn off snooze), Reload
+  *       (opens the demo profile page). Snooze pauses earning for a chosen
+  *       duration (30 minutes, 2 hours, or 6 hours) with a live countdown; the
+  *       right-click menu carries the same choices as a submenu, plus
+  *       "Turn off snooze".
+  *   • RIGHT-CLICK the status item → a menu: Sponsor (live feed only — opens
+  *       the current campaign's https click URL), Pause toggle, Snooze
+  *       submenu (30 minutes / 2 hours / 6 hours / Turn off snooze), Reload
  *       campaigns (live feed only), Launch at Login (bundled app only),
  *       About, Quit.
  *
@@ -1089,6 +1089,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuPauseItem: NSMenuItem!
     private var snooze30Item: NSMenuItem!
     private var snooze2hItem: NSMenuItem!
+    private var snooze6hItem: NSMenuItem!
     private var snoozeOffItem: NSMenuItem!
     private var loginItem: NSMenuItem!
     private var updateMenuItem: NSMenuItem!
@@ -1294,7 +1295,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(menuPauseItem)
 
         // Snooze submenu — the same choices as the popover button: pause
-        // earning for 30 minutes or 2 hours, or turn an active snooze off.
+        // earning for 30 minutes, 2 hours, or 6 hours, or turn an active snooze off.
         let snoozeSub = NSMenu()
         snooze30Item = NSMenuItem(title: "Snooze 30 minutes",
                                   action: #selector(snooze30(_:)), keyEquivalent: "s")
@@ -1304,6 +1305,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                   action: #selector(snooze2h(_:)), keyEquivalent: "")
         snooze2hItem.target = self
         snoozeSub.addItem(snooze2hItem)
+        snooze6hItem = NSMenuItem(title: "Snooze 6 hours",
+                                  action: #selector(snooze6h(_:)), keyEquivalent: "")
+        snooze6hItem.target = self
+        snoozeSub.addItem(snooze6hItem)
         snoozeOffItem = NSMenuItem(title: "Turn off snooze",
                                    action: #selector(snoozeOff(_:)), keyEquivalent: "")
         snoozeOffItem.target = self
@@ -1376,6 +1381,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let snoozing = snoozed
         snooze30Item?.state = .off
         snooze2hItem?.state = .off
+        snooze6hItem?.state = .off
         snoozeOffItem?.isEnabled = snoozing
         snoozeOffItem?.state = snoozing ? .on : .off
         reloadMenuItem?.isHidden = (adFeedURL == nil)
@@ -1807,8 +1813,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Start a snooze of `minutes` (30 min from the popover, 30 min / 2 h
-    /// from the right-click submenu). While snoozed: no earning ticks, no
+    /// Start a snooze of `minutes` (30 min from the popover; 30 min, 2 h, or
+    /// 6 h from the right-click submenu). While snoozed: no earning ticks, no
     /// live-ad rotation, and the chip reads "snoozed until HH:MM".
     func startSnooze(minutes: TimeInterval) {
         snoozeUntil = Date().addingTimeInterval(minutes * 60)
@@ -1833,6 +1839,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func snooze2h(_ sender: NSMenuItem) {
         startSnooze(minutes: 2 * 60)
+    }
+
+    @objc private func snooze6h(_ sender: NSMenuItem) {
+        startSnooze(minutes: 6 * 60)
     }
 
     @objc private func snoozeOff(_ sender: NSMenuItem) {

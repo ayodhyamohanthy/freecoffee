@@ -9,9 +9,11 @@ import assert from 'node:assert/strict';
 import {
   validateCampaigns,
   applyEarnings,
+  aggregateStats,
   pickRoute,
   ledgerView,
-  getFeed
+  getFeed,
+  workerFetch
 } from './src/worker.js';
 
 /* Fixed clocks: 2026-09-06 12:00 UTC and the next day. */
@@ -207,6 +209,7 @@ function pass(name) { n++; console.log('PASS ' + name); }
 {
   assert.equal(pickRoute('GET', '/health').route, 'health');
   assert.equal(pickRoute('GET', '/feed.json').route, 'feed');
+  assert.equal(pickRoute('GET', '/stats').route, 'stats');
   assert.equal(pickRoute('POST', '/track').route, 'track');
   assert.equal(pickRoute('POST', '/admin/feed').route, 'adminFeed');
   const e = pickRoute('GET', '/earnings/abcd1234-abcd-abcd-abcd-abcd1234abcd');
@@ -261,6 +264,68 @@ function pass(name) { n++; console.log('PASS ' + name); }
   assert.equal(absent.source, 'empty', 'missing KV value falls through to empty');
 
   pass('getFeed honors an admin-cleared feed; unparseable/absent KV → empty');
+}
+
+/* ------------------------------------------------------------------------
+   9. GET /stats — public aggregate delivery report: per-campaign minutes,
+      reported clicks, user-share spend; no device data; honest zeros.
+   ------------------------------------------------------------------------ */
+{
+  const store = {};
+  const kv = {
+    get: async (k) => (k in store ? store[k] : null),
+    put: async (k, v) => { store[k] = String(v); },
+    list: async ({ prefix, limit, cursor }) => {
+      const names = Object.keys(store).filter((k) => k.indexOf(prefix) === 0);
+      const start = cursor ? Number(cursor) || 0 : 0;
+      const slice = names.slice(start, start + (limit || 100));
+      return {
+        keys: slice.map((name) => ({ name })),
+        list_complete: start + slice.length >= names.length,
+        cursor: String(start + slice.length)
+      };
+    }
+  };
+  const env = { SITE_KV: kv };
+  const feed = [{ id: 'c1', sponsor: 'S1', clickUrl: 'https://x.example/', cpm: 10 }];
+
+  let l1 = applyEarnings(null, { type: 'impression', campaignId: 'c1', minutes: 60 }, feed, T1).ledger;
+  l1 = applyEarnings(l1, { type: 'click', campaignId: 'c1' }, feed, T1).ledger;
+  const l2 = applyEarnings(null, { type: 'impression', campaignId: 'c1', minutes: 30 }, feed, T1).ledger;
+  await kv.put('earn:dev1', JSON.stringify(l1));
+  await kv.put('earn:dev2', JSON.stringify(l2));
+  await kv.put('feed:current', JSON.stringify(feed));
+
+  const res = await workerFetch(new Request('https://x.test/stats'), env, {});
+  assert.equal(res.status, 200, 'GET /stats is public (no auth)');
+  const body = await res.json();
+  assert.equal(body.served, 1, 'served feed size reported');
+  assert.equal(body.totals.impressions, 90, '60 + 30 verified minutes');
+  assert.equal(body.totals.clicks, 1, 'one reported click');
+  assert.ok(Math.abs(body.totals.spend - 0.635) < 0.011, 'spend ≈ 0.39 + 0.05 + 0.195');
+  assert.equal(body.totals.earners, 2, 'two devices earned');
+  assert.equal(body.campaigns.length, 1, 'one campaign row');
+  assert.equal(body.campaigns[0].sponsor, 'S1', 'sponsor joined from the served feed');
+  assert.ok(JSON.stringify(body).indexOf('dev1') === -1, 'no device ids leak');
+
+  // Proto-named campaign ids aggregate without polluting the rollup.
+  const proto = aggregateStats(
+    [{ rows: [{ t: T1, type: 'impression', campaignId: '__proto__', amount: 0.01, minutes: 5 }] }],
+    []);
+  assert.equal(proto.campaigns.length, 1, '__proto__ aggregates as data');
+  assert.equal(proto.campaigns[0].impressions, 5);
+  assert.equal({}.polluted, undefined, 'Object.prototype untouched');
+
+  // No KV at all → honest zeros, still 200.
+  const bare = await workerFetch(new Request('https://x.test/stats'), {}, {});
+  assert.equal(bare.status, 200);
+  assert.deepEqual((await bare.json()).totals, { impressions: 0, clicks: 0, spend: 0, earners: 0 });
+
+  // Wrong method → 404 like every other unknown route.
+  const bad = await workerFetch(new Request('https://x.test/stats', { method: 'POST' }), env, {});
+  assert.equal(bad.status, 404);
+
+  pass('GET /stats aggregates delivery publicly; zeros when empty; POST → 404');
 }
 
 console.log('ALL TESTS PASSED (' + n + ' groups)');

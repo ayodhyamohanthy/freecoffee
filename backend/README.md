@@ -37,6 +37,7 @@ backend/
 | `/feed.json` | GET | — | Campaign feed (same JSON contract as the web `AD FEED URL`), CORS `*` |
 | `/track` | POST | — | `{deviceId, type:'impression'\|'click', campaignId, minutes?}` → `{ok, earned, total}` |
 | `/earnings/{deviceId}` | GET | — | `{total, today, monthly, rows (last 50), counters}` |
+| `/stats` | GET | — | Public aggregate delivery report: per-campaign verified minutes, reported clicks, user-share spend + network totals. No device ids, no rows — safe for the advertiser page, no token needed |
 | `/admin/feed` | POST | `Authorization: Bearer $ADMIN_TOKEN` | Upload a validated campaign array → KV `feed:current` |
 
 - **Money math is server-side.** The client sends `minutes` + `type` only;
