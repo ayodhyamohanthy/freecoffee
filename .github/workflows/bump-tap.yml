@@ -25,7 +25,7 @@ on:
       dmg_url:
         description: 'DMG download URL (empty = latest GitHub release asset)'
         required: false
-        default: 'https://github.com/ayodhyamohanthy/freecoffee/releases/latest/download/FreeCoffee.dmg'
+        default: 'https://github.com/ayodhyamohanthy/freecoffee-dist/releases/latest/download/FreeCoffee.dmg'
 
 permissions:
   contents: read
@@ -44,7 +44,7 @@ jobs:
           set -eu
           VERSION=$(echo "$VERSION_IN" | tr -d '[:space:]')
           DMG_URL=$(echo "$URL_IN" | tr -d '[:space:]')
-          [ -n "$DMG_URL" ] || DMG_URL="https://github.com/ayodhyamohanthy/freecoffee/releases/latest/download/FreeCoffee.dmg"
+          [ -n "$DMG_URL" ] || DMG_URL="https://github.com/ayodhyamohanthy/freecoffee-dist/releases/latest/download/FreeCoffee.dmg"
           echo "$VERSION" | grep -Eq '^[A-Za-z0-9._-]+$' || {
             echo "::error::version must match [A-Za-z0-9._-]+ (got: $VERSION)"; exit 1; }
           case "$DMG_URL" in

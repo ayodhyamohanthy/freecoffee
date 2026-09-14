@@ -59,7 +59,7 @@
 
 <main>
 
-<div class="ok-box"><strong>Why this happens:</strong> FreeCoffee is an <strong>open-source demo app that isn't signed with a paid Apple certificate</strong> ($99/yr). macOS shows the same warning for <em>every</em> unsigned app — it does <strong>not</strong> mean the app has a virus. Our app is a single readable Swift file you can audit in the <a href="https://github.com/ayodhyamohanthy/freecoffee">public repo</a>, and it never reads your screen, files, or keystrokes.</div>
+<div class="ok-box"><strong>Why this happens:</strong> FreeCoffee is a <strong>demo app that isn't signed with a paid Apple certificate</strong> ($99/yr). macOS shows the same warning for <em>every</em> unsigned app — it does <strong>not</strong> mean the app has a virus. The app never reads your screen, files, or keystrokes, and the Homebrew install below skips these dialogs entirely.</div>
 
 <h2>Method 1 — Right-click → Open (easiest)</h2>
 <div class="step">
@@ -150,7 +150,7 @@ brew install --cask ayodhyamohanthy/freecoffee/freecoffee</code></pre>
     <li>Run: <code>xattr -dr com.apple.quarantine /Applications/FreeCoffee.app</code> then open the app again.</li>
     <li>If it still fails, re-download the DMG (the file may be truncated) and repeat Method 1.</li>
   </ol>
-  <p>Verify your download: the DMG should be <strong>≈700 KB</strong> (v1.1.3, universal arm64+x86_64 —
+  <p>Verify your download: the DMG should be <strong>≈700 KB</strong> (v1.1.4, universal arm64+x86_64 —
     exact bytes vary per build; if yours is under 100 KB the download was truncated, re-download).</p>
 </details>
 <details>
@@ -171,14 +171,14 @@ brew install --cask ayodhyamohanthy/freecoffee/freecoffee</code></pre>
 </details>
 
 <h2>Never see this again (optional, $99)</h2>
-<p>The permanent fix is an Apple Developer certificate + notarization — that's what established apps ship with (their DMGs open with zero dialogs). The build already supports it: with a membership, <code>build.sh</code> signs, notarizes, and staples the ticket via four environment variables, no script changes. Until then we ship the free path: the app is fully open-source and auditable. If that ever changes, this page will say so.</p>
+<p>The permanent fix is an Apple Developer certificate + notarization — that's what established apps ship with (their DMGs open with zero dialogs). Until then, the zero-friction path is the Homebrew cask above, which handles Gatekeeper for you.</p>
 
 <div class="warn"><strong>Safety note:</strong> Never disable Gatekeeper system-wide (<code>spctl --master-disable</code>) or run install scripts that ask you to. The <code>xattr</code> command above targets <strong>only</strong> the FreeCoffee app — that's the safe, surgical approach.</div>
 
 </main>
 
 <footer>
-  <p><a href="./index.html">← Back to FreeCoffee</a> · <a href="https://github.com/ayodhyamohanthy/freecoffee">Source code</a> · <a href="https://github.com/ayodhyamohanthy/freecoffee/releases/latest/download/FreeCoffee.dmg">Download DMG</a></p>
+  <p><a href="./index.html">← Back to FreeCoffee</a> · <a href="https://github.com/ayodhyamohanthy/freecoffee-dist/releases/latest/download/FreeCoffee.dmg">Download DMG</a></p>
   <p>FreeCoffee demo — simulated data.</p>
 </footer>
 <script>

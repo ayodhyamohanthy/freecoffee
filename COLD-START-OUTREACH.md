@@ -41,8 +41,8 @@ Subject: 1-line pitch: your product on a Mac menu bar for $99
 >
 > I built FreeCoffee — a Mac menu-bar app + PWA where users watch one
 > sponsor slide per session and real micro-earnings accrue to a public
-> ledger. It just shipped (v1.1.0, universal DMG, code + release notes on
-> GitHub: https://github.com/ayodhyamohanthy/freecoffee).
+> ledger. It just shipped (v1.1.4, universal DMG + release notes on
+> GitHub: https://github.com/ayodhyamohanthy/freecoffee-dist).
 >
 > The campaign feed is intentionally empty right now — you would be the
 > first and only advertiser, 100% share of voice, flat $99/month. If we

@@ -290,7 +290,7 @@ contains verified placements from campaigns that actually exist.
 - **Live:** https://freecoffee.tech (GitHub Pages, branch `main`, root; repo
   CNAME = `freecoffee.tech`) — also https://ayodhyamohanthy.github.io/freecoffee/
   and https://freecoffee-at0.pages.dev/ (Cloudflare Pages mirror)
-- **Mac app download:** https://github.com/ayodhyamohanthy/freecoffee/releases/latest/download/FreeCoffee.dmg
+- **Mac app download:** https://github.com/ayodhyamohanthy/freecoffee-dist/releases/latest/download/FreeCoffee.dmg
 - **Custom domain status:** DNS lives at the registrar (orderbox-dns, not
   Cloudflare). Required records at the registrar: apex `A` → `185.199.108.153`,
   `185.199.109.153`, `185.199.110.153`, `185.199.111.153` (replace the old

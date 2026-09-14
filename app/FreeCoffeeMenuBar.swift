@@ -55,7 +55,7 @@
  * UPDATER (the only other network code — anonymous, one-way):
  *   On launch and every 6 hours the app asks the public GitHub Releases
  *   API "what is the latest published release?" — a plain GET of
- *   https://api.github.com/repos/ayodhyamohanthy/freecoffee/releases/latest,
+  *   https://api.github.com/repos/ayodhyamohanthy/freecoffee-dist/releases/latest,
  *   with no token, no account, and no body. If that release's FreeCoffee.dmg
  *   asset carries a CFBundleShortVersionString newer than the running one,
  *   the DMG is downloaded, its sha256 is compared against the checksum in
@@ -713,8 +713,8 @@ final class UpdateEngine: NSObject {
     /// From the bundle's Info.plist (build.sh injects it); bare dev builds fall back.
     static let version: String = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.1.0"
 
-    static let releasesAPI = URL(string: "https://api.github.com/repos/ayodhyamohanthy/freecoffee/releases/latest")!
-    static let releasesPage = URL(string: "https://github.com/ayodhyamohanthy/freecoffee/releases/latest")!
+    static let releasesAPI = URL(string: "https://api.github.com/repos/ayodhyamohanthy/freecoffee-dist/releases/latest")!
+    static let releasesPage = URL(string: "https://github.com/ayodhyamohanthy/freecoffee-dist/releases/latest")!
     static let checkInterval: TimeInterval = 6 * 60 * 60   // re-check every 6 h
 
     enum Status: Equatable {
