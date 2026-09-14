@@ -75,7 +75,10 @@
  * the one HTTPS feed URL the user configured and sends nothing back — and
  * (b) the anonymous one-way update check described above. Neither request
  * carries an identifier, a token, or any payload; no telemetry, impression,
- * or earnings data ever leaves the machine. The app never reads screen
+ * or earnings data ever leaves the machine. One deliberate exception, and
+ * only on your click: opening a live sponsor's link navigates your browser
+ * to the advertiser's URL — that navigation is visible to the advertiser
+ * exactly like any link you open. The app never reads screen
  * contents, files, browser history, keystrokes, screenshots, or
  * window titles — no such API is called from this process. The ONLY
  * signals it touches are:
@@ -96,6 +99,9 @@ import ServiceManagement
 
 /// The persisted shape: ~/Library/Application Support/FreeCoffee/ledger.json
 /// `history` maps yyyy-MM-dd → cents earned that day (drives the 7-day chart).
+/// Decoding is lenient (every key defaults) so older files stay readable —
+/// only a missing file seeds the demo, and only truly malformed JSON is
+/// quarantined (see loadState).
 private struct FreeCoffeeState: Codable {
     var balance: Double
     var today: Double
@@ -106,6 +112,33 @@ private struct FreeCoffeeState: Codable {
     var lastTick: Date?
     var updateSkipped: String?
     var updateSeen: String?
+
+    init(balance: Double, today: Double, paused: Bool, disabled: Bool,
+         snoozeUntil: Date?, history: [String: Int], lastTick: Date?,
+         updateSkipped: String?, updateSeen: String?) {
+        self.balance = balance
+        self.today = today
+        self.paused = paused
+        self.disabled = disabled
+        self.snoozeUntil = snoozeUntil
+        self.history = history
+        self.lastTick = lastTick
+        self.updateSkipped = updateSkipped
+        self.updateSeen = updateSeen
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        balance = try c.decodeIfPresent(Double.self, forKey: .balance) ?? 0
+        today = try c.decodeIfPresent(Double.self, forKey: .today) ?? 0
+        paused = try c.decodeIfPresent(Bool.self, forKey: .paused) ?? false
+        disabled = try c.decodeIfPresent(Bool.self, forKey: .disabled) ?? false
+        snoozeUntil = try c.decodeIfPresent(Date.self, forKey: .snoozeUntil)
+        history = try c.decodeIfPresent([String: Int].self, forKey: .history) ?? [:]
+        lastTick = try c.decodeIfPresent(Date.self, forKey: .lastTick)
+        updateSkipped = try c.decodeIfPresent(String.self, forKey: .updateSkipped)
+        updateSeen = try c.decodeIfPresent(String.self, forKey: .updateSeen)
+    }
 }
 
 // MARK: - Coffee palette (mirrors assets/css/styles.css)
@@ -718,6 +751,25 @@ final class UpdateEngine: NSObject {
     }
     private var pendingAppURL: URL { supportDir.appendingPathComponent("update/FreeCoffee.app", isDirectory: true) }
 
+    /// Version staged in Application Support by an earlier check (nil when
+    /// nothing usable is staged). Lets check() offer .ready without
+    /// re-downloading, and lets the boot swap refuse stale stages.
+    var stagedVersion: String? {
+        guard fm.fileExists(atPath: pendingAppURL.path) else { return nil }
+        let plist = pendingAppURL.appendingPathComponent("Contents/Info.plist")
+        guard let data = try? Data(contentsOf: plist),
+              let pd = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any],
+              let v = pd["CFBundleShortVersionString"] as? String else { return nil }
+        return v
+    }
+
+    /// Drop a staged update entirely (skip-this-version path): marker plus
+    /// staged bundle, so a declined release can never install later.
+    func discardStagedUpdate() {
+        UserDefaults.standard.removeObject(forKey: "FreeCoffeePendingUpdatePath")
+        try? fm.removeItem(at: supportDir.appendingPathComponent("update", isDirectory: true))
+    }
+
     /// Which app bundle we're replacing. Dev runs of the bare binary have no
     /// bundle to swap — they surface the releases page instead.
     private var installedAppURL: URL? {
@@ -731,8 +783,11 @@ final class UpdateEngine: NSObject {
         updateTask = Task { [weak self] in
             guard let self else { return }
             let result = await self.check(force: force)
-            self.status = result
-            completion?(result)
+            // Status drives UI (refreshUI, modal alerts) — always deliver on main.
+            await MainActor.run {
+                self.status = result
+                completion?(result)
+            }
         }
     }
 
@@ -746,7 +801,7 @@ final class UpdateEngine: NSObject {
     }
 
     private func check(force: Bool = false) async -> Status {
-        status = .checking
+        await MainActor.run { self.status = .checking }
         do {
             let (data, resp) = try await session.data(from: Self.releasesAPI)
             guard let http = resp as? HTTPURLResponse, http.statusCode == 200 else {
@@ -759,7 +814,7 @@ final class UpdateEngine: NSObject {
                 return .failed(reason: "Release feed has no tag")
             }
             let latest = tag.trimmingCharacters(in: CharacterSet(charactersIn: "v "))
-            guard isNewer(latest, than: Self.version) else {
+            guard Self.isNewer(latest, than: Self.version) else {
                 return .upToDate(current: Self.version)
             }
             // A version the user explicitly skipped never re-downloads on the
@@ -786,7 +841,12 @@ final class UpdateEngine: NSObject {
             guard installedAppURL != nil else {
                 return .available(version: latest, notes: Self.releasesPage)   // dev binary → show page
             }
-            status = .downloading
+            // Already staged for this exact release (downloaded earlier, app
+            // restarted before relaunch): offer it without re-downloading.
+            if let staged = stagedVersion, staged == latest {
+                return .ready(version: latest)
+            }
+            await MainActor.run { self.status = .downloading }
             let (tmpURL, dlResp) = try await session.download(from: dmgURL)
             guard let dlHTTP = dlResp as? HTTPURLResponse, dlHTTP.statusCode == 200 else {
                 try? fm.removeItem(at: tmpURL)
@@ -799,12 +859,15 @@ final class UpdateEngine: NSObject {
                 return .failed(reason: "Checksum mismatch — download discarded")
             }
             if install(fromDMG: tmpURL) {
+                try? fm.removeItem(at: tmpURL)   // staged copy lives in Application Support now
                 return .ready(version: latest)
             }
             try? fm.removeItem(at: tmpURL)
             return .failed(reason: "Install failed — DMG could not be applied")
         } catch is CancellationError {
-            return status
+            // Superseded by a newer check — back to idle so a stranded
+            // manual flag can't stick (see .idle in handleUpdateStatus).
+            return .idle
         } catch {
             return .failed(reason: error.localizedDescription)
         }
@@ -812,7 +875,7 @@ final class UpdateEngine: NSObject {
 
     // MARK: Version comparison (numeric segments: 1.2.10 > 1.2.9)
 
-    private func isNewer(_ candidate: String, than current: String) -> Bool {
+    private static func isNewer(_ candidate: String, than current: String) -> Bool {
         let c = candidate.split(separator: ".").map { Int($0) ?? 0 }
         let cur = current.split(separator: ".").map { Int($0) ?? 0 }
         for i in 0..<max(c.count, cur.count) {
@@ -888,6 +951,19 @@ final class UpdateEngine: NSObject {
             return
         }
 
+        // Refuse a stale stage: without this, a newer hand-installed build
+        // could be clobbered by an older staged update on next launch.
+        let currentVersion = (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? ""
+        let stagedPlistData = try? Data(contentsOf: staged.appendingPathComponent("Contents/Info.plist"))
+        let stagedPlist = stagedPlistData.flatMap {
+            try? PropertyListSerialization.propertyList(from: $0, options: [], format: nil)
+        } as? [String: Any]
+        let stagedV = stagedPlist?["CFBundleShortVersionString"] as? String ?? ""
+        guard !stagedV.isEmpty, Self.isNewer(stagedV, than: currentVersion) else {
+            abandon("staged version (\(stagedV.isEmpty ? "unreadable" : stagedV)) is not newer than installed (\(currentVersion))")
+            return
+        }
+
         defaults.removeObject(forKey: "FreeCoffeePendingUpdatePath")
 
         // Replace the running bundle: move old aside → move staged in → delete old.
@@ -911,8 +987,16 @@ final class UpdateEngine: NSObject {
             return
         }
         try? fm.removeItem(at: aside)
-        NSWorkspace.shared.openApplication(at: target, configuration: NSWorkspace.OpenConfiguration()) { _, _ in }
-        exit(0)
+        // Relaunch through the new bundle — and only exit once the open
+        // succeeds. If it fails, this (old, in-memory) process keeps running
+        // instead of leaving the user with no app at all.
+        NSWorkspace.shared.openApplication(at: target, configuration: NSWorkspace.OpenConfiguration()) { app, error in
+            if error == nil, app != nil {
+                exit(0)
+            } else {
+                NSLog("FreeCoffee updater: relaunch failed (\(error?.localizedDescription ?? "unknown error")) — v\(stagedV) is installed; please quit and reopen FreeCoffee")
+            }
+        }
     }
 
     // MARK: hdiutil plumbing
@@ -936,7 +1020,11 @@ final class UpdateEngine: NSObject {
               let mountPoint = entry["mount_point"] as? String else { return nil }
         let volume = URL(fileURLWithPath: mountPoint)
         let appURL = volume.appendingPathComponent("FreeCoffee.app", isDirectory: true)
-        guard fm.fileExists(atPath: appURL.path) else { return nil }
+        guard fm.fileExists(atPath: appURL.path) else {
+            // Detach before bailing — otherwise every bad DMG leaks a /Volumes mount.
+            unmount(volume)
+            return nil
+        }
         return (volume, appURL)
     }
 
@@ -1005,6 +1093,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var loginItem: NSMenuItem!
     private var updateMenuItem: NSMenuItem!
     private var countdownTimer: Timer?
+    private var loginItemFailed = false   // sticky: a failed toggle must survive refreshLoginItem()
 
     private var sleepObserver: NSObjectProtocol?
     private var wakeObserver: NSObjectProtocol?
@@ -1345,6 +1434,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: Launch at Login (bundled app only — see buildMenu note)
 
     private func refreshLoginItem() {
+        if loginItemFailed {
+            // A failed toggle stays failed until one succeeds — otherwise
+            // the next refreshUI() would silently re-arm a broken switch.
+            loginItem.action = nil
+            loginItem.title = "Launch at Login (unavailable)"
+            loginItem.state = .off
+            return
+        }
         if #available(macOS 13.0, *),
            Bundle.main.bundleURL.pathExtension == "app" {
             loginItem.action = #selector(toggleLaunchAtLogin(_:))
@@ -1381,11 +1478,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // Non-fatal: on failure show a disabled state rather than a
             // toggle that would silently do nothing.
             NSLog("FreeCoffee: launch-at-login toggle failed (non-fatal): \(error.localizedDescription)")
-            loginItem.action = nil
-            loginItem.title = "Launch at Login (unavailable)"
-            loginItem.state = .off
+            loginItemFailed = true
+            refreshLoginItem()
             return
         }
+        loginItemFailed = false
         refreshLoginItem()
     }
 
@@ -1451,11 +1548,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 updateAndRelaunchTapped()
             } else if choice == .alertSecondButtonReturn {
                 updateEngine.skipCurrentVersion(version)
+                // A skipped version must never install later: drop the
+                // staged bundle + pending marker, not just the preference.
+                updateEngine.discardStagedUpdate()
                 persist()
             }
 
-        case .checking, .downloading, .idle:
+        case .checking, .downloading:
             break
+
+        case .idle:
+            // A superseded check (cancelled by a newer one) lands here —
+            // release the manual flag so future ticks keep working.
+            isManualCheck = false
         }
     }
 
@@ -1571,10 +1676,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if let campaigns = campaigns, !campaigns.isEmpty {
                 // Auction order: highest CPM first, floor applied (pickAd
                 // mirrors assets/js/demo.js). Below-floor campaigns are
-                // filtered out entirely.
-                self.liveCampaigns = pickAd(campaigns, minCpm: self.minCPM)
-                self.liveCampaignIndex = 0
+                // filtered out entirely — but a filter that removes
+                // everything keeps the last-good list, it never blanks live UI.
                 self.saveCampaignCache(campaigns)
+                let eligible = pickAd(campaigns, minCpm: self.minCPM)
+                if eligible.isEmpty {
+                    NSLog("FreeCoffee: live feed has no campaigns above the minCPM floor — keeping last-good list")
+                } else {
+                    self.liveCampaigns = eligible
+                    self.liveCampaignIndex = 0
+                }
             } else if let error = error {
                 // Non-fatal: keep last-good campaigns (or fictional sponsors).
                 NSLog("FreeCoffee: live feed unavailable (non-fatal): \(error)")
@@ -1638,11 +1749,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Load the last-good campaign list (re-validated — the cache file is
-    /// user-visible). Failures fall back to the fictional sponsors.
+    /// user-visible). Failures, or a cache from a different feed URL than
+    /// the one currently configured, fall back to the fictional sponsors.
     private func loadCampaignCache() -> [LiveCampaign] {
         do {
             let data = try Data(contentsOf: Self.campaignCacheURL())
             let cache = try JSONDecoder().decode(CampaignCache.self, from: data)
+            guard cache.feedURL == adFeedURL?.absoluteString else { return [] }
             return sanitizeCampaigns(cache.campaigns)
         } catch {
             return []
@@ -1735,11 +1848,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func openDashboard() {
-        guard let dashURL = Self.dashboardURL else { return }; NSWorkspace.shared.open(dashURL)
+        guard let dashURL = Self.dashboardURL else { return }
+        if !NSWorkspace.shared.open(dashURL) {
+            dialog(title: "Dashboard unavailable",
+                   body: "FreeCoffee couldn't open the demo dashboard. Start the demo server first:\n\ncd freecoffee && python3 -m http.server 8090")
+        }
     }
 
     func openAccount() {
-        guard let profURL = Self.profileURL else { return }; NSWorkspace.shared.open(profURL)
+        guard let profURL = Self.profileURL else { return }
+        if !NSWorkspace.shared.open(profURL) {
+            dialog(title: "Profile unavailable",
+                   body: "FreeCoffee couldn't open the demo profile page. Start the demo server first:\n\ncd freecoffee && python3 -m http.server 8090")
+        }
     }
 
     @objc private func showAbout(_ sender: NSMenuItem) {
@@ -1863,7 +1984,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 paused = false
             }
         } catch {
-            // First run (or unreadable file): seed the demo balance and a
+            if FileManager.default.fileExists(atPath: url.path) {
+                // Present but undecodable: quarantine for inspection instead
+                // of silently discarding the user's earned balance.
+                let backup = url.deletingLastPathComponent()
+                    .appendingPathComponent("ledger-corrupt-\(Int(Date().timeIntervalSince1970)).json")
+                try? FileManager.default.moveItem(at: url, to: backup)
+                NSLog("FreeCoffee: ledger.json unreadable — moved to \(backup.lastPathComponent), reseeding demo balance")
+            }
+            // First run (or quarantined file): seed the demo balance and a
             // 7-day history consistent with the web demo's ledger.
             balanceCents = Self.demoSeedBalanceCents
             todayCents = 0
@@ -1874,7 +2003,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             updateSeen = nil
             history = [:]
             let cal = Calendar.current
-            for (offset, cents) in Self.demoSeedWeek.reversed().enumerated() {
+            for (offset, cents) in Self.demoSeedWeek.enumerated() {
                 guard let day = cal.date(byAdding: .day, value: -(6 - offset), to: Date()) else { continue }
                 history[dayKey(day)] = cents
             }

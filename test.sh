@@ -38,7 +38,7 @@ done
 # ------------------------------------------------------------------ 2. Backend tests
 step "2/7 Backend unit tests"
 if ( cd backend && node test.mjs ); then
-  ok "backend/test.mjs (11 groups)"
+  ok "backend/test.mjs (12 groups)"
 else
   bad "backend/test.mjs"
 fi

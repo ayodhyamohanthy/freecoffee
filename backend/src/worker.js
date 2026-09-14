@@ -51,7 +51,7 @@ var CPM_MIN = 0, CPM_MAX = 100;
 var MAX_CAMPAIGNS = 20;
 var MAX_UPSTREAM = 500;         // work bound on upstream feed entries
 var FEED_TTL_S = 600;           // adapter feed cached 10 minutes
-var ID_MAX = 40, SPONSOR_MAX = 40, TAGLINE_MAX = 90, LOGO_MAX = 2;
+var ID_MAX = 40, SPONSOR_MAX = 40, TAGLINE_MAX = 90, LOGO_MAX = 2, URL_MAX = 500;
 var DEFAULT_ACCENT = '#C98F4E';
 var DEVICE_ID_RE = /^[a-f0-9-]{8,64}$/i;
 
@@ -94,7 +94,10 @@ function isValidHttpsUrl(val) {
 
 function validateCampaigns(raw) {
   if (!Array.isArray(raw)) return [];
-  var seen = {}, out = [];
+  // Object.create(null): ids like "__proto__" must not collide with
+  // Object.prototype (a plain {} would wrongly skip them — or throw on
+  // assignment under strict-mode runtimes).
+  var seen = Object.create(null), out = [];
   for (var i = 0; i < raw.length && out.length < MAX_CAMPAIGNS; i++) {
     var r = raw[i];
     if (!r || typeof r !== 'object' || Array.isArray(r)) continue;
@@ -103,7 +106,8 @@ function validateCampaigns(raw) {
     if (!id) continue;                        // server: id required (pay-key)
     if (!sponsor) continue;                   // unusable without a name
     if (seen[id]) continue;                   // dedupe by id
-    var click = isValidHttpsUrl(r.clickUrl) ? r.clickUrl : '';
+    var clickRaw = capStr(r.clickUrl, URL_MAX);
+    var click = isValidHttpsUrl(clickRaw) ? clickRaw : '';
     var cpm = Number(r.cpm);
     if (!isFinite(cpm)) cpm = 0;
     cpm = Math.min(CPM_MAX, Math.max(CPM_MIN, cpm));
@@ -445,10 +449,10 @@ async function handleAdminFeed(req, env) {
 
 /* ------------------------------ entrypoint ------------------------------ */
 async function handleFetch(request, env, ctx) {
-  var url = new URL(request.url);
-  var picked = pickRoute(request.method, url.pathname);
-  if (!picked.handled) return json({ ok: false, error: 'not found' }, 404);
   try {
+    var url = new URL(request.url);
+    var picked = pickRoute(request.method, url.pathname);
+    if (!picked.handled) return json({ ok: false, error: 'not found' }, 404);
     switch (picked.route) {
       case 'preflight':
         return new Response(null, { status: 204, headers: corsHeaders() });

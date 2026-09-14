@@ -221,6 +221,8 @@
               <span class="act-body">
                 <p class="act-title"><span class="pill pill-ok">Connected</span></p>
                 <p class="act-sub">This Mac · macOS 26</p>
+                <p class="act-sub">Device ID <code id="deviceIdCode">…</code>
+                  <button type="button" class="btn btn-ghost btn-sm" id="copyDeviceIdBtn" style="margin-left:8px">Copy</button></p>
               </span>
             </div>
             <button type="button" class="btn btn-danger-outline" id="unlinkMacBtn" style="margin-top:12px">Unlink Mac</button>
@@ -329,26 +331,41 @@ Disclaimer: FreeCoffee demo — simulated data.</textarea>
     $('prefPayout').checked = p.prefPayout !== false;
     $('prefProduct').checked = !!p.prefProduct;
 
+    // Device ID (used by /earnings/{deviceId} and the agents page).
+    var didEl = $('deviceIdCode');
+    if (didEl) {
+      var D0 = window.FreeCoffeeDemo;
+      var did = (D0 && typeof D0.deviceId === 'function') ? D0.deviceId() : '';
+      didEl.textContent = did || 'unavailable';
+    }
+
     $('profileForm').addEventListener('submit', function (ev) {
       ev.preventDefault();
       // MIN CPM floor: empty string → 0; clamped 0–100 to match the cpm cap.
       var minCpmVal = Number($('minCpm').value);
       if (!isFinite(minCpmVal) || minCpmVal < 0) minCpmVal = 0;
       if (minCpmVal > 100) minCpmVal = 100;
-      writeState({
-        profile: {
-          displayName: $('displayName').value.trim() || 'Demo User',
-          email: $('email').value.trim() || 'demo@freecoffee.local',
-          coffeePref: $('coffeePref').value,
-          adFeedUrl: $('adFeedUrl').value.replace(/^\s+|\s+$/g, ''),
-          backendUrl: $('backendUrl').value.replace(/^\s+|\s+$/g, '').replace(/\/+$/, ''),
-          minCpm: minCpmVal,
-          prefWeekly: $('prefWeekly').checked,
-          prefPayout: $('prefPayout').checked,
-          prefProduct: $('prefProduct').checked,
-          savedTs: Date.now()
-        }
+      // Merge into the existing profile so keys written by other pages
+      // (e.g. payouts.html → payoutRail) survive a profile save.
+      var prev = readState().profile || {};
+      var backend = $('backendUrl').value.replace(/^\s+|\s+$/g, '').replace(/\/+$/, '');
+      if (backend && !/^https:\/\//i.test(backend)) {
+        toast('Backend URL must be an https:// URL (or empty for the offline demo).');
+        return;
+      }
+      var next = Object.assign({}, prev, {
+        displayName: $('displayName').value.trim() || 'Demo User',
+        email: $('email').value.trim() || 'demo@freecoffee.local',
+        coffeePref: $('coffeePref').value,
+        adFeedUrl: $('adFeedUrl').value.replace(/^\s+|\s+$/g, ''),
+        backendUrl: backend,
+        minCpm: minCpmVal,
+        prefWeekly: $('prefWeekly').checked,
+        prefPayout: $('prefPayout').checked,
+        prefProduct: $('prefProduct').checked,
+        savedTs: Date.now()
       });
+      writeState({ profile: next });
       toast('Profile saved — stored locally in freecoffee:v1. (demo)');
     });
 
@@ -372,6 +389,9 @@ Disclaimer: FreeCoffee demo — simulated data.</textarea>
         } else {
           toast('Feed error: ' + ((res && res.error) || 'unknown error'));
         }
+      }).catch(function () {
+        btn.disabled = false;
+        toast('Feed test failed — network error or blocked URL.');
       });
     });
 
@@ -391,6 +411,13 @@ Disclaimer: FreeCoffee demo — simulated data.</textarea>
         btn.disabled = false;
         toast('Backend unreachable — check the URL, CORS, or the deployment (backend/README.md).');
       });
+    });
+
+    var copyDidBtn = $('copyDeviceIdBtn');
+    if (copyDidBtn) copyDidBtn.addEventListener('click', function () {
+      var code = ($('deviceIdCode') && $('deviceIdCode').textContent) || '';
+      if (code && code !== 'unavailable') copyText(code, 'Device ID copied to the clipboard.');
+      else toast('No device ID available in this browser.');
     });
 
     $('unlinkMacBtn').addEventListener('click', function () {

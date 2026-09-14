@@ -12,7 +12,9 @@ cd "$(dirname "$0")"
 #  2. icons             python3 makeicon.py + iconutil  → AppIcon.icns
 #  3. app bundle        $STAGE/FreeCoffee.app (binary + icns + heredoc Info.plist,
 #                       version stamped with plutil, linted with plutil)
-#  4. ad-hoc codesign   codesign --force --sign -   (no --deep: deprecated)
+#  4. codesign          ad-hoc by default (free, Gatekeeper asks once);
+#                       Developer ID + hardened runtime when FC_DEVELOPER_ID
+#                       is set, notarized + stapled in step 5 (zero dialogs)
 #  5. DMG               dmgroot (app + /Applications link + baked drag-cue
 #                       background + volume icon) → writable UDRW → Finder
 #                       layout via AppleScript → compressed UDZO. Headless
@@ -158,12 +160,25 @@ plutil -replace CFBundleVersion            -string "$APP_BUILD"   "$APP/Contents
 plutil -lint "$APP/Contents/Info.plist"
 
 # --------------------------------------------------------------- 4. codesign
-echo "==> [4/7] Ad-hoc codesigning"
-# No --deep: deprecated by Apple, and this bundle has no nested code to sign.
-codesign --force --sign - "$APP"
+echo "==> [4/7] Codesigning"
+# Two modes. Default is ad-hoc (free): Gatekeeper asks once via right-click
+# Open / Open Anyway, then never again. When FC_DEVELOPER_ID names a paid
+# "Developer ID Application" identity, sign with the hardened runtime plus a
+# trusted timestamp instead — step 5 then notarizes the DMG, which is what
+# makes Gatekeeper pass with zero dialogs. Without the $99/yr Apple Developer
+# membership that identity does not exist, so ad-hoc stays the default.
+SIGN_IDENTITY="${FC_DEVELOPER_ID:-}"
+if [ -n "$SIGN_IDENTITY" ]; then
+  codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$APP"
+  SIGNED_MODE="developer-id"
+else
+  # No --deep: deprecated by Apple, and this bundle has no nested code to sign.
+  codesign --force --sign - "$APP"
+  SIGNED_MODE="ad-hoc"
+fi
 codesign --verify --strict "$APP" \
   || fail "the app signature does not verify after signing"
-echo "    ad-hoc signature verified"
+echo "    signature verified ($SIGNED_MODE)"
 
 # -------------------------------------------------------------------- 5. DMG
 echo "==> [5/7] Building $DMG (UDZO, polished Finder layout + /Applications link)"
@@ -323,6 +338,30 @@ else
 fi
 rm -f "$STAGE/rw.dmg"
 
+# -------------------------------------------- 5b. notarize (Developer ID only)
+# Skipped entirely for ad-hoc builds. When step 4 signed with a Developer ID
+# identity, the DMG must carry Apple's ticket or Gatekeeper still blocks it.
+# Credentials come from the environment (never committed — see Info-howto.md):
+#   FC_DEVELOPER_ID  "Developer ID Application: Name (TEAMID)" (step 4)
+#   FC_APPLE_ID      Apple ID email enrolled in the Developer Program
+#   FC_APP_PASSWORD  app-specific password (appleid.apple.com → Security)
+#   FC_TEAM_ID       10-character team ID
+# The ticket is stapled to the DMG, so offline Macs pass Gatekeeper too.
+if [ "$SIGNED_MODE" = "developer-id" ]; then
+  : "${FC_APPLE_ID:?set FC_APPLE_ID (Apple ID email) to notarize}"
+  : "${FC_APP_PASSWORD:?set FC_APP_PASSWORD (app-specific password) to notarize}"
+  : "${FC_TEAM_ID:?set FC_TEAM_ID to notarize}"
+  echo "==> [5/7] Notarizing $DMG (notarytool --wait, then staple)"
+  xcrun notarytool submit "$STAGE/$DMG" --apple-id "$FC_APPLE_ID" \
+    --password "$FC_APP_PASSWORD" --team-id "$FC_TEAM_ID" --wait \
+    || fail "notarization failed — see the notarytool log URL above"
+  xcrun stapler staple "$STAGE/$DMG" \
+    || fail "could not staple the notarization ticket to $DMG"
+  xcrun stapler validate "$STAGE/$DMG" \
+    || fail "stapled ticket does not validate"
+  echo "    notarized + stapled"
+fi
+
 # ----------------------------------------------------------------- 6. verify
 echo "==> [6/7] Verifying $DMG"
 hdiutil verify "$STAGE/$DMG" >/dev/null || fail "$DMG failed hdiutil verify"
@@ -344,8 +383,19 @@ MOUNTED_VERSION="$(plutil -extract CFBundleShortVersionString raw "$VERIFY/$BUND
 codesign --verify --strict "$VERIFY/$BUNDLE" 2>/dev/null \
   || fail "the app inside the DMG has an invalid signature"
 
-lipo -info "$VERIFY/$BUNDLE/Contents/MacOS/FreeCoffeeMenuBar" 2>/dev/null | grep -q arm64 \
-  || fail "the binary inside the DMG is not a universal (arm64) build"
+LIPO_INFO="$(lipo -info "$VERIFY/$BUNDLE/Contents/MacOS/FreeCoffeeMenuBar" 2>/dev/null || true)"
+case "$LIPO_INFO" in *arm64*) : ;; *)
+  fail "the binary inside the DMG has no arm64 slice ($LIPO_INFO)" ;; esac
+case "$LIPO_INFO" in *x86_64*) : ;; *)
+  # An arm64-only fallback must never ship as "universal" — refuse rather
+  # than publish a DMG whose release notes promise arm64 + x86_64.
+  fail "the binary inside the DMG is missing the x86_64 slice ($LIPO_INFO)" ;; esac
+
+if [ "$SIGNED_MODE" = "developer-id" ]; then
+  spctl -a "$VERIFY/$BUNDLE" \
+    || fail "Gatekeeper rejects the notarized app inside the DMG"
+  echo "    Gatekeeper: accepted (Developer ID, notarized)"
+fi
 
 if [ -f "$VERIFY/.DS_Store" ]; then
   echo "    Finder layout: polished (.DS_Store present)"

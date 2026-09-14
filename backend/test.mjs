@@ -76,6 +76,23 @@ function pass(name) { n++; console.log('PASS ' + name); }
 }
 
 /* ------------------------------------------------------------------------
+   2b. validateCampaigns — prototype ids + padded/overlong click URLs
+   ------------------------------------------------------------------------ */
+{
+  const v = validateCampaigns([
+    { id: '__proto__', sponsor: 'Proto Co', clickUrl: 'https://x.example/', cpm: 1 },
+    { id: 'constructor', sponsor: 'Ctor Co', clickUrl: 'https://x.example/', cpm: 1 },
+    { id: 'pad', sponsor: 'Pad Co', clickUrl: '  https://x.example/padded  ', cpm: 1 },
+    { id: 'long', sponsor: 'Long Co', clickUrl: 'https://x.example/' + 'y'.repeat(600), cpm: 1 }
+  ]);
+  assert.equal(v.length, 4, 'prototype-named ids are kept, not swallowed');
+  assert.equal(v[0].id, '__proto__', 'proto id survives dedupe map');
+  assert.equal(v[2].clickUrl, 'https://x.example/padded', 'padded clickUrl trimmed, not dropped');
+  assert.equal(v[3].clickUrl.length, 500, 'clickUrl capped at 500 chars');
+  pass('validateCampaigns handles __proto__ ids; trims + caps click URLs');
+}
+
+/* ------------------------------------------------------------------------
    3. applyEarnings — impression award = 0.65 × cpm × minutes ÷ 1000
    ------------------------------------------------------------------------ */
 {

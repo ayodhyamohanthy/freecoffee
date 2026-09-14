@@ -37,6 +37,7 @@ var PRECACHE = [
   './profile.html',
   './referrals.html',
   './advertisers.html',
+  './app/Info-howto.md',
   './manifest.webmanifest',
   // Versioned exactly as the pages request them — an unversioned entry here
   // would be downloaded and then never matched by any request.
@@ -77,7 +78,11 @@ self.addEventListener('install', function (event) {
 self.addEventListener('activate', function (event) {
   event.waitUntil(
     caches.keys().then(function (keys) {
-      var stale = keys.filter(function (key) { return key !== CACHE; });
+      // Only our own versioned caches — never evict another app that
+      // happens to share this origin.
+      var stale = keys.filter(function (key) {
+        return key !== CACHE && key.indexOf('freecoffee-') === 0;
+      });
       return Promise.all(stale.map(function (key) { return caches.delete(key); }));
     }).then(function () {
       return self.clients.claim();
@@ -130,11 +135,16 @@ self.addEventListener('fetch', function (event) {
           return refresh.then(function (response) {
             if (response) return response;
             // Offline and this exact ?v= was never stored. Fall back to any
-            // cached copy of the same path (a previous version) rather than
-            // failing outright — stale CSS beats an unstyled page.
-            var samePath = new URL(url.pathname, self.location.href).toString();
-            return caches.match(samePath).then(function (older) {
-              return older || Promise.reject(new Error('offline'));
+            // cached copy of the same path (a previous ?v=) rather than
+            // failing outright — stale CSS beats an unstyled page. Match by
+            // pathname because every stored key carries its own ?v=.
+            return cache.keys().then(function (keys) {
+              for (var i = 0; i < keys.length; i++) {
+                if (new URL(keys[i].url).pathname === url.pathname) {
+                  return cache.match(keys[i]);
+                }
+              }
+              return Promise.reject(new Error('offline'));
             });
           });
         });

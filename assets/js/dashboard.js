@@ -362,7 +362,7 @@
     }
 
     $('ledgerFoot').textContent = 'Showing ' + shown + ' of ' + ledger.length +
-      ' rows · available + pending = lifetime, always. Tier floors: T1 $4.00 · T2 $2.50 · T3 $1.25 CPM-equivalent.';
+      ' rows · withdrawals reduce the available balance shown above. Tier floors: T1 $4.00 · T2 $2.50 · T3 $1.25 CPM-equivalent.';
   }
 
   /* ------------------------------------------------------------------
@@ -450,6 +450,7 @@
 
     for (var i = 0; i < live.length; i++) {
       var camp = live[i];
+      if (!camp || typeof camp.sponsor !== 'string' || !camp.sponsor) continue;
 
       var li = document.createElement('li');
       li.className = 'sp-row sp-live';
@@ -624,8 +625,27 @@
        until the first successful read, which simply means "not tracking yet". */
     var trackedCampaignId = '';
 
+    /* Backend calls get the same 8 s timeout as the feed bridge (demo.js).
+       Browsers without AbortController simply fetch without a timeout. */
+    var BACKEND_TIMEOUT_MS = 8000;
+    function backendFetch(url, opts) {
+      opts = opts || {};
+      if (typeof AbortController === 'undefined') return fetch(url, opts);
+      var controller = new AbortController();
+      var timer = setTimeout(function () { try { controller.abort(); } catch (e) { /* noop */ } },
+        BACKEND_TIMEOUT_MS);
+      opts.signal = controller.signal;
+      return fetch(url, opts).then(function (res) {
+        clearTimeout(timer);
+        return res;
+      }, function (err) {
+        clearTimeout(timer);
+        throw err;
+      });
+    }
+
     function loadTrackedCampaign() {
-      return fetch(base + '/feed.json')
+      return backendFetch(base + '/feed.json')
         .then(function (res) { return (res && res.ok) ? res.json() : null; })
         .then(function (d) {
           var list = (d && Array.isArray(d.campaigns)) ? d.campaigns : [];
@@ -640,7 +660,7 @@
       if (state.paused || document.hidden) return;   // visible + not paused only
       if (!trackedCampaignId) return;                // nothing served → nothing to report
       try {
-        fetch(base + '/track', {
+        backendFetch(base + '/track', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ deviceId: dev, type: 'impression', campaignId: trackedCampaignId, minutes: 1 })
@@ -649,9 +669,10 @@
     }
 
     function renderEarnings(d) {
-      $('realEarnTotal').textContent = money(d.total);
-      $('realEarnToday').textContent = money(d.today && d.today.total);
-      $('realEarnMonthly').textContent = money(d.monthly && d.monthly.total);
+      d = d || {};
+      $('realEarnTotal').textContent = money(d.total || 0);
+      $('realEarnToday').textContent = money((d.today && d.today.total) || 0);
+      $('realEarnMonthly').textContent = money((d.monthly && d.monthly.total) || 0);
       $('realEarnImpressions').textContent = String(
         (d.counters && Number(d.counters.impressions)) || 0);
       $('realEarnClicks').textContent = String(
@@ -660,7 +681,7 @@
 
     function fetchEarnings() {
       try {
-        fetch(base + '/earnings/' + encodeURIComponent(dev))
+        backendFetch(base + '/earnings/' + encodeURIComponent(dev))
           .then(function (res) {
             if (!res || !res.ok) throw new Error('HTTP ' + (res ? res.status : 'error'));
             return res.json();

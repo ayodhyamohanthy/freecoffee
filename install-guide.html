@@ -6,6 +6,7 @@
 <title>Install Guide — Open FreeCoffee when Apple blocks it | FreeCoffee</title>
 <meta name="description" content="Step-by-step guide: install FreeCoffee from the DMG when macOS Gatekeeper shows 'Apple could not verify…'. Right-click Open, Open Anyway, and the damaged-app fix.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2314100D'/%3E%3Cpath d='M8 13h11a1 1 0 0 1 1 1v5a4 4 0 0 1-4 4h-5a4 4 0 0 1-4-4v-5a1 1 0 0 1 1-1z' fill='%23E0A93E'/%3E%3Cpath d='M20 14h2.2a2.4 2.4 0 0 1 0 4.8H20v-1.6h2.2a.8.8 0 0 0 0-1.6H20z' fill='%23E0A93E'/%3E%3Crect x='7' y='10.6' width='13.5' height='1.6' rx='.8' fill='%23E0A93E'/%3E%3C/svg%3E">
+<link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#F7F6F3">
 <style>
   :root { color-scheme: light; }
@@ -170,7 +171,7 @@ brew install --cask ayodhyamohanthy/freecoffee/freecoffee</code></pre>
 </details>
 
 <h2>Never see this again (optional, $99)</h2>
-<p>The permanent fix is an Apple Developer certificate + notarization — that's what large companies pay for. We chose the free path: the app is fully open-source and auditable. If that ever changes, this page will say so.</p>
+<p>The permanent fix is an Apple Developer certificate + notarization — that's what established apps ship with (their DMGs open with zero dialogs). The build already supports it: with a membership, <code>build.sh</code> signs, notarizes, and staples the ticket via four environment variables, no script changes. Until then we ship the free path: the app is fully open-source and auditable. If that ever changes, this page will say so.</p>
 
 <div class="warn"><strong>Safety note:</strong> Never disable Gatekeeper system-wide (<code>spctl --master-disable</code>) or run install scripts that ask you to. The <code>xattr</code> command above targets <strong>only</strong> the FreeCoffee app — that's the safe, surgical approach.</div>
 
@@ -180,5 +181,20 @@ brew install --cask ayodhyamohanthy/freecoffee/freecoffee</code></pre>
   <p><a href="./index.html">← Back to FreeCoffee</a> · <a href="https://github.com/ayodhyamohanthy/freecoffee">Source code</a> · <a href="https://github.com/ayodhyamohanthy/freecoffee/releases/latest/download/FreeCoffee.dmg">Download DMG</a></p>
   <p>FreeCoffee demo — simulated data.</p>
 </footer>
+<script>
+/* Service worker registration — shared inline snippet on all pages.
+   Skipped on file:// (no SW support there); failures are non-fatal. */
+if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
+  try {
+    navigator.serviceWorker.register('sw.js').then(function (reg) {
+      console.info('FreeCoffee: service worker registered (scope ' + reg.scope + ')');
+    }).catch(function (err) {
+      console.info('FreeCoffee: service worker registration failed: ' + err);
+    });
+  } catch (err) {
+    console.info('FreeCoffee: service worker registration failed: ' + err);
+  }
+}
+</script>
 </body>
 </html>

@@ -158,8 +158,8 @@
             <p class="stat-label">referral earnings · all time</p>
           </div>
           <div class="card stat-card">
-            <p class="stat-num" id="refTier">3</p>
-            <p class="stat-label">referrals to next tier · +$5 bonus</p>
+            <p class="stat-num" id="refGate">1 of 2</p>
+            <p class="stat-label">referees past the 60-min gate</p>
           </div>
         </section>
 
@@ -249,14 +249,22 @@
     try {
       var D = window.FreeCoffeeDemo;
       var h = D.generateHistory(D.SEED);
-      var refs = h.totals.referrals;
-      var sum = 0;
-      for (var i = 0; i < refs.length; i++) sum += refs[i].accrued;
+      var refs = (h && h.totals && h.totals.referrals) || [];
+      var sum = 0, gated = 0;
+      for (var i = 0; i < refs.length; i++) {
+        sum += Number(refs[i].accrued) || 0;
+        if (refs[i].verified) gated++;
+      }
       $('refEarnings').textContent = '$' + (Math.round(sum * 100) / 100).toFixed(2);
       $('refUsers').textContent = String(refs.length);
+      $('refGate').textContent = gated + ' of ' + refs.length;
+      var footBits = [];
+      for (var j = 0; j < refs.length; j++) {
+        footBits.push(refs[j].name + ' $' + (Number(refs[j].accrued) || 0).toFixed(2));
+      }
       $('refFoot').textContent = 'Numbers come from the same seeded ledger as the dashboard — ' +
         'referral rows are 10% of each referee\'s daily base earnings. ' +
-        'astra.dev $' + refs[0].accrued.toFixed(2) + ' · quill@mac $' + refs[1].accrued.toFixed(2) + '.';
+        footBits.join(' · ') + '.';
     } catch (e) { /* static values already match seed 42 */ }
   }
 

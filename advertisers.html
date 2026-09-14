@@ -171,7 +171,7 @@
               <tr><th scope="col">Field</th><th scope="col">Type</th><th scope="col">Rules</th></tr>
             </thead>
             <tbody>
-              <tr><th scope="row">id</th><td>string</td><td>Unique per campaign (max 40 chars; duplicates are dropped). Optional — falls back to the array position.</td></tr>
+              <tr><th scope="row">id</th><td>string</td><td>Unique per campaign (max 40 chars; duplicates are dropped). Optional for on-device display (falls back to the array position) — but publishing through the backend (<code>POST /admin/feed</code>) requires it: the id is the earnings pay-key.</td></tr>
               <tr><th scope="row">sponsor</th><td>string</td><td>Brand name, trimmed, max 40 chars. Required — entries without it are skipped.</td></tr>
               <tr><th scope="row">tagline</th><td>string</td><td>One line of creative, trimmed, max 90 chars. Optional.</td></tr>
               <tr><th scope="row">clickUrl</th><td>string</td><td>Must be <code>https://</code>. Anything else is dropped and the campaign renders without a link.</td></tr>

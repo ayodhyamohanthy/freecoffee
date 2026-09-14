@@ -158,6 +158,7 @@
     SPONSOR: 40,
     TAGLINE: 90,
     LOGO_TEXT: 2,
+    URL: 500,
     CPM_MIN: 0,
     CPM_MAX: 100,
     DEFAULT_ACCENT: '#C98F4E'
@@ -176,7 +177,11 @@
 
   function fetchLiveCampaigns(feedUrl) {
     return new Promise(function (resolve) {
-      function fail(msg) { resolve({ campaigns: [], error: msg }); }
+      var timer = null;
+      function fail(msg) {
+        if (timer) { clearTimeout(timer); timer = null; }
+        resolve({ campaigns: [], error: msg });
+      }
 
       if (typeof feedUrl !== 'string' || !isValidHttpsUrl(feedUrl)) {
         fail('Feed URL must be an https:// URL');
@@ -184,11 +189,12 @@
       }
 
       var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-      var timer = null;
-      if (controller) {
-        timer = setTimeout(function () { try { controller.abort(); } catch (e) { /* noop */ } },
-          LIVE_LIMITS.TIMEOUT_MS);
-      }
+      // Always arm the timeout — without AbortController the late fetch
+      // still resolves into a settled promise (harmless no-op).
+      timer = setTimeout(function () {
+        if (controller) { try { controller.abort(); } catch (e) { /* noop */ } }
+        fail('Feed fetch timed out after ' + LIVE_LIMITS.TIMEOUT_MS + ' ms');
+      }, LIVE_LIMITS.TIMEOUT_MS);
 
       var opts = controller ? { signal: controller.signal } : {};
       fetch(feedUrl, opts).then(function (res) {
@@ -198,7 +204,7 @@
           try { data = JSON.parse(text); } catch (e) { fail('Feed is not valid JSON'); return; }
           if (!Array.isArray(data)) { fail('Feed must be a JSON array of campaigns'); return; }
 
-          var seen = {};
+          var seen = Object.create(null);
           var out = [];
           for (var i = 0; i < data.length && out.length < LIVE_LIMITS.MAX_CAMPAIGNS; i++) {
             var raw = data[i];
@@ -207,7 +213,7 @@
             var sponsor = capStr(raw.sponsor, LIVE_LIMITS.SPONSOR);
             var tagline = capStr(raw.tagline, LIVE_LIMITS.TAGLINE);
             var id = capStr(raw.id, LIVE_LIMITS.ID) || ('camp_' + (i + 1));
-            var click = isValidHttpsUrl(raw.clickUrl) ? raw.clickUrl : '';
+            var click = isValidHttpsUrl(capStr(raw.clickUrl, LIVE_LIMITS.URL)) ? capStr(raw.clickUrl, LIVE_LIMITS.URL) : '';
             if (!sponsor) continue;               // a campaign without a name is unusable
 
             // cpm: coerce to a finite number, clamp 0–100 (informational —

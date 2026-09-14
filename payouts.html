@@ -280,17 +280,26 @@
   }
 
   /* ---- balance (from the seeded ledger — invariant: available + pending = lifetime) ---- */
+  function paidOutTotal() {
+    var s = 0, list = [];
+    try { list = readState().paidOut || []; } catch (e) { list = []; }
+    for (var i = 0; i < list.length; i++) s += Number(list[i].amount) || 0;
+    return Math.round(s * 100) / 100;
+  }
+
   function renderBalance() {
     var D = window.FreeCoffeeDemo;
     if (!D || typeof D.generateHistory !== 'function') return;
     try {
       var h = D.generateHistory(D.SEED);
       var t = h.totals;
+      // Mirror the dashboard: withdrawals already paid out reduce what's available.
+      var avail = Math.max(0, Math.round((t.available - paidOutTotal()) * 100) / 100);
       $('statLifetimeCell').textContent = money(t.lifetime);
-      $('statAvailable').textContent = money(t.available);
+      $('statAvailable').textContent = money(avail);
       $('statPending').textContent = money(t.pending);
       $('statCups').textContent = '≈ ' + D.cups(t.lifetime) + ' cups of coffee · 1 cup = $5.00';
-      $('balFoot').textContent = t.rows + ' rows in ledger · available + pending = lifetime, always. ' +
+      $('balFoot').textContent = t.rows + ' rows in ledger · withdrawals reduce the available balance shown above. ' +
         'Withdraw the available amount from the Overview page once it crosses the $2 minimum.';
     } catch (e) { /* static $0.00 fallback stays */ }
   }

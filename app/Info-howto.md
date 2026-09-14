@@ -18,6 +18,13 @@ Open Anyway override) on every machine the DMG is moved to. Anyone can verify
 this themselves by rebuilding from `FreeCoffeeMenuBar.swift`, which is a single
 readable file.
 
+**Going further (optional, $99/yr):** with an Apple Developer Program membership,
+export `FC_DEVELOPER_ID` (plus `FC_APPLE_ID` / `FC_APP_PASSWORD` /
+`FC_TEAM_ID`) and `build.sh` signs with the hardened runtime, notarizes the DMG
+via `notarytool --wait`, and staples the ticket — Gatekeeper then passes with
+zero dialogs, online or offline. Credentials live only in the environment, never
+in the repo; without them the build stays ad-hoc and step 6 says so.
+
 ## What it does
 
 1. **Left-click** the status item: the earnings popover opens —
