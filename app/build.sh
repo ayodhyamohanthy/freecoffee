@@ -23,7 +23,8 @@ cd "$(dirname "$0")"
 #  6. verify            hdiutil verify + mount → bundle present, version matches
 #                       the stamp, signature valid, layout reported → detach
 #  7. publish           only now is dist/ touched (rename, not delete+write)
-#                       + artifact sizes and sha256
+#                       + artifact sizes and sha256 + PWA lockstep (ASSET_V
+#                       tracks the DMG version so the web app never lags)
 #
 # --- WHY EVERYTHING IS BUILT IN A STAGING DIR (regression note) -------------
 # This script used to `rm -rf dist/FreeCoffee.app dist/FreeCoffee.dmg` at the
@@ -426,6 +427,41 @@ if command -v shasum >/dev/null 2>&1; then
   echo "  sha256: $DMG_SHA"
 fi
 lipo -info "$DIST/$BUNDLE/Contents/MacOS/FreeCoffeeMenuBar" || true
+
+# PWA lockstep: every DMG version bump also busts the installed web app's
+# cache, so the PWA can never lag the shipped native app. ASSET_V tracks
+# max(stripped APP_VERSION, current ASSET_V) — monotonic, and rebuilding the
+# same version is a no-op. Manual web-only bumps (edit sw.js + ?v=, guarded
+# by test.sh check 7) keep working: a PWA already ahead of the DMG is left
+# alone. python3 rewrites (never `sed -i`: BSD/GNU differ — see step 3 note).
+CUR_V="$(python3 -c "import re,sys; m=re.search(r\"var ASSET_V *= *'([0-9]+)'\", open('../sw.js').read()); print(m.group(1) if m else '')")"
+DERIVED_V="$(printf '%s' "$APP_VERSION" | tr -cd '0-9')"
+if [ -n "$CUR_V" ] && [ -n "$DERIVED_V" ]; then
+  if [ "$DERIVED_V" -gt "$CUR_V" ]; then NEW_V="$DERIVED_V"; else NEW_V="$CUR_V"; fi
+  if [ "$NEW_V" != "$CUR_V" ]; then
+    python3 - "$NEW_V" "$CUR_V" <<'PY'
+import glob, re, sys
+new_v, cur_v = sys.argv[1], sys.argv[2]
+sw = '../sw.js'
+src = open(sw, encoding='utf-8').read()
+src = src.replace("var ASSET_V = '%s'" % cur_v, "var ASSET_V = '%s'" % new_v)
+src = src.replace("'freecoffee-v%s'" % cur_v, "'freecoffee-v%s'" % new_v)
+open(sw, 'w', encoding='utf-8').write(src)
+n = 0
+for f in glob.glob('../*.html'):
+    s = open(f, encoding='utf-8').read()
+    s2 = re.sub(r'\?v=%s\b' % cur_v, '?v=' + new_v, s)
+    if s2 != s:
+        open(f, 'w', encoding='utf-8').write(s2)
+        n += 1
+print('  PWA: ASSET_V %s -> %s (sw.js + %d page(s)) — commit with this build' % (cur_v, new_v, n))
+PY
+  else
+    echo "  PWA: already in sync (ASSET_V=$CUR_V)"
+  fi
+else
+  echo "  WARNING: could not sync PWA version (sw.js ASSET_V unreadable)" >&2
+fi
 
 # Release notes template — paste this into the GitHub Release body. The app's
 # updater parses the "SHA256: <hex>" line to verify the download, so publishing

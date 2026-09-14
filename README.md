@@ -110,13 +110,14 @@ The site is also a full PWA (works entirely offline after first visit — no bac
   when the browser fires `beforeinstallprompt`) or the browser's own install icon in the address bar.
 - **Install on iOS Safari:** iOS never fires the prompt event — use **Share → Add to Home
   Screen** (the site shows this hint line on iPhones). Requires HTTPS or localhost serving.
-- **Service worker caching behavior** (`sw.js`, cache `freecoffee-v13`): precached app shell is served
+- **Service worker caching behavior** (`sw.js`, cache `freecoffee-v113`): precached app shell is served
   cache-first; navigations are network-first with cache fallback (so content updates when you're
   online); versioned assets (`assets/*?v=N`) are stale-while-revalidate — served from cache instantly
   and refreshed in the background, so bumping `?v=` in the HTML always pulls the fresh asset; other
   same-origin GETs are runtime-cached on first fetch; cross-origin and non-GET requests are untouched.
   Bump `CACHE` **and** the `?v=` versions when changing assets — `activate()` deletes old caches
   automatically, and `skipWaiting`/`clients.claim` make updates take effect on reload.
+  (`app/build.sh` also does this automatically on every DMG version bump — PWA lockstep.)
 - Served over plain `python3 -m http.server`, the SW registers on `http://127.0.0.1:*` (localhost
   is a secure context). On `file://` the registration is skipped by design.
 - **Storage:** the demo persists to `localStorage` key **`freecoffee:v1`**. If an older demo wrote
