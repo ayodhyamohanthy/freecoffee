@@ -10,7 +10,8 @@ import {
   validateCampaigns,
   applyEarnings,
   pickRoute,
-  ledgerView
+  ledgerView,
+  getFeed
 } from './src/worker.js';
 
 /* Fixed clocks: 2026-09-06 12:00 UTC and the next day. */
@@ -217,6 +218,32 @@ function pass(name) { n++; console.log('PASS ' + name); }
   assert.ok(view.counters.impressions === 60);
   assert.ok(view.today.date === '2026-09-06');
   pass('ledgerView serves 2-decimal totals + last 50 rows');
+}
+
+/* ------------------------------------------------------------------------
+   8. getFeed — an admin-cleared feed ([] in KV) is honored, not overridden
+      by the adapter. The adapter only writes KV when it has ≥1 valid
+      campaign, so [] in KV can only come from POST /admin/feed with [].
+   ------------------------------------------------------------------------ */
+{
+  const kv = (value) => ({ get: async () => value, put: async () => {} });
+
+  const cleared = await getFeed({ SITE_KV: kv('[]') });
+  assert.equal(cleared.source, 'kv', 'admin-cleared feed stays kv-sourced');
+  assert.deepEqual(cleared.campaigns, [], 'no campaigns served');
+
+  const full = await getFeed({ SITE_KV: kv(JSON.stringify(FEED)) });
+  assert.equal(full.source, 'kv', 'populated KV feed served');
+  assert.equal(full.campaigns.length, 2, 'both campaigns validated through');
+
+  const garbage = await getFeed({ SITE_KV: kv('not json at all') });
+  assert.equal(garbage.source, 'empty', 'unparseable KV falls through to empty');
+  assert.deepEqual(garbage.campaigns, []);
+
+  const absent = await getFeed({ SITE_KV: { get: async () => null, put: async () => {} } });
+  assert.equal(absent.source, 'empty', 'missing KV value falls through to empty');
+
+  pass('getFeed honors an admin-cleared feed; unparseable/absent KV → empty');
 }
 
 console.log('ALL TESTS PASSED (' + n + ' groups)');

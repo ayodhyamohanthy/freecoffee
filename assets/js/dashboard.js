@@ -587,10 +587,16 @@
      freecoffee:v1 → profile.backendUrl); hidden entirely otherwise.
 
      Every 60 s while the page is visible and ads are not paused:
+       • GET  {backend}/feed.json → resolve the campaign the SERVER is
+         actually serving (top bid via pickAd) and remember its id
        • POST {backend}/track   {deviceId, type:'impression',
-                                 campaignId:'demo', minutes:1}
+                                 campaignId:<that id>, minutes:1}
          (fire-and-forget, best-effort — failures are swallowed)
        • GET  {backend}/earnings/{deviceId} → render the panel
+     The campaignId is resolved from the served feed on purpose: the backend
+     pays from the campaign looked up in ITS feed, so reporting a hardcoded
+     id that no feed defines earns $0 forever while still counting
+     impressions. No served campaign → no impression is reported at all.
      All money math is server-side; this code only DISPLAYS what the
      backend reports and never computes, caches, or fakes an amount.
      It never touches state.history, balances, or the payout simulator.
@@ -614,13 +620,30 @@
     }
     panel.hidden = false;
 
+    /* The id the backend will recognise — refreshed from /feed.json. Empty
+       until the first successful read, which simply means "not tracking yet". */
+    var trackedCampaignId = '';
+
+    function loadTrackedCampaign() {
+      return fetch(base + '/feed.json')
+        .then(function (res) { return (res && res.ok) ? res.json() : null; })
+        .then(function (d) {
+          var list = (d && Array.isArray(d.campaigns)) ? d.campaigns : [];
+          if (!list.length) { trackedCampaignId = ''; return; }
+          var top = (typeof D.pickAd === 'function') ? D.pickAd(list, { minCpm: 0 })[0] : list[0];
+          trackedCampaignId = (top && typeof top.id === 'string') ? top.id : '';
+        })
+        .catch(function () { /* keep the last known id */ });
+    }
+
     function trackImpression() {
       if (state.paused || document.hidden) return;   // visible + not paused only
+      if (!trackedCampaignId) return;                // nothing served → nothing to report
       try {
         fetch(base + '/track', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ deviceId: dev, type: 'impression', campaignId: 'demo', minutes: 1 })
+          body: JSON.stringify({ deviceId: dev, type: 'impression', campaignId: trackedCampaignId, minutes: 1 })
         }).catch(function () { /* best-effort — silent */ });
       } catch (e) { /* best-effort — silent */ }
     }
@@ -656,12 +679,19 @@
       } catch (e) { /* best-effort — silent */ }
     }
 
-    trackImpression();
-    fetchEarnings();
-    window.setInterval(function () {
-      trackImpression();
-      fetchEarnings();
-    }, REAL_EARN_INTERVAL_MS);
+    /* Resolve the served campaign FIRST, then report — so the very first
+       heartbeat already carries an id the backend recognises. */
+    function tick() {
+      var p;
+      try { p = loadTrackedCampaign(); } catch (e) { p = null; }
+      Promise.resolve(p).then(function () {
+        trackImpression();
+        fetchEarnings();
+      });
+    }
+
+    tick();
+    window.setInterval(tick, REAL_EARN_INTERVAL_MS);
   }
 
   /* ------------------------------------------------------------------

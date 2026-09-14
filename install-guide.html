@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Install Guide — Open FreeCoffee when Apple blocks it | FreeCoffee</title>
 <meta name="description" content="Step-by-step guide: install FreeCoffee from the DMG when macOS Gatekeeper shows 'Apple could not verify…'. Right-click Open, Open Anyway, and the damaged-app fix.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2314100D'/%3E%3Cpath d='M8 13h11a1 1 0 0 1 1 1v5a4 4 0 0 1-4 4h-5a4 4 0 0 1-4-4v-5a1 1 0 0 1 1-1z' fill='%23E0A93E'/%3E%3Cpath d='M20 14h2.2a2.4 2.4 0 0 1 0 4.8H20v-1.6h2.2a.8.8 0 0 0 0-1.6H20z' fill='%23E0A93E'/%3E%3Crect x='7' y='10.6' width='13.5' height='1.6' rx='.8' fill='%23E0A93E'/%3E%3C/svg%3E">
+<meta name="theme-color" content="#F7F6F3">
 <style>
   :root { color-scheme: light; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -53,6 +55,8 @@
   <h1>Installing FreeCoffee when Apple blocks it</h1>
   <p class="sub">A plain-English walkthrough for the "Apple could not verify…" message. Works on macOS 13 Ventura and later (including macOS 26). Two minutes, once.</p>
 </header>
+
+<main>
 
 <div class="ok-box"><strong>Why this happens:</strong> FreeCoffee is an <strong>open-source demo app that isn't signed with a paid Apple certificate</strong> ($99/yr). macOS shows the same warning for <em>every</em> unsigned app — it does <strong>not</strong> mean the app has a virus. Our app is a single readable Swift file you can audit in the <a href="https://github.com/ayodhyamohanthy/freecoffee">public repo</a>, and it never reads your screen, files, or keystrokes.</div>
 
@@ -145,7 +149,7 @@ brew install --cask ayodhyamohanthy/freecoffee/freecoffee</code></pre>
     <li>Run: <code>xattr -dr com.apple.quarantine /Applications/FreeCoffee.app</code> then open the app again.</li>
     <li>If it still fails, re-download the DMG (the file may be truncated) and repeat Method 1.</li>
   </ol>
-  <p>Verify your download: the DMG should be <strong>≈283 KB</strong> (v1.1.0, universal arm64+x86_64 —
+  <p>Verify your download: the DMG should be <strong>≈690 KB</strong> (v1.1.2, universal arm64+x86_64 —
     exact bytes vary per build; if yours is under 100 KB the download was truncated, re-download).</p>
 </details>
 <details>
@@ -169,6 +173,8 @@ brew install --cask ayodhyamohanthy/freecoffee/freecoffee</code></pre>
 <p>The permanent fix is an Apple Developer certificate + notarization — that's what large companies pay for. We chose the free path: the app is fully open-source and auditable. If that ever changes, this page will say so.</p>
 
 <div class="warn"><strong>Safety note:</strong> Never disable Gatekeeper system-wide (<code>spctl --master-disable</code>) or run install scripts that ask you to. The <code>xattr</code> command above targets <strong>only</strong> the FreeCoffee app — that's the safe, surgical approach.</div>
+
+</main>
 
 <footer>
   <p><a href="./index.html">← Back to FreeCoffee</a> · <a href="https://github.com/ayodhyamohanthy/freecoffee">Source code</a> · <a href="https://github.com/ayodhyamohanthy/freecoffee/releases/latest/download/FreeCoffee.dmg">Download DMG</a></p>

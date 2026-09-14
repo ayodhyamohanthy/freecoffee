@@ -15,8 +15,12 @@
    • Admin routes require `Authorization: Bearer ${env.ADMIN_TOKEN}`
      (length-safe constant-time compare; ADMIN_TOKEN is an encrypted
      Worker variable — `wrangler secret put ADMIN_TOKEN` or dashboard →
-     Settings → Variables → Encrypt). No secrets are ever committed to
-     this repo — wrangler.toml ships placeholders only.
+     Settings → Variables → Encrypt). No CREDENTIAL is ever committed to
+     this repo: wrangler.toml ships no secrets. It does carry the Cloudflare
+     account id and KV namespace id, which are non-secret identifiers (they
+     grant nothing on their own and appear in every dashboard URL) — they are
+     committed deliberately so `wrangler deploy` works out of the box. Fork
+     the repo and swap them for your own before deploying.
    • CORS: `access-control-allow-origin: *` on EVERY response (the API is
      public and holds no credentials) + OPTIONS preflight → 204.
    • Abuse caps enforced server-side: ≤5 paid clicks/day per device and
@@ -326,7 +330,12 @@ async function getFeed(env) {
     try { cached = await kv.get('feed:current'); } catch (e) { cached = null; }
   }
   var fromCache = feedFromKVText(cached);
-  if (fromCache && fromCache.length) return { campaigns: fromCache, source: 'kv' };
+  /* A KV value that parses to an array is served as-is — including an EMPTY
+     one. The adapter below only ever writes when it has at least one valid
+     campaign, so `[]` in KV can only mean an admin deliberately cleared the
+     feed (POST /admin/feed with []). Falling through on empty would silently
+     resurrect the adapter feed the admin just turned off. */
+  if (fromCache) return { campaigns: fromCache, source: 'kv' };
 
   var adapterUrl = env && env.ADAPTER_URL ? String(env.ADAPTER_URL) : '';
   if (isValidHttpsUrl(adapterUrl)) {
@@ -486,6 +495,7 @@ export {
   pickRoute,
   ledgerView,
   freshLedger,
+  getFeed,
   round2,
   round4,
   todayKey,

@@ -13,10 +13,13 @@ cd "$(dirname "$0")"
 #  3. app bundle        $STAGE/FreeCoffee.app (binary + icns + heredoc Info.plist,
 #                       version stamped with plutil, linted with plutil)
 #  4. ad-hoc codesign   codesign --force --sign -   (no --deep: deprecated)
-#  5. DMG               staging dir with FreeCoffee.app + /Applications
-#                       symlink → hdiutil create -volname FreeCoffee -format UDZO
+#  5. DMG               dmgroot (app + /Applications link + baked drag-cue
+#                       background + volume icon) → writable UDRW → Finder
+#                       layout via AppleScript → compressed UDZO. Headless
+#                       runners have no Finder to script, so any polish
+#                       failure falls back to the plain UDZO one-liner.
 #  6. verify            hdiutil verify + mount → bundle present, version matches
-#                       the stamp, signature valid → detach
+#                       the stamp, signature valid, layout reported → detach
 #  7. publish           only now is dist/ touched (rename, not delete+write)
 #                       + artifact sizes and sha256
 #
@@ -81,6 +84,7 @@ STAGE="$(mktemp -d "${TMPDIR:-/tmp}/freecoffee-build.XXXXXX")"
 MOUNTED=0
 cleanup() {
   [ "$MOUNTED" = "1" ] && hdiutil detach "$STAGE/verify" >/dev/null 2>&1 || true
+  hdiutil detach "$STAGE/FreeCoffee" >/dev/null 2>&1 || true
   rm -rf "$STAGE"
 }
 trap cleanup EXIT
@@ -162,12 +166,162 @@ codesign --verify --strict "$APP" \
 echo "    ad-hoc signature verified"
 
 # -------------------------------------------------------------------- 5. DMG
-echo "==> [5/7] Building $DMG (UDZO, with /Applications link)"
+echo "==> [5/7] Building $DMG (UDZO, polished Finder layout + /Applications link)"
 DMGROOT="$STAGE/dmgroot"
-mkdir -p "$DMGROOT"
+mkdir -p "$DMGROOT/.background"
 cp -R "$APP" "$DMGROOT/"
 ln -s /Applications "$DMGROOT/Applications"
-hdiutil create -volname FreeCoffee -srcfolder "$DMGROOT" -ov -format UDZO "$STAGE/$DMG"
+cp "$STAGE/AppIcon.icns" "$DMGROOT/.VolumeIcon.icns"
+
+# Polished-dmg background: baked "drag to Applications" caption + gold arrow,
+# rendered with AppKit (stock macOS, same toolchain as the app itself).
+# No Pillow, no network, no checked-in binary assets.
+cat > "$STAGE/renderbg.swift" <<'SWIFT'
+import AppKit
+import Foundation
+
+// Window content is 600x400pt; the PNG is rendered at 2x for crisp Retina
+// text (1200x800 logical; lockFocus may rasterize it at display scale).
+let W = 1200, H = 800
+// AppKit's lockFocus origin is bottom-left; ty() converts top-down coords.
+func ty(_ y: CGFloat, _ h: CGFloat = 0) -> CGFloat { return CGFloat(H) - y - h }
+
+guard CommandLine.arguments.count > 1 else { exit(1) }
+let outPath = CommandLine.arguments[1]
+
+let img = NSImage(size: NSSize(width: W, height: H))
+img.lockFocus()
+
+NSColor(red: 0xF7/255.0, green: 0xF6/255.0, blue: 0xF3/255.0, alpha: 1.0).setFill()
+NSBezierPath(rect: NSRect(x: 0, y: 0, width: W, height: H)).fill()
+
+let caption = "Drag FreeCoffee to Applications to install" as NSString
+let font = NSFont.systemFont(ofSize: 42, weight: .semibold)
+let fg = NSColor(red: 0x1C/255.0, green: 0x1B/255.0, blue: 0x1A/255.0, alpha: 1.0)
+let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: fg]
+let ts = caption.size(withAttributes: attrs)
+caption.draw(at: NSPoint(x: (CGFloat(W) - ts.width) / 2.0, y: ty(118, ts.height)),
+             withAttributes: attrs)
+
+let sub = "FreeCoffee demo \u{2014} simulated data" as NSString
+let subFont = NSFont.systemFont(ofSize: 27)
+let subFg = NSColor(red: 0x71/255.0, green: 0x71/255.0, blue: 0x7A/255.0, alpha: 1.0)
+let subAttrs: [NSAttributedString.Key: Any] = [.font: subFont, .foregroundColor: subFg]
+let ss = sub.size(withAttributes: subAttrs)
+sub.draw(at: NSPoint(x: (CGFloat(W) - ss.width) / 2.0, y: ty(172, ss.height)),
+         withAttributes: subAttrs)
+
+// Gold arrow between the icons (app center ~300px, Applications ~900px).
+let gold = NSColor(red: 0xE0/255.0, green: 0xA9/255.0, blue: 0x3E/255.0, alpha: 1.0)
+gold.setFill()
+let ay: CGFloat = ty(430)
+let x0: CGFloat = 470, x1: CGFloat = 700, thick: CGFloat = 20
+NSBezierPath(roundedRect: NSRect(x: x0, y: ay - thick / 2, width: x1 - x0, height: thick),
+             xRadius: thick / 2, yRadius: thick / 2).fill()
+let head = NSBezierPath()
+head.move(to: NSPoint(x: 775, y: ay))
+head.line(to: NSPoint(x: x1 - 10, y: ay - 52))
+head.line(to: NSPoint(x: x1 - 10, y: ay + 52))
+head.close()
+head.fill()
+
+img.unlockFocus()
+guard let tiff = img.tiffRepresentation,
+      let rep = NSBitmapImageRep(data: tiff),
+      let png = rep.representation(using: .png, properties: [:]) else { exit(2) }
+do {
+    try Data(png).write(to: URL(fileURLWithPath: outPath))
+} catch {
+    fputs("renderbg: write failed\n", stderr)
+    exit(3)
+}
+SWIFT
+BG_OK=0
+if xcrun -sdk macosx swiftc -O "$STAGE/renderbg.swift" -o "$STAGE/renderbg" -framework AppKit 2>/dev/null \
+   && "$STAGE/renderbg" "$DMGROOT/.background/background.png" 2>/dev/null \
+   && [ -s "$DMGROOT/.background/background.png" ]; then
+  BG_OK=1
+  echo "    background: baked drag-cue caption + arrow"
+else
+  echo "    WARNING: background render failed — continuing without it" >&2
+  rm -rf "$DMGROOT/.background"
+fi
+
+# Two-stage image: writable UDRW → Finder layout via AppleScript → UDZO.
+# polish_dmg must only ever `return 1` on failure (never exit/fail), so the
+# caller can fall back to the plain image. It runs as an `if` condition, in
+# which context `set -e` is suspended — every step still guards explicitly.
+polish_dmg() {
+  hdiutil create -volname FreeCoffee -srcfolder "$DMGROOT" -fs HFS+ \
+    -format UDRW -ov "$STAGE/rw.dmg" >/dev/null || return 1
+  # Never touch the user's mounts: if anything is already sitting at the
+  # canonical mountpoint, addressing `disk "FreeCoffee"` would be ambiguous,
+  # so skip the polish and ship the plain image instead.
+  if [ -e "/Volumes/FreeCoffee" ]; then
+    echo "    WARNING: /Volumes/FreeCoffee already mounted — skipping Finder polish" >&2
+    return 1
+  fi
+  # Finder names an attached disk after its mountpoint folder (not the volume
+  # name), so mount at a folder literally called FreeCoffee — otherwise
+  # `disk "FreeCoffee"` fails with -1728 and no layout is ever applied.
+  MNT="$STAGE/FreeCoffee"
+  mkdir -p "$MNT"
+  hdiutil attach "$STAGE/rw.dmg" -nobrowse -mountpoint "$MNT" >/dev/null || return 1
+  BG_LINE=""
+  if [ "$BG_OK" = "1" ]; then
+    BG_LINE="set background picture of viewOptions to (POSIX file \"$MNT/.background/background.png\" as alias)"
+  fi
+  cat > "$STAGE/polish.scpt" <<SCPT
+tell application "Finder"
+  set theDisk to disk "FreeCoffee"
+  open theDisk
+  delay 2
+  set wc to container window of theDisk
+  set current view of wc to icon view
+  set toolbar visible of wc to false
+  set statusbar visible of wc to false
+  set bounds of wc to {100, 100, 700, 500}
+  set viewOptions to icon view options of wc
+  tell viewOptions
+    set arrangement to not arranged
+    set icon size to 128
+    set text size to 16
+    $BG_LINE
+  end tell
+  delay 1
+  set position of item "FreeCoffee.app" of theDisk to {150, 205}
+  set position of item "Applications" of theDisk to {450, 205}
+  delay 1
+  close wc
+  delay 1
+  open theDisk
+  delay 2
+end tell
+SCPT
+  osascript "$STAGE/polish.scpt" >/dev/null || return 1
+  SetFile -a C "$MNT" >/dev/null 2>&1 || true
+  [ "$BG_OK" = "1" ] && SetFile -a V "$MNT/.background" >/dev/null 2>&1 || true
+  SetFile -a V "$MNT/.VolumeIcon.icns" >/dev/null 2>&1 || true
+  rm -rf "$MNT/.fseventsd" "$MNT/.Trashes" >/dev/null 2>&1 || true
+  bless --folder "$MNT" --openfolder "$MNT" >/dev/null 2>&1 || true
+  sync
+  sleep 1
+  hdiutil detach "$MNT" >/dev/null || { sleep 2; hdiutil detach "$MNT" >/dev/null || return 1; }
+  hdiutil convert "$STAGE/rw.dmg" -format UDZO -imagekey zlib-level=9 \
+    -o "$STAGE/$DMG" >/dev/null || return 1
+  return 0
+}
+
+POLISHED=0
+if polish_dmg; then
+  POLISHED=1
+  echo "    polished layout: 600x400 window, placed icons, drag-cue background, volume icon"
+else
+  echo "    WARNING: Finder polish unavailable — shipping plain UDZO (app + /Applications link)" >&2
+  hdiutil detach "$STAGE/FreeCoffee" >/dev/null 2>&1 || true
+  hdiutil create -volname FreeCoffee -srcfolder "$DMGROOT" -ov -format UDZO "$STAGE/$DMG"
+fi
+rm -f "$STAGE/rw.dmg"
 
 # ----------------------------------------------------------------- 6. verify
 echo "==> [6/7] Verifying $DMG"
@@ -192,6 +346,12 @@ codesign --verify --strict "$VERIFY/$BUNDLE" 2>/dev/null \
 
 lipo -info "$VERIFY/$BUNDLE/Contents/MacOS/FreeCoffeeMenuBar" 2>/dev/null | grep -q arm64 \
   || fail "the binary inside the DMG is not a universal (arm64) build"
+
+if [ -f "$VERIFY/.DS_Store" ]; then
+  echo "    Finder layout: polished (.DS_Store present)"
+else
+  echo "    NOTE: plain-fallback DMG (no Finder .DS_Store) — rebuild on a Mac with Finder access for the drag cue" >&2
+fi
 
 hdiutil detach "$VERIFY" >/dev/null
 MOUNTED=0

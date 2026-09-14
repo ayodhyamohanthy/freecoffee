@@ -656,13 +656,22 @@
     // only — never touches the seeded ledger.
     var liveCampaigns = [];
 
+    /* Two sponsor shapes meet here:
+         • built-in demo sponsors — { name, tag, bid }
+         • live campaigns (AD FEED CONTRACT) — { id, sponsor, tagline, clickUrl,
+           cpm, logoText, accent }
+       Resolve both, so a connected live feed never renders the literal string
+       "undefined" into the chip, and its tagline is never silently dropped. */
+    function chipName(c) { return (c && (c.sponsor || c.name)) || ''; }
+    function chipTag(c) { return (c && (c.tagline || c.tag)) || ''; }
+
     function renderChip() {
       var useLive = liveCampaigns.length > 0;
       var sp = useLive ? liveCampaigns[idx % liveCampaigns.length] : order[idx % order.length];
       if (chip) {
-        chip.textContent = sp.name;
+        chip.textContent = chipName(sp);
         if (useLive) {
-          chip.setAttribute('title', 'LIVE CAMPAIGN — ' + sp.name);
+          chip.setAttribute('title', 'LIVE CAMPAIGN — ' + chipName(sp));
           if (sp.accent && /^#[0-9a-fA-F]{6}$/.test(sp.accent)) {
             chip.style.backgroundColor = sp.accent;
           } else {
@@ -684,9 +693,9 @@
           var liveCpm = Number(sp.cpm);
           label.textContent = 'LIVE CAMPAIGN · $' + (isFinite(liveCpm) ? liveCpm : 0).toFixed(2) + ' CPM';
           tag.appendChild(label);
-          tag.appendChild(document.createTextNode(sp.tag || ''));
+          tag.appendChild(document.createTextNode(chipTag(sp)));
         } else {
-          tag.appendChild(document.createTextNode(sp.tag));
+          tag.appendChild(document.createTextNode(chipTag(sp)));
         }
       }
     }

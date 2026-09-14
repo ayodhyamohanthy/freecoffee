@@ -15,11 +15,15 @@
        workers.dev origin): dynamic, never precached, never cached.
 
    Version bump CACHE on any content change — activate() deletes old caches.
+   Bump ASSET_V in lockstep with the ?v= in every page's asset URLs, or the
+   precache stores URLs nothing ever requests and an offline first load gets
+   no CSS/JS at all. test.sh check 7 guards this pairing.
    ========================================================================== */
 /* eslint-disable no-restricted-globals */
 'use strict';
 
-var CACHE = 'freecoffee-v13';
+var ASSET_V = '14';                  // must match ?v= in the HTML asset URLs
+var CACHE = 'freecoffee-v14';
 
 var PRECACHE = [
   './',
@@ -34,9 +38,11 @@ var PRECACHE = [
   './referrals.html',
   './advertisers.html',
   './manifest.webmanifest',
-  './assets/css/styles.css',
-  './assets/js/demo.js',
-  './assets/js/dashboard.js',
+  // Versioned exactly as the pages request them — an unversioned entry here
+  // would be downloaded and then never matched by any request.
+  './assets/css/styles.css?v=' + ASSET_V,
+  './assets/js/demo.js?v=' + ASSET_V,
+  './assets/js/dashboard.js?v=' + ASSET_V,
   './assets/icons/icon-192.png',
   './assets/icons/icon-512.png',
   './assets/icons/icon-maskable-512.png'
@@ -120,7 +126,17 @@ self.addEventListener('fetch', function (event) {
             if (response && response.ok) putSafe(cache, request, response.clone());
             return response;
           }).catch(function () { return null; });
-          return cached || refresh.then(function (response) { return response || Promise.reject(new Error('offline')); });
+          if (cached) return cached;
+          return refresh.then(function (response) {
+            if (response) return response;
+            // Offline and this exact ?v= was never stored. Fall back to any
+            // cached copy of the same path (a previous version) rather than
+            // failing outright — stale CSS beats an unstyled page.
+            var samePath = new URL(url.pathname, self.location.href).toString();
+            return caches.match(samePath).then(function (older) {
+              return older || Promise.reject(new Error('offline'));
+            });
+          });
         });
       })
     );
