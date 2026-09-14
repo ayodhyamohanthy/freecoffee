@@ -26,10 +26,20 @@
   *       right-click menu carries the same choices as a submenu, plus
   *       "Turn off snooze".
   *   • RIGHT-CLICK the status item → a menu: Sponsor (live feed only — opens
-  *       the current campaign's https click URL), Pause toggle, Snooze
-  *       submenu (30 minutes / 2 hours / 6 hours / Turn off snooze), Reload
- *       campaigns (live feed only), Launch at Login (bundled app only),
- *       About, Quit.
+  *       the current campaign's https click URL), Advertise here (feed
+  *       configured but empty — opens the advertiser pitch), Pause toggle,
+  *       Snooze submenu (30 minutes / 2 hours / 6 hours / Turn off snooze),
+  *       Reload campaigns (live feed only), Launch at Login (bundled app
+  *       only), About, Quit.
+  *
+  * NO-SPONSOR BEHAVIOR (the bar is never a dead end):
+  *   • No feed configured (demo): the chip rotates fictional demo sponsors
+  *     (same cast as the web demo), clearly marked simulated — display only,
+  *     the earning tick stays the flat demo rate.
+  *   • Feed configured but nothing usable (empty feed, all below the floor,
+  *     fetch failing on an empty cache): the chip becomes an acquisition
+  *     slot, "✨ Your brand here", and the popover + menu offer "Advertise
+  *     here", opening the public advertiser pitch. Zero earnings impact.
  *
  * SNOOZE SEMANTICS: while snoozed the menu-bar chip reads
  * "☕ FreeCoffee — snoozed until HH:MM", no earning ticks accrue, no live
@@ -434,6 +444,7 @@ final class PopoverViewController: NSViewController {
     private let cupsLabel = NSTextField(labelWithString: "")
     private let snoozeButton = NSButton(title: "Snooze", target: nil, action: nil)
     private let disableButton = NSButton(title: "Disable", target: nil, action: nil)
+    private let advertiseButton = NSButton(title: "✨ Advertise here", target: nil, action: nil)
     private let chartView = EarningsChartView(frame: NSRect(x: 0, y: 0, width: 268, height: 84))
 
     override func loadView() {
@@ -488,6 +499,15 @@ final class PopoverViewController: NSViewController {
         nameStack.addArrangedSubview(name)
         nameStack.addArrangedSubview(subtitle)
         nameStack.addArrangedSubview(sponsorLine)
+        // Empty-inventory CTA — hidden unless the feed is configured but
+        // yields nothing (see refresh). Opens the advertiser pitch.
+        advertiseButton.target = self
+        advertiseButton.action = #selector(advertiseTapped)
+        advertiseButton.isBordered = false
+        advertiseButton.font = NSFont.systemFont(ofSize: 9.5, weight: .semibold)
+        advertiseButton.contentTintColor = Coffee.goldBright
+        advertiseButton.isHidden = true
+        nameStack.addArrangedSubview(advertiseButton)
 
         statusDot.wantsLayer = true
         statusDot.layer?.backgroundColor = Coffee.success.cgColor
@@ -651,10 +671,17 @@ final class PopoverViewController: NSViewController {
             sponsorLine.stringValue = "LIVE · \(camp.sponsor)" +
                 (camp.tagline.isEmpty ? "" : " — \(camp.tagline)")
             sponsorLine.isHidden = false
+            advertiseButton.isHidden = true
+        } else if app.awaitingSponsors {
+            statusLabel.stringValue = label
+            sponsorLine.stringValue = "No sponsors right now — this slot is open."
+            sponsorLine.isHidden = false
+            advertiseButton.isHidden = false
         } else {
             statusLabel.stringValue = label
-            sponsorLine.stringValue = ""
-            sponsorLine.isHidden = true
+            sponsorLine.stringValue = "Demo · \(app.demoSponsor) (fictional)"
+            sponsorLine.isHidden = false
+            advertiseButton.isHidden = true
         }
 
         balanceField.stringValue = money(state.balanceCents)
@@ -687,6 +714,11 @@ final class PopoverViewController: NSViewController {
     @objc private func accountTapped() {
         view.window?.orderOut(nil)
         app?.openAccount()
+    }
+
+    @objc private func advertiseTapped() {
+        view.window?.orderOut(nil)
+        app?.openAdvertisePage()
     }
 
     @objc private func snoozeTapped() {
@@ -1108,7 +1140,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var feedRefreshTimer: Timer?
     private var campaignRotateTimer: Timer?
     private var sponsorMenuItem: NSMenuItem?       // present only when a feed is live
+    private var advertiseMenuItem: NSMenuItem?    // present only when a feed is configured but empty
     private var reloadMenuItem: NSMenuItem?        // "Reload campaigns" (feed only)
+
+    /// Fictional demo sponsors (same cast as the web demo) — display-only
+    /// rotation while no live feed is configured. They earn nothing extra;
+    /// the tick stays the flat demo rate.
+    private static let demoSponsors = ["Northline", "Ledgerly", "Fernhill Coffee", "Breeze VPN", "Kite Studio"]
+    private var demoSponsorIndex = 0
+    var demoSponsor: String { Self.demoSponsors[demoSponsorIndex % Self.demoSponsors.count] }
+
+    /// Feed configured but nothing usable right now (empty feed, all below
+    /// the floor, fetch failing on an empty cache). The menu bar turns into
+    /// advertiser acquisition instead of a dead end.
+    var awaitingSponsors: Bool { adFeedURL != nil && currentLiveCampaign == nil }
 
     /// The campaign currently shown on the chip + popover header (or nil
     /// when running on the fictional demo sponsors).
@@ -1122,6 +1167,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // (cd freecoffee && python3 -m http.server 8090).
     private static let dashboardURL = URL(string: "http://127.0.0.1:8090/dashboard.html")
     private static let profileURL = URL(string: "http://127.0.0.1:8090/profile.html")
+    private static let advertiseURL = URL(string: "https://freecoffee.tech/advertisers.html")
 
     // First run is seeded to match the web demo's deterministic ledger
     // (seed 42 lifetime, $28.55), so both layers tell the same story.
@@ -1215,9 +1261,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func refreshUI() {
-        // Menu-bar chip: while snoozed it reads "☕ FreeCoffee — snoozed
-        // until HH:MM"; otherwise the current live sponsor when a feed is
-        // connected, the plain FreeCoffee brand otherwise.
+        // Menu-bar chip: snoozed → countdown; live sponsor when a feed is
+        // connected; acquisition slot when the feed is empty; otherwise the
+        // rotating fictional demo sponsors (simulated, display only).
         if snoozed {
             statusItem.button?.title = "☕ FreeCoffee — snoozed until \(snoozeEndTimeLabel())"
             statusItem.button?.toolTip = "FreeCoffee — snoozed (no earning ticks, no ad rotation). " +
@@ -1226,9 +1272,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             statusItem.button?.title = "☕ " + truncateForBar(camp.sponsor)
             statusItem.button?.toolTip = "FreeCoffee — LIVE campaign: \(camp.sponsor). " +
                 "Nothing is collected; the configured feed URL is the only outbound request."
+        } else if awaitingSponsors {
+            statusItem.button?.title = "✨ Your brand here"
+            statusItem.button?.toolTip = "No sponsors right now — put your brand in this menu bar. " +
+                "Click for details."
         } else {
-            statusItem.button?.title = "☕ FreeCoffee"
-            statusItem.button?.toolTip = "FreeCoffee demo — simulated data. Nothing is collected."
+            statusItem.button?.title = "☕ " + truncateForBar(demoSponsor)
+            statusItem.button?.toolTip = "FreeCoffee demo sponsor (simulated) — no real campaign, " +
+                "nothing is collected."
         }
         popoverVC?.refresh()
         updateMenu()
@@ -1251,6 +1302,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: Status item click routing (left → popover, right → menu)
 
     @objc private func statusItemClicked(_ sender: Any) {
+        NSLog("DBG statusItemClicked: event=\(String(describing: NSApp.currentEvent?.type.rawValue))")
         guard let event = NSApp.currentEvent else {
             togglePopover()
             return
@@ -1263,11 +1315,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func togglePopover() {
+        NSLog("DBG toggle: isShown=\(popover.isShown) button=\(statusItem.button != nil) inWindow=\(statusItem.button?.window != nil) vc=\(popover.contentViewController != nil)")
         if popover.isShown {
             popover.performClose(nil)
-        } else if let button = statusItem.button {
+        } else if statusItem.button != nil {
             refreshUI()
-            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+            // Present on the next runloop turn, activated: presenting a
+            // transient popover synchronously inside the opening click's
+            // mouse-up makes newer macOS dismiss it immediately, so the
+            // panel never appears. Activation keeps .transient
+            // click-outside-to-close semantics for a background app.
+            NSApp.activate(ignoringOtherApps: true)
+            DispatchQueue.main.async { [weak self] in
+                guard let self, let button = self.statusItem.button,
+                      !self.popover.isShown else {
+                    NSLog("DBG async: skipped (button gone or already shown)")
+                    return
+                }
+                self.popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+                NSLog("DBG async: show called, isShown=\(self.popover.isShown)")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    NSLog("DBG after show: isShown=\(self.popover.isShown)")
+                }
+            }
         }
     }
 
@@ -1289,6 +1359,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         sponsor.isHidden = true
         menu.addItem(sponsor)
         sponsorMenuItem = sponsor
+
+        // Acquisition slot — visible only when a feed is configured but
+        // empty (see updateMenu). Opens the public advertiser pitch.
+        let advertise = NSMenuItem(title: "Advertise here…",
+                                   action: #selector(openAdvertisePageTapped(_:)), keyEquivalent: "")
+        advertise.target = self
+        advertise.isHidden = true
+        menu.addItem(advertise)
+        advertiseMenuItem = advertise
 
         menuPauseItem = NSMenuItem(title: "Pause earning", action: #selector(togglePause(_:)), keyEquivalent: "p")
         menuPauseItem.target = self
@@ -1372,9 +1451,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             sponsorMenuItem?.toolTip = camp.tagline.isEmpty
                 ? "Opens the live campaign page (https)"
                 : camp.tagline
+            advertiseMenuItem?.isHidden = true
         } else {
             sponsorMenuItem?.isHidden = true
             sponsorMenuItem?.title = "Sponsor: —"
+            // Feed configured but empty: offer the slot instead of a dead end.
+            advertiseMenuItem?.isHidden = (adFeedURL == nil)
         }
         // Snooze submenu state: the duration items start a snooze; "Turn
         // off snooze" is only enabled (and check-marked) while one is active.
@@ -1665,8 +1747,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // No ad rotation while snoozed — the chip is in snooze mode.
         guard !snoozed else { refreshUI(); return }
-        guard liveCampaigns.count > 1 else { return }
-        liveCampaignIndex = (liveCampaignIndex + 1) % liveCampaigns.count
+        if liveCampaigns.count > 1 {
+            liveCampaignIndex = (liveCampaignIndex + 1) % liveCampaigns.count
+        } else if adFeedURL == nil {
+            // Demo mode still rotates the fictional sponsors, so the bar
+            // always shows an ad even with no feed configured.
+            demoSponsorIndex = (demoSponsorIndex + 1) % Self.demoSponsors.count
+        }
         refreshUI()
     }
 
@@ -1871,6 +1958,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             dialog(title: "Profile unavailable",
                    body: "FreeCoffee couldn't open the demo profile page. Start the demo server first:\n\ncd freecoffee && python3 -m http.server 8090")
         }
+    }
+
+    /// Public advertiser pitch (empty-inventory CTA). Unlike the dashboard
+    /// links above this is the live site, not the local demo server.
+    func openAdvertisePage() {
+        guard let url = Self.advertiseURL else { return }
+        if !NSWorkspace.shared.open(url) {
+            dialog(title: "Advertiser page unavailable",
+                   body: "FreeCoffee couldn't open the advertiser page. Visit https://freecoffee.tech/advertisers.html in your browser.")
+        }
+    }
+
+    @objc private func openAdvertisePageTapped(_ sender: NSMenuItem) {
+        openAdvertisePage()
     }
 
     @objc private func showAbout(_ sender: NSMenuItem) {
