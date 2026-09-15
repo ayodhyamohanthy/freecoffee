@@ -3,6 +3,9 @@
 # FreeCoffee repo-wide smoke test — zero dependencies (node + python3 only).
 #
 # Catches the failure classes this repo has actually hit before:
+#   0. Committed merge-conflict markers. A half-resolved merge shipped once and
+#      silently broke sw.js (a top-level '<<<<<<< HEAD' is a syntax error, so the
+#      service worker died) while every other check still passed.
 #   1. HTML tag-misnesting / unclosed elements (was broken in referrals.html)
 #   2. Inline <script> blocks that no longer parse (node --check)
 #   3. JS element-ID references that don't exist in the page
@@ -13,7 +16,8 @@
 #   7. Asset version pairing (?v= in HTML <-> sw.js ASSET_V <-> CACHE) — a
 #      mismatch silently breaks the precache and offline first loads — plus
 #      the PWA lockstep floor (ASSET_V >= padded APP_VERSION from
-#      app/build.sh) so DMG bumps always bust the web cache
+#      app/build.sh) so DMG bumps always bust the web cache, plus a
+#      single-declaration rule (a duplicated ASSET_V hides the real version)
 #   + Swift parse gate inside check 1 (macOS only, skipped elsewhere)
 #
 # Run from the repo root:   ./test.sh      (or:  bash test.sh)
@@ -28,8 +32,48 @@ step() { printf '\n==> %s\n' "$1"; }
 ok()  { PASS=$((PASS+1)); printf '    PASS  %s\n' "$1"; }
 bad() { FAIL=$((FAIL+1)); printf '    FAIL  %s\n' "$1"; }
 
+# ------------------------------------------------------------------ 0. Repo hygiene
+# A committed conflict marker is the worst kind of failure: it is invisible to
+# every other check here (the HTML parser treats it as text, and the ?v= regex
+# happily matches whichever side it finds first) yet it can make a file
+# unparseable. Detect it first, before anything else trusts the tree.
+step "1/8 Repo hygiene (no committed merge-conflict markers)"
+python3 - <<'PY'
+import os, re, sys
+
+SKIP_DIRS = {'.git', '.workbuddy-ai', 'node_modules', 'dist', '.build', 'DerivedData'}
+START = re.compile(r'^<{7}[ \t]', re.M)      # '<<<<<<< HEAD'
+END = re.compile(r'^>{7}[ \t]', re.M)        # '>>>>>>> d2b288b…'
+# '=======' on its own is deliberately NOT part of the test: it is a legal
+# setext-heading underline in Markdown, so matching it would false-positive on
+# ordinary docs. A real conflict always carries both START and END.
+MAX_BYTES = 1_000_000
+
+hits = []
+for root, dirs, files in os.walk('.'):
+    dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
+    for name in files:
+        p = os.path.join(root, name)
+        try:
+            if os.path.getsize(p) > MAX_BYTES:
+                continue
+            src = open(p, encoding='utf-8').read()
+        except (UnicodeDecodeError, OSError):
+            continue
+        if START.search(src) and END.search(src):
+            n = len(START.findall(src))
+            hits.append('%s (%d unresolved hunk%s)' % (p[2:], n, '' if n == 1 else 's'))
+
+if hits:
+    for h in sorted(hits):
+        print('    FAIL conflict markers: ' + h)
+    sys.exit(1)
+print('    ok   no committed merge-conflict markers anywhere in the tree')
+PY
+[ $? -eq 0 ] && ok "repo hygiene: no conflict markers" || bad "repo hygiene: conflict markers committed"
+
 # ------------------------------------------------------------------ 1. JS syntax
-step "1/7 JS syntax (node --check)"
+step "2/8 JS syntax (node --check)"
 JS_FAIL=0
 for f in assets/js/*.js backend/src/worker.js; do
   if ! node --check "$f" 2>/dev/null; then
@@ -51,7 +95,7 @@ else
 fi
 
 # ------------------------------------------------------------------ 2. Backend tests
-step "2/7 Backend unit tests"
+step "3/8 Backend unit tests"
 if ( cd backend && node test.mjs ); then
   ok "backend/test.mjs (24 groups)"
 else
@@ -59,7 +103,7 @@ else
 fi
 
 # ------------------------------------------------------------------ 3. Static-site checks (python3)
-step "3/7 HTML structure, inline JS, ID references"
+step "4/8 HTML structure, inline JS, ID references"
 python3 - <<'PY'
 import glob, html.parser, os, re, subprocess, sys, tempfile
 
@@ -114,7 +158,7 @@ PY
 [ $? -eq 0 ] && ok "static-site checks" || bad "static-site checks"
 
 # ------------------------------------------------------------------ 4. Demo determinism
-step "4/7 Demo engine determinism + balance invariant"
+step "5/8 Demo engine determinism + balance invariant"
 node -e '
 const D = require("./assets/js/demo.js");
 const a = JSON.stringify(D.generateHistory(42));
@@ -128,7 +172,7 @@ console.log("    ok   seed 42 reproducible; available + pending = lifetime ($" +
 [ $? -eq 0 ] && ok "demo engine" || bad "demo engine"
 
 # ------------------------------------------------------------------ 5. De-branding guard
-step "5/7 No competitor brand references"
+step "6/8 No competitor brand references"
 HITS=$(grep -riIl --exclude-dir=.git --exclude-dir=.workbuddy-ai --exclude=test.sh -E 'sponsorbar|kickbot' . 2>/dev/null)
 if [ -z "$HITS" ]; then
   ok "no competitor brand references in any tracked text file"
@@ -138,7 +182,7 @@ else
 fi
 
 # ------------------------------------------------------------------ 6. Asset presence
-step "6/7 Referenced local files exist"
+step "7/8 Referenced local files exist"
 python3 - <<'PY'
 import re, glob, os, sys
 missing = []
@@ -161,12 +205,22 @@ PY
 [ $? -eq 0 ] && ok "asset references" || bad "asset references"
 
 # ------------------------------------------------------------------ 7. Asset version pairing
-step "7/7 Asset version pairing (?v= <-> sw.js ASSET_V <-> CACHE)"
+step "8/8 Asset version pairing (?v= <-> sw.js ASSET_V <-> CACHE)"
 python3 - <<'PY'
 import glob, re, sys
 
 bad = []
 sw = open('sw.js', encoding='utf-8').read()
+
+# Exactly one declaration of each. A second one (the classic half-resolved
+# merge) makes the version the worker actually uses ambiguous, and a plain
+# re.search() would silently report whichever came first.
+for name, pat in (('ASSET_V', r"var ASSET_V\s*=\s*'([^']+)'"),
+                  ('CACHE', r"var CACHE\s*=\s*'freecoffee-v([^']+)'")):
+    found = re.findall(pat, sw)
+    if len(found) != 1:
+        bad.append('sw.js declares %s %d time(s) (%s) — exactly one is required'
+                   % (name, len(found), ', '.join(found) if found else 'none'))
 
 m_av = re.search(r"var ASSET_V\s*=\s*'([^']+)'", sw)
 m_c  = re.search(r"var CACHE\s*=\s*'freecoffee-v([^']+)'", sw)
