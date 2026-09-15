@@ -127,7 +127,8 @@
           <h1>Put your brand in the menu bar.</h1>
           <p class="dash-sub">Minute-long verified placements on real Macs — your campaign occupies the empty
             stretch of the menu bar while the user is awake and unlocked. You bid in the auction with a
-            CPM you control; <strong>$15 minimum campaign spend</strong>. Users keep 65% of auction revenue
+            CPM you control; <strong>$15 minimum campaign spend</strong>. Want a guaranteed block instead?
+            Book it in the <a href="#slots">slot calendar</a>. Users keep 65% of auction revenue
             per the <a href="model.html">published model</a>. Managing existing campaigns? Head to
             <a href="campaigns.html">Campaigns</a>.</p>
         </div>
@@ -160,6 +161,105 @@
               verified — counted only while the Mac is awake and unlocked, never over a hidden bar.</p>
           </li>
         </ol>
+      </section>
+
+      <!-- ============ SLOT AUCTION — BOOK A BLOCK ============ -->
+      <section id="slots" aria-labelledby="slots-h" style="margin:34px 0 10px">
+        <h2 id="slots-h" style="font-size:1.3rem">Book slots — highest bid wins the block</h2>
+        <p class="section-sub" style="margin-bottom:12px">Inventory is sold in <strong>4-hour blocks, UTC</strong> —
+          six per day, 00–04 through 20–24. Select as many blocks as you want, across days, weeks, or months,
+          and name one CPM for the lot. The highest bid on a block takes <strong>100% of that block's
+          impressions</strong>; while a block is won, the open auction feed is suppressed for its duration.
+          Bidding is free and places nothing on your card — you are naming a price, and the block is yours
+          from its start time.</p>
+
+        <div class="card">
+          <div class="slot-bar">
+            <div class="slot-nav">
+              <button type="button" class="slot-nav-btn" id="slotPrev" aria-label="Previous month">‹</button>
+              <span class="slot-month" id="slotMonth" aria-live="polite">—</span>
+              <button type="button" class="slot-nav-btn" id="slotNext" aria-label="Next month">›</button>
+            </div>
+            <span class="slot-tz">All times UTC · 4-hour blocks</span>
+            <span class="slot-count" id="slotCount">0 blocks selected</span>
+          </div>
+
+          <div class="slot-cal" id="slotCal" aria-label="Slot calendar"></div>
+
+          <div class="slot-legend">
+            <span><i class="slot-key"></i> open</span>
+            <span><i class="slot-key is-bid"></i> bid placed</span>
+            <span><i class="slot-key is-picked"></i> selected by you</span>
+            <span><i class="slot-key is-past"></i> already started</span>
+          </div>
+
+          <div class="slot-editor" id="slotEditor" hidden>
+            <div class="slot-editor-head">
+              <h3 id="slotDayHead">Pick a day</h3>
+              <span class="slot-editor-sub" id="slotDaySub"></span>
+              <button type="button" class="btn btn-ghost btn-sm" id="slotDayAll"
+                      style="margin-left:auto">Select all open</button>
+            </div>
+            <div class="slot-chips" id="slotChips"></div>
+          </div>
+
+          <div class="slot-sum">
+            <div class="slot-sum-head">
+              <h3>Your selection</h3>
+              <button type="button" class="slot-sum-clear" id="slotClear" hidden>Clear all</button>
+            </div>
+            <div class="slot-sum-list" id="slotSumList">
+              <p class="slot-sum-empty" id="slotSumEmpty">No blocks selected yet — open a day above, then pick
+                its blocks.</p>
+            </div>
+
+            <form id="slotForm" novalidate style="margin-top:14px">
+              <div class="slot-fields">
+                <div class="field">
+                  <label class="field-label" for="slotCampId">Campaign ID</label>
+                  <input class="input" type="text" id="slotCampId" name="slotCampId" maxlength="40"
+                         placeholder="e.g. acme-sept">
+                </div>
+                <div class="field">
+                  <label class="field-label" for="slotSponsor">Brand name (required)</label>
+                  <input class="input" type="text" id="slotSponsor" name="slotSponsor" maxlength="40"
+                         placeholder="Acme Coffee Co." required>
+                </div>
+                <div class="field">
+                  <label class="field-label" for="slotTagline">Tagline</label>
+                  <input class="input" type="text" id="slotTagline" name="slotTagline" maxlength="90"
+                         placeholder="Single-origin beans — 20% off first bag">
+                </div>
+                <div class="field">
+                  <label class="field-label" for="slotClickUrl">Destination — https only (required)</label>
+                  <input class="input" type="url" id="slotClickUrl" name="slotClickUrl" inputmode="url"
+                         placeholder="https://advertiser.example/offer" required>
+                </div>
+                <div class="field">
+                  <label class="field-label" for="slotCpm">Your CPM — USD (min $1)</label>
+                  <input class="input" type="number" id="slotCpm" name="slotCpm" inputmode="decimal"
+                         min="1" max="100" step="0.5" placeholder="6.0" required>
+                </div>
+                <div class="field">
+                  <label class="field-label" for="slotBidder">Your contact (required)</label>
+                  <input class="input" type="text" id="slotBidder" name="slotBidder" maxlength="120"
+                         placeholder="you@company.com" required>
+                </div>
+              </div>
+              <div class="slot-submit">
+                <button type="submit" class="btn btn-primary" id="slotBidBtn">Place bid →</button>
+                <p class="slot-note" id="slotNote" role="status">Pick your blocks, then name your CPM.
+                  Keep the same Campaign ID to raise an existing bid.</p>
+              </div>
+              <div class="slot-results" id="slotResults"></div>
+            </form>
+          </div>
+        </div>
+
+        <p class="footnote">The block calendar is live inventory: prices shown are the current top bid to beat.
+          Bids are stored by the platform backend, and a block's winner is served for its full 4 hours. Review
+          is a manual step on this path today — see <a href="#honest-h">what we report</a> for what that means.
+          Nothing here is charged, and no card is collected.</p>
       </section>
 
       <!-- ============ SELF-SERVE FEED CONTRACT ============ -->
@@ -251,31 +351,37 @@
         <h2 id="honest-h" style="font-size:1.3rem">What we report — and what we don't (yet)</h2>
         <div class="grid-2" style="margin-top:14px">
           <div class="card">
-            <h3>What the client reports today</h3>
+            <h3>What's live today</h3>
             <ul class="check-list">
-              <li>Impressions and clicks are counted locally on the user's machine and shown in their
-                dashboard ledger — <strong>demo accounting</strong> on simulated numbers.</li>
-              <li>Your campaigns render with a LIVE marker everywhere they appear; nothing about them is
-                presented as settled earnings.</li>
-              <li>Verification rules are already defined: impressions count only awake + unlocked;
-                clicks need ≥10s delay and ≥2s dwell, capped at 5/day and ≤25% of monthly impressions.</li>
+              <li><strong>Delivery reporting is live.</strong> Connect a backend and
+                <a href="campaigns.html">Campaigns</a> shows time served, distinct devices reached, clicks,
+                spend, and the surface/region mix behind each campaign. It is <strong>public and
+                token-free</strong> — anyone can read any campaign's totals — and it emits counts and
+                percentages only: never a device id, never a ledger row.</li>
+              <li><strong>Regions are device-reported, not verified.</strong> Each client stamps its own
+                platform and country code; we never geo-locate an IP. Read the region mix as a self-declared
+                signal, not a measured one.</li>
+              <li>Verification rules are already defined: impressions count only awake + unlocked; clicks
+                need ≥10s delay and ≥2s dwell, capped at 5/day and ≤25% of monthly impressions.</li>
             </ul>
           </div>
           <div class="card">
             <h3>What we won't pretend to have</h3>
             <ul class="check-list not-list">
-              <li>No advertiser-facing reporting dashboard yet — per-campaign delivery, CTR, and spend
-                reporting ship with the platform backend.</li>
+              <li><strong>Review is not enforced on the slot path.</strong> The open-auction form below goes
+                to a human queue (≤ 48 h), but a winning slot bid currently enters the serving list without
+                that step. Don't bid on this path expecting a pre-flight review.</li>
               <li>No payment collection yet — we cannot invoice your $15 minimum spend until the payment
-                rails are live. No money moves today, in either direction.</li>
+                rails are live. No money moves today, in either direction, and bidding collects no card.</li>
               <li>No fabricated numbers — the demo ledger is seeded and simulated, and every page says so.
                 We won't dress it up as delivery data.</li>
             </ul>
           </div>
         </div>
-        <p class="footnote">In plain terms: <strong>the feed bridge is live today</strong> — campaigns you submit
-          really appear in the app and on the dashboard. Measurement and money are the parts that need the
-          platform backend, and we'd rather say that plainly than fake a dashboard.</p>
+        <p class="footnote">In plain terms: <strong>the feed bridge and the slot auction are live today</strong> —
+          campaigns you submit really appear in the app, blocks you win really serve, and delivery numbers are
+          counted for real. Payment and slot-path review are the parts that aren't built yet, and we'd rather
+          say that plainly than fake either one.</p>
       </section>
 
       <!-- ============ PRICING ============ -->
@@ -630,6 +736,437 @@
       note('Backend unreachable — check your connection or try again later. Nothing was submitted.', false);
     });
   });
+})();
+</script>
+<script>
+/* Slot auction picker — live inventory from the platform backend.
+
+   GET  /slots?month=YYYY-MM  every 4-hour block in the month, its state, and
+                              the current top bid to beat (no bidder identity
+                              is ever exposed).
+   POST /slots/bid            {bidder, campaign, slots[]} — highest CPM per
+                              block wins it outright, so the response reports
+                              per block whether you hold it or are behind.
+
+   Selection is client-side and deliberately spans months: picked ids live in
+   `picked` and survive month navigation, which is what "multiple slots across
+   days, weeks, months" means in practice. One bid call covers the whole lot.
+
+   The backend replaces a bid that reuses the same campaign id, so the id is
+   remembered in localStorage — re-submitting raises your price instead of
+   stacking a duplicate. Bidding collects no payment detail and charges nothing. */
+(function () {
+  'use strict';
+  var BACKEND = 'https://freecoffee-backend.ayodhya-711.workers.dev';
+  var STORE_KEY = 'freecoffee:slotCampaign';   // remembered campaign id
+  var MAX_AHEAD_MONTHS = 13;                   // backend caps ~400 days ahead
+
+  function $(id) { return document.getElementById(id); }
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+  function money(n) {
+    var v = Math.round(Number(n) * 100) / 100;
+    return (isFinite(v) ? v : 0).toFixed(2);
+  }
+
+  var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'];
+  var DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  var DOW_LONG = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+  var cal = $('slotCal'), monthEl = $('slotMonth'), countEl = $('slotCount');
+  var prevBtn = $('slotPrev'), nextBtn = $('slotNext');
+  var editor = $('slotEditor'), dayHead = $('slotDayHead'), daySub = $('slotDaySub');
+  var chips = $('slotChips'), dayAll = $('slotDayAll');
+  var sumList = $('slotSumList'), sumEmpty = $('slotSumEmpty'), clearBtn = $('slotClear');
+  var form = $('slotForm'), noteEl = $('slotNote'), resEl = $('slotResults');
+  var bidBtn = $('slotBidBtn'), campEl = $('slotCampId');
+  if (!cal || !form || !chips || typeof fetch !== 'function') return;
+
+  var picked = Object.create(null);   // 'YYYY-MM-DD#B' → true
+  var known = Object.create(null);    // slot id → slot object, across months
+  var byDay = Object.create(null);    // 'YYYY-MM-DD' → [slot, …] for the shown month
+  var grid = null;                    // last /slots payload
+  var focusDay = null;                // day open in the block editor
+  var month = null;                   // 'YYYY-MM' on screen
+  var busy = false;
+
+  function blockH() { return (grid && grid.blockHours) || 4; }
+  function slotDate(id) { return String(id).slice(0, 10); }
+  function slotBlock(id) { return Number(String(id).slice(11)) || 0; }
+  function blockLabel(b) { var h = blockH(); return pad2(b * h) + '–' + pad2(b * h + h); }
+  function pickedIds() {
+    var out = [];
+    for (var k in picked) { if (picked[k]) out.push(k); }
+    out.sort();
+    return out;
+  }
+  function dayDate(dateKey) { return new Date(dateKey + 'T00:00:00Z'); }
+  function dayLabel(dateKey) {
+    var d = dayDate(dateKey), wd = (d.getUTCDay() + 6) % 7;
+    return DOW_LONG[wd] + ' ' + d.getUTCDate() + ' ' + MONTHS[d.getUTCMonth()].slice(0, 3) +
+      ' ' + d.getUTCFullYear();
+  }
+  function dayShort(dateKey) {
+    var d = dayDate(dateKey), wd = (d.getUTCDay() + 6) % 7;
+    return DOW[wd] + ' ' + d.getUTCDate() + ' ' + MONTHS[d.getUTCMonth()].slice(0, 3);
+  }
+  function setNote(msg, kind) {
+    noteEl.textContent = msg;
+    noteEl.className = 'slot-note' + (kind ? ' is-' + kind : '');
+  }
+
+  /* ---------------- inventory ---------------- */
+  function indexGrid() {
+    byDay = Object.create(null);
+    var list = (grid && grid.slots) || [];
+    for (var i = 0; i < list.length; i++) {
+      var s = list[i];
+      known[s.id] = s;                       // remembered for other months too
+      var dk = slotDate(s.id);
+      (byDay[dk] || (byDay[dk] = [])).push(s);
+    }
+  }
+  function gridFail() {
+    cal.textContent = '';
+    var p = document.createElement('p');
+    p.className = 'slot-note is-bad';
+    p.style.gridColumn = '1 / -1';
+    p.textContent = 'Inventory unavailable — the platform backend did not answer. The calendar is ' +
+      'live stock, so nothing can be booked while it is unreachable.';
+    cal.appendChild(p);
+    editor.hidden = true;
+    if (countEl) countEl.textContent = '—';
+  }
+  function load(monthStr) {
+    month = monthStr;
+    var y = Number(monthStr.slice(0, 4)), m = Number(monthStr.slice(5));
+    monthEl.textContent = MONTHS[m - 1] + ' ' + y;
+    var t = new Date();
+    var curM = t.getUTCFullYear() * 12 + t.getUTCMonth();
+    var thisM = y * 12 + (m - 1);
+    prevBtn.disabled = thisM <= curM;
+    nextBtn.disabled = thisM >= curM + MAX_AHEAD_MONTHS;
+    cal.setAttribute('aria-busy', 'true');
+    fetch(BACKEND + '/slots?month=' + monthStr)
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        cal.removeAttribute('aria-busy');
+        if (!d || !d.slots) { gridFail(); return; }
+        grid = d;
+        indexGrid();
+        renderCal();
+        renderEditor();
+        renderSum();
+      })
+      .catch(function () { cal.removeAttribute('aria-busy'); gridFail(); });
+  }
+
+  /* ---------------- month grid ---------------- */
+  function renderCal() {
+    var y = Number(month.slice(0, 4)), m = Number(month.slice(5));
+    var daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    var lead = (new Date(Date.UTC(y, m - 1, 1)).getUTCDay() + 6) % 7;   // Mon-first
+    var now = Date.now();
+    var todayKey = new Date(now).toISOString().slice(0, 10);
+    var frag = document.createDocumentFragment();
+    var i;
+    for (i = 0; i < 7; i++) {
+      var dow = document.createElement('div');
+      dow.className = 'slot-dow';
+      dow.textContent = DOW[i];
+      frag.appendChild(dow);
+    }
+    for (i = 0; i < lead; i++) {
+      var blank = document.createElement('div');
+      blank.className = 'slot-day is-blank';
+      frag.appendChild(blank);
+    }
+    for (var da = 1; da <= daysInMonth; da++) {
+      var dk = y + '-' + pad2(m) + '-' + pad2(da);
+      var slots = byDay[dk] || [];
+      var anyOpen = false, anyPick = false, pickCount = 0;
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'slot-day';
+      btn.setAttribute('data-day', dk);
+      var num = document.createElement('span');
+      num.className = 'slot-daynum';
+      num.textContent = String(da);
+      btn.appendChild(num);
+      var dots = document.createElement('span');
+      dots.className = 'slot-dots';
+      for (var s = 0; s < slots.length; s++) {
+        var sl = slots[s];
+        var isPast = sl.startsAt <= now;
+        var isPick = !!picked[sl.id];
+        if (!isPast) anyOpen = true;
+        if (isPick) { anyPick = true; pickCount++; }
+        var dot = document.createElement('i');
+        dot.className = 'slot-dot' +
+          (isPast ? ' is-past' : (isPick ? ' is-picked' : (sl.topCpm != null ? ' is-bid' : '')));
+        dots.appendChild(dot);
+      }
+      btn.appendChild(dots);
+      if (slots.length && !anyOpen) btn.classList.add('is-past');
+      if (anyPick) btn.classList.add('is-picked');
+      if (focusDay === dk) btn.classList.add('is-open');
+      if (dk === todayKey) btn.classList.add('is-today');
+      var label = dayLabel(dk) + ' — ' + slots.length + ' blocks' +
+        (anyOpen ? '' : ', all started') +
+        (pickCount ? ', ' + pickCount + ' selected' : '');
+      btn.setAttribute('aria-label', label);
+      btn.title = label;
+      frag.appendChild(btn);
+    }
+    cal.textContent = '';
+    cal.appendChild(frag);
+  }
+
+  /* ---------------- block editor for the focused day ---------------- */
+  function renderEditor() {
+    if (!focusDay || !byDay[focusDay]) { editor.hidden = true; return; }
+    var slots = byDay[focusDay];
+    var now = Date.now();
+    var open = 0, pickedHere = 0;
+    var i;
+    for (i = 0; i < slots.length; i++) {
+      if (slots[i].startsAt > now) open++;
+      if (picked[slots[i].id]) pickedHere++;
+    }
+    editor.hidden = false;
+    dayHead.textContent = dayLabel(focusDay);
+    daySub.textContent = open + ' of ' + slots.length + ' blocks still open · times UTC';
+    chips.textContent = '';
+    for (i = 0; i < slots.length; i++) {
+      var sl = slots[i];
+      var isPast = sl.startsAt <= now;
+      var isPick = !!picked[sl.id];
+      var c = document.createElement('button');
+      c.type = 'button';
+      c.className = 'slot-chip' + (isPick ? ' is-picked' : '') +
+        (!isPast && sl.topCpm != null ? ' is-taken' : '');
+      c.setAttribute('data-slot', sl.id);
+      c.disabled = isPast;
+      c.setAttribute('aria-pressed', isPick ? 'true' : 'false');
+      var hd = document.createElement('span');
+      hd.className = 'slot-chip-h';
+      hd.textContent = blockLabel(slotBlock(sl.id)) + ' UTC';
+      c.appendChild(hd);
+      var pr = document.createElement('span');
+      pr.className = 'slot-chip-p';
+      pr.textContent = isPast ? 'already started'
+        : (isPick ? 'selected'
+          : (sl.topCpm != null ? 'top bid $' + money(sl.topCpm) + ' — beat it' : 'no bids yet'));
+      c.appendChild(pr);
+      c.title = dayLabel(focusDay) + ' · ' + blockLabel(slotBlock(sl.id)) + ' UTC · ' +
+        (isPast ? 'already started'
+          : (sl.topCpm != null ? 'top bid $' + money(sl.topCpm) + ' — bid higher to take it' : 'no bids yet'));
+      chips.appendChild(c);
+    }
+    dayAll.disabled = open === 0;
+    dayAll.textContent = (open > 0 && pickedHere >= open) ? 'Deselect all' : 'Select all open';
+  }
+
+  /* ---------------- selection summary ---------------- */
+  function renderSum() {
+    var ids = pickedIds();
+    countEl.textContent = ids.length + (ids.length === 1 ? ' block selected' : ' blocks selected');
+    clearBtn.hidden = ids.length === 0;
+    if (bidBtn) {
+      bidBtn.textContent = ids.length
+        ? 'Place bid on ' + ids.length + (ids.length === 1 ? ' block →' : ' blocks →')
+        : 'Place bid →';
+    }
+    var old = sumList.querySelectorAll('.slot-sum-row');
+    for (var q = 0; q < old.length; q++) sumList.removeChild(old[q]);
+    sumEmpty.hidden = ids.length > 0;
+    for (var i = 0; i < ids.length; i++) {
+      var id = ids[i];
+      var sl = known[id];
+      var row = document.createElement('div');
+      row.className = 'slot-sum-row';
+      row.setAttribute('data-slot', id);
+      var when = document.createElement('span');
+      when.className = 'slot-sum-when';
+      when.textContent = dayShort(slotDate(id)) + ' · ' + blockLabel(slotBlock(id)) + ' UTC';
+      row.appendChild(when);
+      var top = document.createElement('span');
+      top.className = 'slot-sum-top';
+      top.textContent = (sl && sl.topCpm != null) ? 'top bid $' + money(sl.topCpm) : 'no bids yet';
+      row.appendChild(top);
+      sumList.appendChild(row);
+    }
+  }
+
+  /* ---------------- interactions ---------------- */
+  cal.addEventListener('click', function (ev) {
+    var btn = ev.target && ev.target.closest ? ev.target.closest('.slot-day') : null;
+    if (!btn || btn.classList.contains('is-blank')) return;
+    var dk = btn.getAttribute('data-day');
+    if (!dk) return;
+    focusDay = dk;
+    renderCal();
+    renderEditor();
+  });
+
+  chips.addEventListener('click', function (ev) {
+    var btn = ev.target && ev.target.closest ? ev.target.closest('.slot-chip') : null;
+    if (!btn || btn.disabled) return;
+    var id = btn.getAttribute('data-slot');
+    if (!id) return;
+    if (picked[id]) delete picked[id]; else picked[id] = true;
+    renderCal();
+    renderEditor();
+    renderSum();
+  });
+
+  dayAll.addEventListener('click', function () {
+    if (!focusDay || !byDay[focusDay]) return;
+    var now = Date.now();
+    var open = [];
+    var slots = byDay[focusDay];
+    for (var i = 0; i < slots.length; i++) if (slots[i].startsAt > now) open.push(slots[i]);
+    if (!open.length) return;
+    var allPicked = true;
+    for (var j = 0; j < open.length; j++) if (!picked[open[j].id]) { allPicked = false; break; }
+    for (var k = 0; k < open.length; k++) {
+      if (allPicked) delete picked[open[k].id]; else picked[open[k].id] = true;
+    }
+    renderCal();
+    renderEditor();
+    renderSum();
+  });
+
+  clearBtn.addEventListener('click', function () {
+    picked = Object.create(null);
+    renderCal();
+    renderEditor();
+    renderSum();
+  });
+
+  function shiftMonth(delta) {
+    var y = Number(month.slice(0, 4)), m = Number(month.slice(5)) + delta;
+    while (m < 1) { m += 12; y -= 1; }
+    while (m > 12) { m -= 12; y += 1; }
+    load(y + '-' + pad2(m));
+  }
+  prevBtn.addEventListener('click', function () { shiftMonth(-1); });
+  nextBtn.addEventListener('click', function () { shiftMonth(1); });
+
+  /* ---------------- place the bid ---------------- */
+  form.addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    if (busy) return;
+    var ids = pickedIds();
+    if (!ids.length) {
+      setNote('Select at least one block first — open a day above and tap its blocks.', 'bad');
+      return;
+    }
+    var val = function (id) {
+      var el = $(id);
+      return String((el && el.value) || '').replace(/^\s+|\s+$/g, '');
+    };
+    var campId = val('slotCampId').slice(0, 40);
+    if (!campId) campId = 'slot-' + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36);
+    var sponsor = val('slotSponsor').slice(0, 40);
+    var tagline = val('slotTagline').slice(0, 90);
+    var clickUrl = val('slotClickUrl');
+    var bidder = val('slotBidder').slice(0, 120);
+    var cpm = Number(($('slotCpm') && $('slotCpm').value));
+    if (!sponsor) { setNote('Brand name is required.', 'bad'); return; }
+    if (!/^https:\/\//i.test(clickUrl)) { setNote('Destination must be an https:// URL.', 'bad'); return; }
+    if (!isFinite(cpm) || cpm < 1 || cpm > 100) {
+      setNote('Bid must be a number between $1 and $100 CPM.', 'bad');
+      return;
+    }
+    if (!bidder) { setNote('A contact email or handle is required — that is the only way we can reach you.', 'bad'); return; }
+
+    // Remember the id: a re-bid on the same id REPLACES the stored bid, so
+    // raising a price is one call rather than a duplicate entry.
+    if (campEl) campEl.value = campId;
+    try { window.localStorage.setItem(STORE_KEY, campId); } catch (e) { /* private mode */ }
+
+    busy = true;
+    if (bidBtn) bidBtn.disabled = true;
+    setNote('Placing bid on ' + ids.length + (ids.length === 1 ? ' block…' : ' blocks…'), '');
+    resEl.textContent = '';
+
+    var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var timer = setTimeout(function () {
+      if (ctrl) { try { ctrl.abort(); } catch (e) { /* noop */ } }
+    }, 15000);
+    var opts = {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        bidder: bidder,
+        campaign: { id: campId, sponsor: sponsor, tagline: tagline, clickUrl: clickUrl, cpm: cpm },
+        slots: ids
+      })
+    };
+    if (ctrl) opts.signal = ctrl.signal;
+
+    fetch(BACKEND + '/slots/bid', opts).then(function (res) {
+      clearTimeout(timer);
+      return res.json().then(function (d) { return { status: res.status, body: d }; });
+    }).then(function (out) {
+      busy = false;
+      if (bidBtn) bidBtn.disabled = false;
+      var b = out.body || {};
+      if (out.status === 200 && b.ok) {
+        setNote(b.note || 'Bid placed.', b.outbidOn ? 'bad' : 'ok');
+        var placed = b.slots || [];
+        for (var i = 0; i < placed.length; i++) {
+          var p = placed[i] || {};
+          var r = document.createElement('div');
+          r.className = 'slot-res ' + (p.top ? 'win' : 'lose');
+          var w = document.createElement('span');
+          w.className = 'when';
+          w.textContent = dayShort(slotDate(p.slot)) + ' · ' + blockLabel(slotBlock(p.slot)) + ' UTC';
+          r.appendChild(w);
+          var why = document.createElement('span');
+          why.className = 'why';
+          why.textContent = p.top ? 'yours at $' + money(p.topCpm) : 'behind $' + money(p.outbid);
+          r.appendChild(why);
+          resEl.appendChild(r);
+        }
+        var rej = b.rejected || [];
+        for (var j = 0; j < rej.length; j++) {
+          var rj = rej[j] || {};
+          var rr = document.createElement('div');
+          rr.className = 'slot-res lose';
+          var rw = document.createElement('span');
+          rw.className = 'when';
+          rw.textContent = String(rj.slot || 'slot');
+          rr.appendChild(rw);
+          var ry = document.createElement('span');
+          ry.className = 'why';
+          ry.textContent = 'not booked — ' + String(rj.reason || 'rejected');
+          rr.appendChild(ry);
+          resEl.appendChild(rr);
+        }
+        load(month);   // repaint top bids; the selection is kept so you can raise
+      } else if (out.status === 429) {
+        setNote('Daily bid limit reached (' + (b.error || 'too many requests') + '). ' +
+          'Nothing was changed — try again tomorrow.', 'bad');
+      } else {
+        setNote('Not accepted: ' + (b.error || ('HTTP ' + out.status)) + '.', 'bad');
+      }
+    }).catch(function () {
+      clearTimeout(timer);
+      busy = false;
+      if (bidBtn) bidBtn.disabled = false;
+      setNote('Backend unreachable — check your connection and try again. No bid was placed.', 'bad');
+    });
+  });
+
+  /* ---------------- start ---------------- */
+  try {
+    var saved = window.localStorage.getItem(STORE_KEY);
+    if (saved && campEl) campEl.value = saved;
+  } catch (e) { /* private mode — the id stays per-session */ }
+  var now0 = new Date();
+  load(now0.getUTCFullYear() + '-' + pad2(now0.getUTCMonth() + 1));
 })();
 </script>
 <script>

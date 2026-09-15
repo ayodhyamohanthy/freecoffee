@@ -1642,10 +1642,12 @@ body.theme-light .codeblock { background: #FAFAF9; border-color: var(--line); }
 .slot-sum-row.is-win .slot-sum-top { color: var(--success); font-weight: 600; }
 .slot-sum-row.is-lose .slot-sum-top { color: var(--danger); font-weight: 600; }
 .slot-sum-empty { font-size: 0.8rem; color: var(--text-faint); }
-.slot-bid-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin-top: 12px; }
-.slot-bid-bar .field { margin: 0; }
-.slot-bid-bar .input { width: 132px; }
-.slot-bid-bar .btn { flex: none; }
+/* Three-up field grid: campaign id / brand / tagline on row 1,
+   destination / CPM / contact on row 2, the bid button below. */
+.slot-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 14px; }
+.slot-fields .field { margin: 0 0 14px; }
+.slot-submit { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.slot-submit .slot-note { margin: 0; }
 
 .slot-results { display: grid; gap: 5px; max-height: 200px; overflow-y: auto; margin-top: 10px; }
 .slot-res {
@@ -1680,6 +1682,7 @@ body.theme-light .codeblock { background: #FAFAF9; border-color: var(--line); }
 }
 @media (max-width: 860px) {
   .slot-chips { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .slot-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 620px) {
   .balcard-divs.cols-5 { grid-template-columns: 1fr 1fr; }
@@ -1687,4 +1690,5 @@ body.theme-light .codeblock { background: #FAFAF9; border-color: var(--line); }
   .slot-day { min-height: 46px; padding: 5px; }
   .slot-day.is-today .slot-daynum::after { content: none; }
   .deliv-nums { gap: 14px; }
+  .slot-fields { grid-template-columns: 1fr; }
 }
