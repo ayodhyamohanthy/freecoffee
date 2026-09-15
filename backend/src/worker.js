@@ -55,6 +55,27 @@ var ID_MAX = 40, SPONSOR_MAX = 40, TAGLINE_MAX = 90, LOGO_MAX = 2, URL_MAX = 500
 var DEFAULT_ACCENT = '#C98F4E';
 var DEVICE_ID_RE = /^[a-f0-9-]{8,64}$/i;
 
+/* --------------------------- flywheel constants -------------------------
+   The loop this file closes, server-side:
+
+     capture (any platform)  →  activate (60 verified minutes)  →
+     earn (65% base share)   →  share (attributed link)         →  capture…
+
+   with the second, reinforcing half: more verified minutes → advertiser
+   value → higher winning bids → bigger user earnings → more sharing.
+
+   Everything money-shaped is here: the referrer's 10% is computed from the
+   REFEREE's own base award (platform-side money — the referee's 65% is never
+   reduced), gated on activation, and capped at a 12-month term. */
+var REFERRAL_SHARE = 0.10;        // 10% of the referee's BASE earnings
+var REFERRAL_TERM_DAYS = 365;     // 12-month referral term
+var REFERRAL_GATE_MINUTES = 60;   // activation gate: verified minutes…
+var REFERRAL_GATE_DAYS = 30;      // …inside the referee's first 30 days
+var REF_CODE_RE = /^[a-z0-9][a-z0-9-]{2,31}$/;    // lowercase share codes
+var PLATFORM_RE = /^[a-z0-9][a-z0-9_-]{0,19}$/;   // mac | web | pwa | agent …
+var REFERRALS_MAX = 200;          // referees tracked per referrer code
+var PLATFORM_MAX = 12;            // distinct platforms counted per ledger
+
 /* Pure helpers are exported for unit tests (backend/test.mjs). The Workers
    fetch listener sits at the bottom behind a
    `typeof addEventListener !== 'undefined'` guard so `node --check` and a
