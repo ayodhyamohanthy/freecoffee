@@ -598,9 +598,10 @@
 FreeCoffeeDemo.initMenuBarDemo(); FreeCoffeeDemo.initInstallUX();
 
 /* Announce ticker + live-price card + tier bars — honest demo/live split.
-   Backend configured → real numbers from GET /health (impression counter)
-   and GET /feed.json (top CPM). No backend → the static launch line, the
-   published Tier-1 floor, and the seeded ledger's tier split stay showing. */
+   Backend configured → real numbers from GET /earnings/{deviceId} (per-device
+   impression counter) and GET /feed.json (top CPM). No backend → the static
+   launch line, the published Tier-1 floor, and the seeded ledger's tier
+   split stay showing. */
 (function () {
   var D = window.FreeCoffeeDemo;
   var base = D.backendBase();

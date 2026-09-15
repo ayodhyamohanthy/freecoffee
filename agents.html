@@ -118,8 +118,7 @@
           <p class="section-sub" style="margin-bottom:10px">Publish a validated campaign array to the
             live ad feed. Same feed contract the web app speaks: https-only click URLs, cpm clamped
             0–100, deduped by <code>id</code>, capped at 20 campaigns.</p>
-          <p><span class="agent-endpoint">POST /admin/feed</span><span class="agent-endpoint">GET /feed.json</span></p>
-          <p class="footnote" style="margin-bottom:0">Admin routes require a bearer token
+                    <p><span class="agent-endpoint">POST /admin/feed</span><span class="agent-endpoint">GET /feed.json</span></p>          <p class="footnote" style="margin-bottom:0">Admin routes require a bearer token
             (<code>Authorization: Bearer …</code>) — set it as an encrypted Worker secret, never in
             the agent's prompt.</p>
         </section>
@@ -128,7 +127,7 @@
           <h2 style="font-size:1.05rem">Read performance</h2>
           <p class="section-sub" style="margin-bottom:10px">Every amount is computed server-side from
             the served feed — the agent (and everyone else) sees the same numbers the ledger keeps.</p>
-          <p><span class="agent-endpoint">GET /earnings/{deviceId}</span><span class="agent-endpoint">GET /health</span></p>
+          <p><span class="agent-endpoint">GET /earnings/{deviceId}</span><span class="agent-endpoint">GET /stats</span><span class="agent-endpoint">GET /health</span></p>
           <p class="footnote" style="margin-bottom:0">The deviceId is the random UUID this browser
             already uses — no account, no email, no PII. See <a href="profile.html#connectedMac">Profile › Connected Mac</a> to
             find yours.</p>
@@ -194,6 +193,11 @@
         },
         "required": ["deviceId"]
       }
+    },
+    {
+      "name": "freecoffee_delivery_stats",
+      "description": "Public aggregate delivery report: per-campaign verified minutes, reported clicks, user-share spend, network totals. No token, no device data.",
+      "inputSchema": { "type": "object", "properties": {} }
     },
     {
       "name": "freecoffee_health",
