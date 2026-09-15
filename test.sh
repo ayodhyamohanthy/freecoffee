@@ -11,7 +11,10 @@
 #   5. Backend helper regressions (backend/test.mjs)
 #   6. Monitor JSON/log integrity + missing asset references
 #   7. Asset version pairing (?v= in HTML <-> sw.js ASSET_V <-> CACHE) — a
-#      mismatch silently breaks the precache and offline first loads
+#      mismatch silently breaks the precache and offline first loads — plus
+#      the PWA lockstep floor (ASSET_V >= padded APP_VERSION from
+#      app/build.sh) so DMG bumps always bust the web cache
+#   + Swift parse gate inside check 1 (macOS only, skipped elsewhere)
 #
 # Run from the repo root:   ./test.sh      (or:  bash test.sh)
 # Exit 0 when everything passes, non-zero otherwise.
@@ -34,6 +37,18 @@ for f in assets/js/*.js backend/src/worker.js; do
   fi
 done
 [ "$JS_FAIL" = "0" ] && ok "assets/js/*.js + backend/src/worker.js parse cleanly"
+
+# Swift parse gate (macOS only, best-effort): catches typos/bracket slips in
+# the menu-bar app without a full typecheck. Skipped, not failed, off-Mac.
+if command -v xcrun >/dev/null 2>&1; then
+  if xcrun -sdk macosx swiftc -parse app/FreeCoffeeMenuBar.swift >/dev/null 2>&1; then
+    ok "FreeCoffeeMenuBar.swift parses (xcrun swiftc -parse)"
+  else
+    bad "FreeCoffeeMenuBar.swift failed swiftc -parse"
+  fi
+else
+  printf '    SKIP  swift parse gate (no xcrun off macOS)\n'
+fi
 
 # ------------------------------------------------------------------ 2. Backend tests
 step "2/7 Backend unit tests"
@@ -190,8 +205,28 @@ if bad:
         print('    FAIL ' + b)
     sys.exit(1)
 print('    ok   ASSET_V=%s, CACHE=v%s, precache and every ?v= reference agree' % (asset_v, cache_v))
+
+# Lockstep floor (build.sh PWA scheme): ASSET_V must be >= APP_VERSION as
+# major*1e6+minor*1e3+patch, so a DMG version bump can never ship without
+# busting the PWA cache. Manual web-only bumps use a larger integer.
+m_app = re.search(r'^APP_VERSION="([^"]+)"', open('app/build.sh', encoding='utf-8').read(), re.M)
+if not m_app:
+    print('    FAIL app/build.sh: APP_VERSION not found')
+    sys.exit(1)
+try:
+    segs = [int(x) for x in m_app.group(1).split('.')]
+    while len(segs) < 3:
+        segs.append(0)
+    floor = segs[0] * 1000000 + segs[1] * 1000 + segs[2]
+except ValueError:
+    print('    FAIL app/build.sh: APP_VERSION %r is not numeric x.y.z' % m_app.group(1))
+    sys.exit(1)
+if not asset_v.isdigit() or int(asset_v) < floor:
+    print('    FAIL ASSET_V=%s below the APP_VERSION floor %d — run app/build.sh (PWA lockstep) or bump sw.js by hand' % (asset_v, floor))
+    sys.exit(1)
+print('    ok   ASSET_V=%s satisfies the APP_VERSION=%s floor (%d)' % (asset_v, m_app.group(1), floor))
 PY
-[ $? -eq 0 ] && ok "asset version pairing" || bad "asset version pairing"
+[ $? -eq 0 ] && ok "asset version pairing + PWA lockstep floor" || bad "asset version pairing"
 
 # ------------------------------------------------------------------ summary
 echo

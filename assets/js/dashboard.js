@@ -666,7 +666,12 @@
         backendFetch(base + '/track', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ deviceId: dev, type: 'impression', campaignId: trackedCampaignId, minutes: 1 })
+          body: JSON.stringify({
+            deviceId: dev, type: 'impression', campaignId: trackedCampaignId, minutes: 1,
+            /* which platform this placement happened on (mac | pwa | web-mac …) —
+               the public /stats mix is built from this field */
+            platform: (typeof D.currentPlatform === 'function') ? D.currentPlatform() : 'web'
+          })
         }).catch(function () { /* best-effort — silent */ });
       } catch (e) { /* best-effort — silent */ }
     }
