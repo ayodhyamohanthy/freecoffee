@@ -1290,20 +1290,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             statusItem.button?.image = chipTile(
                 monogram: chipMonogram(logoText: camp.logoText, sponsor: camp.sponsor),
                 accentHex: camp.accent)
-            statusItem.button?.title = truncateForBar(camp.sponsor)
+            statusItem.button?.attributedTitle = chipTitle(
+                headline: camp.sponsor,
+                description: camp.tagline.isEmpty ? "LIVE" : camp.tagline)
             statusItem.button?.toolTip = "FreeCoffee — LIVE: \(camp.sponsor)" +
                 (camp.tagline.isEmpty ? "" : " — \(camp.tagline)") + ". Nothing is collected."
         } else if awaitingSponsors {
             statusItem.button?.image = NSImage(systemSymbolName: "megaphone",
                                                accessibilityDescription: "Advertise")
-            statusItem.button?.title = "Your brand here"
+            statusItem.button?.attributedTitle = chipTitle(
+                headline: "Your brand here",
+                description: "No sponsors available")
             statusItem.button?.toolTip = "No sponsors right now — put your brand in this menu bar. " +
                 "Click for details."
         } else {
             statusItem.button?.image = chipTile(
                 monogram: chipMonogram(logoText: "", sponsor: demoSponsor),
                 accentHex: "#E0A93E")
-            statusItem.button?.title = truncateForBar(demoSponsor)
+            statusItem.button?.attributedTitle = chipTitle(
+                headline: demoSponsor,
+                description: "Demo · fictional")
             statusItem.button?.toolTip = "FreeCoffee demo sponsor (simulated) — no real campaign, " +
                 "nothing is collected."
         }
@@ -1321,8 +1327,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Chip-safe sponsor name: the menu bar is narrow.
-    private func truncateForBar(_ s: String) -> String {
-        s.count <= 20 ? s : String(s.prefix(19)) + "…"
+    private func truncateForBar(_ s: String, max: Int = 20) -> String {
+        s.count <= max ? s : String(s.prefix(max - 1)) + "…"
+    }
+
+    /// Two-line chip title (headline + description), like the reference
+    /// pill. Tahoe's taller menu bar fits 13pt + 9pt; the description is
+    /// capped short. Adaptive label colors track light/dark menu bars.
+    private func chipTitle(headline: String, description: String?) -> NSAttributedString {
+        let head = NSMutableAttributedString(
+            string: truncateForBar(headline),
+            attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .regular),
+                         .foregroundColor: NSColor.labelColor])
+        if let d = description, !d.isEmpty {
+            let desc = NSAttributedString(
+                string: "\n" + truncateForBar(d, max: 24),
+                attributes: [.font: NSFont.systemFont(ofSize: 9, weight: .regular),
+                             .foregroundColor: NSColor.secondaryLabelColor])
+            head.append(desc)
+        }
+        let para = NSMutableParagraphStyle()
+        para.lineSpacing = 0
+        para.lineBreakMode = .byTruncatingTail
+        head.addAttribute(.paragraphStyle, value: para,
+                          range: NSRange(location: 0, length: head.length))
+        return head
     }
 
     /// Menu-bar tile: accent rounded square + monogram, i.e. the reference
