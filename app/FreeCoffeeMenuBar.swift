@@ -1212,6 +1212,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // LEFT-click → popover; RIGHT-click → menu (see statusItemClicked).
         statusItem.button?.action = #selector(statusItemClicked(_:))
         statusItem.button?.target = self
+        setupChipPill()   // dark pill + status dot behind logo + texts
 
         observeSleepWake()
         scheduleTimers()
@@ -1283,9 +1284,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // rotating fictional demo sponsors (simulated, display only).
         if snoozed {
             statusItem.button?.image = nil
-            statusItem.button?.title = "☕ FreeCoffee — snoozed until \(snoozeEndTimeLabel())"
+            // Single line, untruncated in code (the bar itself clips) so the
+            // resume time is never cut by the 18-char headline cap.
+            statusItem.button?.attributedTitle = NSAttributedString(
+                string: "☕ FreeCoffee — snoozed until \(snoozeEndTimeLabel())",
+                attributes: [.font: NSFont.systemFont(ofSize: 12, weight: .regular),
+                             .foregroundColor: NSColor.white])
             statusItem.button?.toolTip = "FreeCoffee — snoozed (no earning ticks, no ad rotation). " +
                 "Earning resumes automatically. Nothing is collected."
+            placeChipDot(color: Coffee.textFaint)
         } else if let camp = currentLiveCampaign {
             statusItem.button?.image = chipTile(
                 monogram: chipMonogram(logoText: camp.logoText, sponsor: camp.sponsor),
@@ -1295,6 +1302,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 description: camp.tagline.isEmpty ? "LIVE" : camp.tagline)
             statusItem.button?.toolTip = "FreeCoffee — LIVE: \(camp.sponsor)" +
                 (camp.tagline.isEmpty ? "" : " — \(camp.tagline)") + ". Nothing is collected."
+            placeChipDot(color: Coffee.success)
         } else if awaitingSponsors {
             statusItem.button?.image = NSImage(systemSymbolName: "megaphone",
                                                accessibilityDescription: "Advertise")
@@ -1303,6 +1311,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 description: "No sponsors available")
             statusItem.button?.toolTip = "No sponsors right now — put your brand in this menu bar. " +
                 "Click for details."
+            placeChipDot(color: Coffee.waiting)
         } else {
             statusItem.button?.image = chipTile(
                 monogram: chipMonogram(logoText: "", sponsor: demoSponsor),
@@ -1312,6 +1321,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 description: "Demo · fictional")
             statusItem.button?.toolTip = "FreeCoffee demo sponsor (simulated) — no real campaign, " +
                 "nothing is collected."
+            placeChipDot(color: Coffee.success)
         }
         popoverVC?.refresh()
         updateMenu()
@@ -1333,18 +1343,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Two-line chip title (headline + description), like the reference
     /// pill. Tahoe's taller menu bar fits 12pt + 8pt; the description is
-    /// capped short. Adaptive label colors track light/dark menu bars.
+    /// capped short. Fixed light colors — the chip always sits on the dark
+    /// pill background (see setupChipPill), never on the bare menu bar.
     /// (13/9 clipped the headline's cap-height — keep this compact.)
     private func chipTitle(headline: String, description: String?) -> NSAttributedString {
         let head = NSMutableAttributedString(
             string: truncateForBar(headline, max: 18),
             attributes: [.font: NSFont.systemFont(ofSize: 12, weight: .regular),
-                         .foregroundColor: NSColor.labelColor])
+                         .foregroundColor: NSColor.white])
         if let d = description, !d.isEmpty {
             let desc = NSAttributedString(
                 string: "\n" + truncateForBar(d, max: 22),
                 attributes: [.font: NSFont.systemFont(ofSize: 8, weight: .regular),
-                             .foregroundColor: NSColor.secondaryLabelColor])
+                             .foregroundColor: NSColor(srgbRed: 0xB0 / 255.0, green: 0xB0 / 255.0, blue: 0xB8 / 255.0, alpha: 1)])
             head.append(desc)
         }
         let para = NSMutableParagraphStyle()
@@ -1353,6 +1364,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         head.addAttribute(.paragraphStyle, value: para,
                           range: NSRange(location: 0, length: head.length))
         return head
+    }
+
+    /// Dark pill behind logo + texts, like the reference (opaque dark
+    /// capsule + trailing status dot). Layer-backed status button — no
+    /// deprecated statusItem.view involved. Called once at launch.
+    private let chipDot = NSView(frame: NSRect(x: 0, y: 0, width: 6, height: 6))
+
+    private func setupChipPill() {
+        guard let button = statusItem.button else { return }
+        button.wantsLayer = true
+        button.layer?.backgroundColor = NSColor(srgbRed: 0x2C / 255.0, green: 0x2C / 255.0, blue: 0x30 / 255.0, alpha: 0.95).cgColor
+        button.layer?.cornerRadius = 9
+        // (NSButton has no contentInsets: left padding comes from the tile
+        // itself, right padding from the dot's 8pt trailing offset below.)
+        chipDot.wantsLayer = true
+        chipDot.layer?.cornerRadius = 3
+        chipDot.layer?.backgroundColor = Coffee.textFaint.cgColor
+        button.addSubview(chipDot)
+    }
+
+    /// Keep the dot pinned to the pill's right edge, colored by state.
+    private func placeChipDot(color: NSColor) {
+        guard let button = statusItem.button else { return }
+        let d: CGFloat = 6
+        chipDot.frame = NSRect(x: button.bounds.width - 8 - d,
+                               y: (button.bounds.height - d) / 2,
+                               width: d, height: d)
+        chipDot.layer?.backgroundColor = color.cgColor
     }
 
     /// Menu-bar tile: accent rounded square + monogram, i.e. the reference
