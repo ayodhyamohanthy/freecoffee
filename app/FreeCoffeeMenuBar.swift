@@ -1285,14 +1285,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if snoozed {
             statusItem.button?.image = nil
             // Single line, untruncated in code (the bar itself clips) so the
-            // resume time is never cut by the 18-char headline cap.
-            statusItem.button?.attributedTitle = NSAttributedString(
+            // resume time is never cut by the 18-char headline cap. Same dot
+            // zone reservation as chipTitle.
+            let snoozePara = NSMutableParagraphStyle()
+            snoozePara.lineBreakMode = .byTruncatingTail
+            let snoozeTitle = NSMutableAttributedString(
                 string: "☕ FreeCoffee — snoozed until \(snoozeEndTimeLabel())",
                 attributes: [.font: NSFont.systemFont(ofSize: 12, weight: .regular),
                              .foregroundColor: NSColor.white])
+            snoozeTitle.addAttribute(.paragraphStyle, value: snoozePara,
+                                     range: NSRange(location: 0, length: snoozeTitle.length))
+            statusItem.button?.attributedTitle = snoozeTitle
             statusItem.button?.toolTip = "FreeCoffee — snoozed (no earning ticks, no ad rotation). " +
                 "Earning resumes automatically. Nothing is collected."
-            placeChipDot(color: Coffee.textFaint)
+            chipDotColor = Coffee.textFaint
         } else if let camp = currentLiveCampaign {
             statusItem.button?.image = chipTile(
                 monogram: chipMonogram(logoText: camp.logoText, sponsor: camp.sponsor),
@@ -1302,7 +1308,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 description: camp.tagline.isEmpty ? "LIVE" : camp.tagline)
             statusItem.button?.toolTip = "FreeCoffee — LIVE: \(camp.sponsor)" +
                 (camp.tagline.isEmpty ? "" : " — \(camp.tagline)") + ". Nothing is collected."
-            placeChipDot(color: Coffee.success)
+            chipDotColor = Coffee.success
         } else if awaitingSponsors {
             statusItem.button?.image = NSImage(systemSymbolName: "megaphone",
                                                accessibilityDescription: "Advertise")
@@ -1311,7 +1317,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 description: "No sponsors available")
             statusItem.button?.toolTip = "No sponsors right now — put your brand in this menu bar. " +
                 "Click for details."
-            placeChipDot(color: Coffee.waiting)
+            chipDotColor = Coffee.waiting
         } else {
             statusItem.button?.image = chipTile(
                 monogram: chipMonogram(logoText: "", sponsor: demoSponsor),
@@ -1321,8 +1327,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 description: "Demo · fictional")
             statusItem.button?.toolTip = "FreeCoffee demo sponsor (simulated) — no real campaign, " +
                 "nothing is collected."
-            placeChipDot(color: Coffee.success)
+            chipDotColor = Coffee.success
         }
+        fitChipWidth()
+        placeChipDot(color: chipDotColor)
         popoverVC?.refresh()
         updateMenu()
     }
@@ -1342,19 +1350,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Two-line chip title (headline + description), like the reference
-    /// pill. Tahoe's taller menu bar fits 12pt + 8pt; the description is
+    /// pill. Tahoe's taller menu bar fits 11.5pt + 7.5pt; the description is
     /// capped short. Fixed light colors — the chip always sits on the dark
     /// pill background (see setupChipPill), never on the bare menu bar.
-    /// (13/9 clipped the headline's cap-height — keep this compact.)
+    /// NOTE: no tailIndent here — the bar sizes the button to the title, so
+    /// any right inset only shrinks the drawing area and truncates text.
+    /// The dot zone comes from fitChipWidth() widening the button instead.
     private func chipTitle(headline: String, description: String?) -> NSAttributedString {
         let head = NSMutableAttributedString(
             string: truncateForBar(headline, max: 18),
-            attributes: [.font: NSFont.systemFont(ofSize: 12, weight: .regular),
+            attributes: [.font: NSFont.systemFont(ofSize: 11.5, weight: .regular),
                          .foregroundColor: NSColor.white])
         if let d = description, !d.isEmpty {
             let desc = NSAttributedString(
                 string: "\n" + truncateForBar(d, max: 22),
-                attributes: [.font: NSFont.systemFont(ofSize: 8, weight: .regular),
+                attributes: [.font: NSFont.systemFont(ofSize: 7.5, weight: .regular),
                              .foregroundColor: NSColor(srgbRed: 0xB0 / 255.0, green: 0xB0 / 255.0, blue: 0xB8 / 255.0, alpha: 1)])
             head.append(desc)
         }
@@ -1364,6 +1374,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         head.addAttribute(.paragraphStyle, value: para,
                           range: NSRange(location: 0, length: head.length))
         return head
+    }
+
+    /// The bar sizes the button to the title alone, which lets long lines
+    /// slide under the status dot. Widen by the dot zone + padding after
+    /// every title change (refreshUI covers all branches).
+    private func fitChipWidth() {
+        guard let button = statusItem.button else { return }
+        button.sizeToFit()
+        var f = button.frame
+        f.size.width += 20
+        button.frame = f
     }
 
     /// Dark pill behind logo + texts, like the reference (opaque dark
@@ -1385,6 +1406,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Keep the dot pinned to the pill's right edge, colored by state.
+    /// Called after fitChipWidth (order matters — widening moves the edge).
+    private var chipDotColor: NSColor = Coffee.success
+
     private func placeChipDot(color: NSColor) {
         guard let button = statusItem.button else { return }
         let d: CGFloat = 6
