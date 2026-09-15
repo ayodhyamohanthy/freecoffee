@@ -87,6 +87,32 @@ var REF_CODE_RE = /^[a-z0-9][a-z0-9-]{2,31}$/;    // lowercase share codes
 var PLATFORM_RE = /^[a-z0-9][a-z0-9_-]{0,19}$/;   // mac | web | pwa | agent …
 var REFERRALS_MAX = 200;          // referees tracked per referrer code
 var PLATFORM_MAX = 12;            // distinct platforms counted per ledger
+var REGION_LIST_MAX = 40;         // regions/surfaces reported per campaign
+
+/* --------------------------------- slots ---------------------------------
+   A SLOT is one hour-block on one UTC calendar day: the atomic unit of
+   menu-bar inventory. Advertisers bid a CPM on any number of slots; on each
+   slot the HIGHEST BID takes the whole window (winner takes all), ties going
+   to the earlier bid. Slots are independent — winning Tue 08–12 says nothing
+   about Tue 12–16.
+
+   Storage is one KV key per calendar month, `slots:YYYY-MM`, holding
+     { "YYYY-MM-DD": { "<block>": [bid, …] } }
+   so a whole month's grid is a single read and a bid rewrites only the month
+   it lands in. A bid carries the same campaign payload as a feed campaign, so
+   a slot winner is served — and paid — by the existing engine untouched:
+   applyEarnings looks its cpm up by campaignId in the served list.
+   ------------------------------------------------------------------------- */
+var SLOT_BLOCK_HOURS = 4;                      // 6 blocks/day: 00–04 … 20–24
+var SLOT_BLOCKS_PER_DAY = 24 / SLOT_BLOCK_HOURS;
+var SLOT_MIN_CPM = 1;                          // same floor as /submit
+var SLOT_MAX_PER_REQUEST = 200;                // slots per bid request
+var SLOT_BIDS_KEPT = 20;                       // top bids retained per slot
+var SLOT_MAX_AHEAD_DAYS = 400;                 // ~13 months of bookable future
+var SLOT_RATE_PER_DAY = 120;                   // bid requests/day/IP
+var BIDDER_MAX = 120;                          // bidder contact string cap
+var SLOT_ID_RE = /^(\d{4})-(\d{2})-(\d{2})#(\d{1,2})$/;
+var MONTH_RE = /^(\d{4})-(\d{2})$/;
 
 /* Pure helpers are exported for unit tests (backend/test.mjs). The Workers
    fetch listener sits at the bottom behind a
@@ -189,6 +215,14 @@ function normalizeRefCode(val) {
 function normalizePlatform(val) {
   var p = (typeof val === 'string') ? val.replace(/^\s+|\s+$/g, '').toLowerCase() : '';
   return PLATFORM_RE.test(p) ? p : 'unknown';
+}
+
+/* Coarse region for delivery reporting: an ISO-3166 alpha-2 country code, or
+   'unknown'. The client reports it — we never geo-locate an IP, so this is
+   device-asserted, not verified, and the advertiser report says so. */
+function normalizeRegion(val) {
+  var r = (typeof val === 'string') ? val.replace(/^\s+|\s+$/g, '').toUpperCase() : '';
+  return /^[A-Z]{2}$/.test(r) ? r : 'unknown';
 }
 
 function bumpPlatform(counters, platform, minutes, clicks) {
@@ -397,10 +431,17 @@ function pickRoute(method, pathname) {
   if (method === 'OPTIONS') return { handled: true, route: 'preflight' };
   if (method === 'GET' && pathname === '/feed.json') return { handled: true, route: 'feed' };
   if (method === 'GET' && pathname === '/stats') return { handled: true, route: 'stats' };
+  if (method === 'POST' && pathname === '/submit') return { handled: true, route: 'submit' };
+  if (method === 'GET' && pathname === '/admin/queue') return { handled: true, route: 'adminQueue' };
+  if (method === 'POST' && pathname === '/admin/review') return { handled: true, route: 'adminReview' };
   if (method === 'GET' && pathname === '/health') return { handled: true, route: 'health' };
   if (method === 'POST' && pathname === '/track') return { handled: true, route: 'track' };
   if (method === 'POST' && pathname === '/admin/feed') return { handled: true, route: 'adminFeed' };
   if (method === 'POST' && pathname === '/referral') return { handled: true, route: 'referral' };
+  /* Slot auction (public: anyone can bid on inventory). */
+  if (method === 'GET' && pathname === '/slots') return { handled: true, route: 'slots' };
+  if (method === 'GET' && pathname === '/slots/current') return { handled: true, route: 'slotCurrent' };
+  if (method === 'POST' && pathname === '/slots/bid') return { handled: true, route: 'slotBid' };
   if (method === 'GET' && /^\/referrals\/[^/]+$/.test(pathname)) {
     return { handled: true, route: 'referrals', code: pathname.split('/')[2] || '' };
   }
@@ -466,6 +507,7 @@ function applyEarnings(ledger, report, campaigns, now, referral) {
     return { ledger: ledger, earned: 0, note: null, error: 'campaignId required' };
   }
   var platform = normalizePlatform(report.platform);
+  var region = normalizeRegion(report.region);
 
   /* cpm + click eligibility come from the SERVED feed — never the client. */
   var campaign = null;
@@ -517,7 +559,11 @@ function applyEarnings(ledger, report, campaigns, now, referral) {
     l.monthly.impressions = monthImpressions + minutes;
     // minutes rides along so delivery reporting can sum verified minutes
     // per campaign (rows written before v1.1.3 lack it and count as 1).
-    l.rows.push({ t: ts, type: type, campaignId: campaignId, amount: earned, minutes: minutes });
+    // platform + region ride along too, so the advertiser report can break
+    // delivery down by surface and region rather than guessing (rows written
+    // before delivery reporting landed read as 'unknown' on both).
+    l.rows.push({ t: ts, type: type, campaignId: campaignId, amount: earned,
+      minutes: minutes, platform: platform, region: region });
     l.counters.impressions = (Number(l.counters.impressions) || 0) + minutes;
     bumpPlatform(l.counters, platform, minutes, 0);
   } else {
@@ -540,7 +586,8 @@ function applyEarnings(ledger, report, campaigns, now, referral) {
     l.total = round4((Number(l.total) || 0) + earned);
     l.today.total = round4((Number(l.today.total) || 0) + earned);
     l.monthly.total = round4((Number(l.monthly.total) || 0) + earned);
-    l.rows.push({ t: ts, type: type, campaignId: campaignId, amount: earned });
+    l.rows.push({ t: ts, type: type, campaignId: campaignId, amount: earned,
+      platform: platform, region: region });
     l.counters.clicks = (Number(l.counters.clicks) || 0) + 1;
     l.counters.todayClicks.count = attemptsToday + 1;
     bumpPlatform(l.counters, platform, 0, 1);
@@ -601,13 +648,45 @@ function ledgerView(ledger, opts) {
 
 /* ------------------------- delivery reporting ---------------------------
    GET /stats (PUBLIC, aggregate-only): per-campaign delivery rolled up
-   across every stored ledger — verified minutes, reported clicks, and
-   user-share spend — plus network totals and the served feed size. No
-   device ids, no rows, no per-device anything ever leaves this endpoint,
-   so the advertiser page calls it directly with no token. KV scanning is
-   capped (STATS_MAX_KEYS) to bound the work on the free tier. */
+   across every stored ledger — verified minutes (and the same figure in
+   hours), reported clicks, user-share spend, the number of DISTINCT DEVICES
+   the campaign reached, and its delivery broken down by SURFACE (mac menu
+   bar / web / pwa / agent) and REGION (device-reported ISO-3166 alpha-2).
+   Plus network totals and the served feed size.
+
+   Privacy: this endpoint emits COUNTS and percentages only. No device id,
+   no ledger row, no per-device breakdown ever leaves it — a reach count is
+   aggregate, and `regions` are self-reported by the device (we never
+   geo-locate an IP), which the advertiser page states plainly.
+
+   KV scanning is capped (STATS_MAX_KEYS) to bound the work on the free tier. */
 var STATS_MAX_KEYS = 1000;
 
+/* {key: minutes} → [{<name>, minutes, share%}] sorted desc, capped.
+   Used for both the region mix and the surface mix. */
+function shareList(map, name, total) {
+  var out = [];
+  for (var k in map) {
+    if (!Object.prototype.hasOwnProperty.call(map, k)) continue;
+    var mins = Number(map[k]) || 0;
+    var row = { minutes: mins, share: total > 0 ? round2(mins / total * 100) : 0 };
+    row[name] = k;
+    out.push(row);
+  }
+  out.sort(function (a, b) {
+    if (b.minutes !== a.minutes) return b.minutes - a.minutes;
+    var ka = a[name], kb = b[name];
+    return ka < kb ? -1 : (ka > kb ? 1 : 0);
+  });
+  return out.slice(0, REGION_LIST_MAX);
+}
+
+/* Aggregate delivery across every device ledger.
+   Each ledger is ONE device, so a per-campaign distinct-device count is just
+   "how many ledgers carry a row for that campaign". handleStats stamps
+   `deviceId` from the KV key; an unstamped ledger still counts as one device
+   via its loop index, so the number is never inflated by a missing stamp.
+   Counts only — no device id is ever emitted. */
 function aggregateStats(ledgers, feed) {
   var names = Object.create(null);   // feed ids can be "__proto__" too
   var f = Array.isArray(feed) ? feed : [];
@@ -618,6 +697,8 @@ function aggregateStats(ledgers, feed) {
   }
   var per = Object.create(null);   // campaign ids can be "__proto__" etc.
   var plat = Object.create(null);  // { platform: {minutes, clicks} } — flywheel mix
+  var reg = Object.create(null);   // global region mix, by verified minutes
+  var devices = Object.create(null);  // distinct device ids seen, globally
   var referralSpend = 0;           // platform-side referral cost, never a campaign's
   var earners = 0;
   for (var d = 0; d < ledgers.length; d++) {
@@ -626,6 +707,8 @@ function aggregateStats(ledgers, feed) {
     // are skipped by the caller, but never let one mint an earner.
     if (!l || typeof l !== 'object' || Array.isArray(l) || !Array.isArray(l.rows)) continue;
     earners++;
+    var dev = (typeof l.deviceId === 'string' && l.deviceId) ? l.deviceId : ('#' + d);
+    devices[dev] = true;
     referralSpend += Number(l.referral && l.referral.total) || 0;
     var ps = platformsOf(l.counters);
     for (var pi = 0; pi < ps.length; pi++) {
@@ -639,8 +722,14 @@ function aggregateStats(ledgers, feed) {
       var row = rows[r] || {};
       var id = (typeof row.campaignId === 'string') ? row.campaignId : '';
       if (!id) continue;
-      var e = per[id] || (per[id] = { id: id, sponsor: names[id] || '', impressions: 0, clicks: 0, spend: 0 });
+      var e = per[id] || (per[id] = {
+        id: id, sponsor: names[id] || '', impressions: 0, clicks: 0, spend: 0,
+        devices: Object.create(null),
+        regions: Object.create(null),
+        surfaces: Object.create(null)
+      });
       var amt = round4(Number(row.amount) || 0);
+      var mins = 0;
       if (row.type === 'click') {
         e.clicks += 1;   // reported clicks (paid or not — caps burn quota)
       } else {
@@ -648,9 +737,19 @@ function aggregateStats(ledgers, feed) {
         // missing/NaN (pre-v1.1.3 rows) falls back to 1.
         var mraw = row.minutes;
         var m = (mraw === undefined || mraw === null) ? NaN : Math.floor(Number(mraw));
-        e.impressions += isFinite(m) ? Math.max(0, m) : 1;
+        mins = isFinite(m) ? Math.max(0, m) : 1;
+        e.impressions += mins;
       }
       e.spend = round4(e.spend + amt);
+      // Delivery dimensions only mean something for time actually served.
+      if (mins > 0) {
+        e.devices[dev] = true;
+        var rk = normalizeRegion(row.region);
+        var sk = normalizePlatform(row.platform);
+        e.regions[rk] = (e.regions[rk] || 0) + mins;
+        e.surfaces[sk] = (e.surfaces[sk] || 0) + mins;
+        reg[rk] = (reg[rk] || 0) + mins;
+      }
     }
   }
   var campaigns = [];
@@ -659,6 +758,14 @@ function aggregateStats(ledgers, feed) {
     var c = per[k];
     tS4 = round4(tS4 + c.spend);
     c.spend = round2(c.spend);
+    var devCount = 0;
+    for (var dk in c.devices) {
+      if (Object.prototype.hasOwnProperty.call(c.devices, dk)) devCount++;
+    }
+    c.devices = devCount;                                   // distinct devices
+    c.hours = round2(c.impressions / 60);                   // "how much time"
+    c.regions = shareList(c.regions, 'region', c.impressions);
+    c.surfaces = shareList(c.surfaces, 'surface', c.impressions);
     campaigns.push(c);
     tI += c.impressions; tC += c.clicks;
   }
@@ -675,10 +782,18 @@ function aggregateStats(ledgers, feed) {
     if (b.minutes !== a.minutes) return b.minutes - a.minutes;
     return a.platform < b.platform ? -1 : (a.platform > b.platform ? 1 : 0);
   });
+  var devTotal = 0;
+  for (var dk2 in devices) {
+    if (Object.prototype.hasOwnProperty.call(devices, dk2)) devTotal++;
+  }
   return {
     campaigns: campaigns,
-    totals: { impressions: tI, clicks: tC, spend: round2(tS4), earners: earners },
+    totals: {
+      impressions: tI, clicks: tC, spend: round2(tS4), earners: earners,
+      hours: round2(tI / 60), devices: devTotal
+    },
     platforms: platforms,
+    regions: shareList(reg, 'region', tI),
     referralSpend: round2(referralSpend),
     served: f.length
   };
@@ -768,19 +883,32 @@ async function getFeed(env) {
 /* --------------------------- request handlers --------------------------- */
 async function handleFeed(env) {
   var feed = await getFeed(env);
-  return json({ campaigns: feed.campaigns }, 200, { 'cache-control': 'public, max-age=60' });
+  /* `campaigns` is the SERVING list, not the raw feed: while a slot has a
+     winner that winner is the only thing that serves (winner takes all), so
+     every client — including the macOS app, which just picks the highest CPM
+     — honours the auction with no client change. `openFeedCount` keeps the
+     advertiser page's "live campaigns" number honest. */
+  var served = await servingList(env, feed.campaigns);
+  return json({
+    campaigns: served.campaigns,
+    openFeedCount: feed.campaigns.length,
+    slot: served.slot
+  }, 200, { 'cache-control': 'public, max-age=30' });
 }
 
 /* /stats — PUBLIC, aggregate-only. `totals` stays the delivery rollup (one
-   key set advertisers already read); the flywheel additions ride alongside:
-   `platforms` (where the verified minutes happened) and `referralSpend`
+   key set advertisers already read), now with `hours` and `devices` added;
+   each campaign carries its own reach + surface/region breakdown. The
+   flywheel additions ride alongside: `platforms` (where the verified minutes
+   happened), `regions` (network-wide region mix) and `referralSpend`
    (platform-side referral cost — never billed to a campaign). */
 async function handleStats(env) {
   var feed = await getFeed(env);
   var zeros = {
     campaigns: [],
-    totals: { impressions: 0, clicks: 0, spend: 0, earners: 0 },
+    totals: { impressions: 0, clicks: 0, spend: 0, earners: 0, hours: 0, devices: 0 },
     platforms: [],
+    regions: [],
     referralSpend: 0,
     served: feed.campaigns.length
   };
@@ -796,7 +924,17 @@ async function handleStats(env) {
       for (var i = 0; i < page.keys.length && ledgers.length < STATS_MAX_KEYS; i++) {
         try {
           var raw = await env.SITE_KV.get(page.keys[i].name);
-          if (raw) { try { ledgers.push(JSON.parse(raw)); } catch (e) { /* skip corrupt */ } }
+          if (raw) {
+            try {
+              var parsed = JSON.parse(raw);
+              /* Stamp the owning device so per-campaign reach can be counted
+                 as distinct devices. Counts only — ids are never emitted. */
+              if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                parsed.deviceId = String(page.keys[i].name).slice('earn:'.length);
+              }
+              ledgers.push(parsed);
+            } catch (e) { /* skip corrupt */ }
+          }
         } catch (e2) { /* skip unreadable */ }
       }
       if (page.list_complete || !page.cursor) break;
@@ -825,6 +963,9 @@ async function handleTrack(req, env) {
   }
 
   var feed = await getFeed(env);
+  /* cpm is looked up in the SERVING list, so a slot's exclusive winner is the
+     only campaign that can be paid while that slot is running. */
+  var served = await servingList(env, feed.campaigns);
 
   /* Best-effort atomic-ish read-modify-write. KV is eventually consistent;
      free tier = last-write-wins (documented in the security model). */
@@ -847,7 +988,7 @@ async function handleTrack(req, env) {
   } catch (e6) { binding = null; }
   if (binding && !normalizeRefCode(binding.code)) binding = null;
 
-  var result = applyEarnings(ledger, body, feed.campaigns, Date.now(), binding);
+  var result = applyEarnings(ledger, body, served.campaigns, Date.now(), binding);
   if (result.error) return json({ ok: false, error: result.error }, 400);
 
   try {
@@ -1098,6 +1239,504 @@ async function handleAdminFeed(req, env) {
   return json({ ok: true, count: valid.length }, 200);
 }
 
+/* --------------------- open submission + review ---------------------
+   Anyone can submit ONE campaign per request (no token). Submissions land
+   in a human-review queue — nothing reaches the live feed without an
+   explicit admin approval, which is what the advertisers page promises.
+   Spam controls: minimum $1 CPM bid, https-only destination required
+   (linkless ads are pointless), duplicate ids rejected across feed AND
+   queue, 5 submissions/day per IP, queue capped at 50. Highest CPM still
+   wins the minute (pickAd sorts desc); with no bids the clients show
+   their fictional/demo fallback, as always. */
+var SUBMIT_MIN_CPM = 1;
+var SUBMIT_MAX_PER_DAY = 5;
+var QUEUE_MAX = 50;
+
+async function readQueue(kv) {
+  try {
+    var raw = await kv.get('queue:campaigns');
+    if (!raw) return [];
+    var arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) { return []; }
+}
+
+async function writeQueue(kv, arr) {
+  await kv.put('queue:campaigns', JSON.stringify(arr));
+}
+
+function clientIP(req) {
+  try {
+    var ip = req.headers.get('cf-connecting-ip') || '';
+    ip = ip.replace(/^\s+|\s+$/g, '').slice(0, 64);
+    return ip || 'unknown';
+  } catch (e) { return 'unknown'; }
+}
+
+async function handleSubmit(req, env) {
+  if (!env || !env.SITE_KV) return json({ ok: false, error: 'KV not configured (SITE_KV binding missing)' }, 503);
+  var body;
+  try { body = await req.json(); }
+  catch (e) { return json({ ok: false, error: 'invalid JSON body' }, 400); }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return json({ ok: false, error: 'submit one campaign object (not an array)' }, 400);
+  }
+  var valid = validateCampaigns([body]);
+  if (!valid.length) {
+    return json({ ok: false, error: 'campaign needs an id and a sponsor (max 40 chars each)' }, 400);
+  }
+  var camp = valid[0];
+  if (!isValidHttpsUrl(capStr(body.clickUrl, URL_MAX))) {
+    return json({ ok: false, error: 'clickUrl must be a valid https:// URL' }, 400);
+  }
+  if (!(camp.cpm >= SUBMIT_MIN_CPM)) {
+    return json({ ok: false, error: 'minimum bid is $' + SUBMIT_MIN_CPM + ' CPM' }, 400);
+  }
+  var kv = env.SITE_KV;
+  var feedRaw = null;
+  try { feedRaw = await kv.get('feed:current'); } catch (e0) { feedRaw = null; }
+  var feed = feedFromKVText(feedRaw);
+  feed = feed || [];
+  var queue = await readQueue(kv);
+  for (var i = 0; i < feed.length; i++) {
+    if (feed[i] && feed[i].id === camp.id) {
+      return json({ ok: false, error: 'id already live in the feed' }, 409);
+    }
+  }
+  for (var j = 0; j < queue.length; j++) {
+    if (queue[j] && queue[j].id === camp.id) {
+      return json({ ok: false, error: 'id already awaiting review' }, 409);
+    }
+  }
+  if (queue.length >= QUEUE_MAX) {
+    return json({ ok: false, error: 'review queue is full — try again later' }, 429);
+  }
+  var day = todayKey(Date.now());
+  var rateKey = 'sub:' + clientIP(req) + ':' + day;
+  var used = 0;
+  try { used = Number(await kv.get(rateKey)) || 0; } catch (e) { used = 0; }
+  if (used >= SUBMIT_MAX_PER_DAY) {
+    return json({ ok: false, error: 'daily submission limit reached (5/day per network)' }, 429);
+  }
+  try {
+    await kv.put(rateKey, String(used + 1), { expirationTtl: 86400 });
+  } catch (e2) { /* rate-limit write failed — still accept, queue is the record */ }
+  camp.submittedAt = Date.now();
+  queue.push(camp);
+  try {
+    await writeQueue(kv, queue);
+  } catch (e3) {
+    return json({ ok: false, error: 'ledger unavailable' }, 503);
+  }
+  return json({ ok: true, status: 'pending-review', id: camp.id,
+    note: 'A human reviews every submission before it can serve. Watch /feed.json.' }, 200);
+}
+
+function requireAdmin(env, req) {
+  var auth = '';
+  try { auth = req.headers.get('authorization') || ''; } catch (e) { auth = ''; }
+  var expected = 'Bearer ' + (env && env.ADMIN_TOKEN ? env.ADMIN_TOKEN : '');
+  return !!(env && env.ADMIN_TOKEN && safeEqual(auth, expected));
+}
+
+async function handleAdminQueue(req, env) {
+  if (!requireAdmin(env, req)) return json({ ok: false, error: 'unauthorized' }, 401);
+  if (!env.SITE_KV) return json({ ok: false, error: 'KV not configured (SITE_KV binding missing)' }, 503);
+  return json({ campaigns: await readQueue(env.SITE_KV) }, 200);
+}
+
+async function handleAdminReview(req, env) {
+  if (!requireAdmin(env, req)) return json({ ok: false, error: 'unauthorized' }, 401);
+  if (!env.SITE_KV) return json({ ok: false, error: 'KV not configured (SITE_KV binding missing)' }, 503);
+  var body;
+  try { body = await req.json(); }
+  catch (e) { return json({ ok: false, error: 'invalid JSON body' }, 400); }
+  var id = (body && typeof body.id === 'string') ? capStr(body.id, ID_MAX) : '';
+  if (!id) return json({ ok: false, error: 'id required' }, 400);
+  var approved = !!(body && body.approve);
+  var kv = env.SITE_KV;
+  var queue = await readQueue(kv);
+  var at = -1;
+  for (var i = 0; i < queue.length; i++) {
+    if (queue[i] && queue[i].id === id) { at = i; break; }
+  }
+  if (at === -1) return json({ ok: false, error: 'id not in the review queue' }, 404);
+  var camp = queue[at];
+  queue.splice(at, 1);
+  if (approved) {
+    var feedRaw = null;
+    try { feedRaw = await kv.get('feed:current'); } catch (e0) { feedRaw = null; }
+    var feed = feedFromKVText(feedRaw);
+    feed = feed || [];
+    if (feed.length >= MAX_CAMPAIGNS) {
+      await writeQueue(kv, queue).catch(function () {});
+      return json({ ok: false, error: 'live feed is full (20) — remove one via POST /admin/feed first' }, 409);
+    }
+    delete camp.submittedAt;
+    feed.push(camp);
+    try {
+      await kv.put('feed:current', JSON.stringify(feed));
+      await writeQueue(kv, queue);
+    } catch (e2) {
+      return json({ ok: false, error: 'ledger unavailable' }, 503);
+    }
+    return json({ ok: true, status: 'live', id: id }, 200);
+  }
+  try { await writeQueue(kv, queue); } catch (e3) { /* best-effort */ }
+  return json({ ok: true, status: 'rejected', id: id }, 200);
+}
+
+/* ============================== slot auction ==============================
+   Pure helpers first (exported for backend/test.mjs), then the KV handlers.
+   Every slot helper is deterministic and takes an injected `now`, so the
+   whole auction is unit-testable with no clock and no network.
+   ========================================================================= */
+
+function pad2(n) { return (n < 10 ? '0' : '') + n; }
+
+function slotDateKey(ts) {
+  var d = new Date(ts);
+  return d.getUTCFullYear() + '-' + pad2(d.getUTCMonth() + 1) + '-' + pad2(d.getUTCDate());
+}
+
+/* The slot containing `ts`: "YYYY-MM-DD#<block>". */
+function slotIdOf(ts) {
+  var t = (typeof ts === 'number' && isFinite(ts)) ? ts : 0;
+  var d = new Date(t);
+  return slotDateKey(t) + '#' + Math.floor(d.getUTCHours() / SLOT_BLOCK_HOURS);
+}
+
+function slotMonthOf(ts) {
+  var d = new Date(typeof ts === 'number' && isFinite(ts) ? ts : 0);
+  return d.getUTCFullYear() + '-' + pad2(d.getUTCMonth() + 1);
+}
+
+/* "YYYY-MM-DD#B" → {id, date, block, startsAt, endsAt, month} or null.
+   Rejects rolled-over dates (2026-02-31) and out-of-range blocks. */
+function parseSlotId(id) {
+  if (typeof id !== 'string') return null;
+  var m = SLOT_ID_RE.exec(id);
+  if (!m) return null;
+  var y = +m[1], mo = +m[2], da = +m[3], b = +m[4];
+  if (mo < 1 || mo > 12 || da < 1 || da > 31) return null;
+  if (!(b >= 0 && b < SLOT_BLOCKS_PER_DAY)) return null;
+  var startsAt = Date.UTC(y, mo - 1, da, b * SLOT_BLOCK_HOURS, 0, 0);
+  var d = new Date(startsAt);
+  if (d.getUTCFullYear() !== y || d.getUTCMonth() !== mo - 1 || d.getUTCDate() !== da) return null;
+  return {
+    id: y + '-' + pad2(mo) + '-' + pad2(da) + '#' + b,
+    date: slotDateKey(startsAt), block: b,
+    startsAt: startsAt, endsAt: startsAt + SLOT_BLOCK_HOURS * 3600000,
+    month: slotMonthOf(startsAt)
+  };
+}
+
+/* A stored bid → the campaign shape /feed.json serves. */
+function bidToCampaign(b) {
+  if (!b || typeof b !== 'object') return null;
+  return {
+    id: b.campaignId, sponsor: b.sponsor, tagline: b.tagline,
+    clickUrl: b.clickUrl, cpm: b.cpm, logoText: b.logoText,
+    accent: b.accent, allowClicks: b.allowClicks !== false
+  };
+}
+
+/* One bid → a stored bid, or null when unusable. Reuses the campaign
+   validator so a slot bid obeys exactly the feed's field rules.
+
+   Accepts BOTH shapes on purpose: a CLIENT bid carries `id` (the feed's field
+   name), a STORED bid carries `campaignId` (the served/ledger field name).
+   Reading KV back through here must not drop real bids, so resolve whichever
+   is present before validating. */
+function normalizeBid(raw, now) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  var rawId = (typeof raw.campaignId === 'string' && raw.campaignId) ? raw.campaignId : raw.id;
+  var v = validateCampaigns([{
+    id: capStr(rawId, ID_MAX),
+    sponsor: raw.sponsor,
+    tagline: raw.tagline,
+    clickUrl: raw.clickUrl,
+    cpm: raw.cpm,
+    logoText: raw.logoText,
+    accent: raw.accent,
+    allowClicks: raw.allowClicks
+  }])[0];
+  if (!v) return null;
+  var cpm = Number(v.cpm);
+  if (!isFinite(cpm) || cpm < SLOT_MIN_CPM) return null;
+  var ts = Number(raw.bidTs);
+  if (!isFinite(ts) || ts <= 0) ts = (typeof now === 'number' && isFinite(now)) ? now : 0;
+  return {
+    campaignId: v.id, sponsor: v.sponsor, tagline: v.tagline,
+    clickUrl: v.clickUrl, cpm: round2(cpm), logoText: v.logoText,
+    accent: v.accent, allowClicks: v.allowClicks,
+    bidder: capStr(raw.bidder, BIDDER_MAX), bidTs: ts
+  };
+}
+
+/* Highest CPM wins; a tie goes to the earlier bid. */
+function slotWinner(bids) {
+  if (!Array.isArray(bids) || !bids.length) return null;
+  var best = null;
+  for (var i = 0; i < bids.length; i++) {
+    var b = bids[i];
+    if (!b || typeof b !== 'object') continue;
+    if (!best) { best = b; continue; }
+    if (b.cpm > best.cpm) best = b;
+    else if (b.cpm === best.cpm && b.bidTs < best.bidTs) best = b;
+  }
+  return best;
+}
+
+function sortBids(bids) {
+  return bids.slice().sort(function (a, b) {
+    if (b.cpm !== a.cpm) return b.cpm - a.cpm;   // highest CPM first
+    return a.bidTs - b.bidTs;                    // ties: earliest first
+  });
+}
+
+/* Add a bid to a slot. A second bid from the SAME campaignId REPLACES that
+   campaign's earlier bid on this slot (so raising a bid is one call), then
+   the list is re-sorted and capped. */
+function placeBid(bids, bid) {
+  var list = Array.isArray(bids) ? bids : [];
+  var out = [];
+  for (var i = 0; i < list.length; i++) {
+    if (list[i] && list[i].campaignId !== bid.campaignId) out.push(list[i]);
+  }
+  out.push(bid);
+  return sortBids(out).slice(0, SLOT_BIDS_KEPT);
+}
+
+/* Defensive read of a month store: drop anything malformed rather than
+   letting one bad write poison a whole month of auctions. */
+function normalizeMonthStore(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  var out = {};
+  for (var date in raw) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+    var day = raw[date];
+    if (!day || typeof day !== 'object' || Array.isArray(day)) continue;
+    var blocks = {};
+    for (var k in day) {
+      var b = Number(k);
+      if (!(b >= 0 && b < SLOT_BLOCKS_PER_DAY)) continue;
+      if (!Array.isArray(day[k])) continue;
+      var clean = [];
+      for (var i = 0; i < day[k].length; i++) {
+        var nb = normalizeBid(day[k][i], 0);
+        if (nb) clean.push(nb);
+      }
+      if (clean.length) blocks[b] = sortBids(clean).slice(0, SLOT_BIDS_KEPT);
+    }
+    if (Object.keys(blocks).length) out[date] = blocks;
+  }
+  return out;
+}
+
+/* A whole month's grid for the picker: every slot, its state, and the
+   current top bid (enough to render "beat $6.00" without exposing bidders). */
+function slotGrid(store, month, now) {
+  var m = MONTH_RE.exec(String(month || ''));
+  if (!m) return null;
+  var y = +m[1], mo = +m[2];
+  if (mo < 1 || mo > 12) return null;
+  var t = (typeof now === 'number' && isFinite(now)) ? now : 0;
+  var daysInMonth = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+  var slots = [];
+  for (var da = 1; da <= daysInMonth; da++) {
+    for (var b = 0; b < SLOT_BLOCKS_PER_DAY; b++) {
+      var p = parseSlotId(y + '-' + pad2(mo) + '-' + pad2(da) + '#' + b);
+      if (!p) continue;
+      var bids = (store[p.date] && store[p.date][b]) || [];
+      var w = slotWinner(bids);
+      slots.push({
+        id: p.id,
+        startsAt: p.startsAt,
+        endsAt: p.endsAt,
+        state: t < p.startsAt ? 'open' : (t < p.endsAt ? 'active' : 'past'),
+        bidCount: bids.length,
+        topCpm: w ? w.cpm : null,
+        topSponsor: w ? w.sponsor : null,
+        topCampaignId: w ? w.campaignId : null
+      });
+    }
+  }
+  return {
+    month: y + '-' + pad2(mo),
+    blockHours: SLOT_BLOCK_HOURS,
+    blocksPerDay: SLOT_BLOCKS_PER_DAY,
+    timezone: 'UTC',
+    slots: slots
+  };
+}
+
+async function readMonthStore(kv, month) {
+  try {
+    var raw = await kv.get('slots:' + month);
+    if (!raw) return {};
+    return normalizeMonthStore(JSON.parse(raw));
+  } catch (e) { return {}; }
+}
+
+/* The slot covering `now`, with its resolved winner. Null when no KV. */
+async function currentSlot(env, now) {
+  if (!env || !env.SITE_KV) return null;
+  var t = (typeof now === 'number' && isFinite(now)) ? now : Date.now();
+  var p = parseSlotId(slotIdOf(t));
+  if (!p) return null;
+  var store = await readMonthStore(env.SITE_KV, p.month);
+  var bids = (store[p.date] && store[p.date][p.block]) || [];
+  var w = slotWinner(bids);
+  return {
+    id: p.id, startsAt: p.startsAt, endsAt: p.endsAt,
+    topCpm: w ? w.cpm : null, bidCount: bids.length,
+    winner: w ? bidToCampaign(w) : null
+  };
+}
+
+/* What actually serves right now. A slot with a winner is EXCLUSIVE — the
+   open feed is suppressed for the duration, which is what "winner takes all"
+   means. With no slot winner the open CPM auction serves as it always has. */
+async function servingList(env, feedCampaigns) {
+  var slot = await currentSlot(env, Date.now());
+  if (slot && slot.winner) return { campaigns: [slot.winner], slot: slot };
+  return { campaigns: feedCampaigns, slot: slot };
+}
+
+/* ------------------------------ slot handlers --------------------------- */
+async function handleSlots(env, month) {
+  if (!env || !env.SITE_KV) {
+    return json({ ok: false, error: 'KV not configured (SITE_KV binding missing)' }, 503);
+  }
+  var want = month || slotMonthOf(Date.now());
+  if (!MONTH_RE.test(String(want))) return json({ ok: false, error: 'month must be YYYY-MM' }, 400);
+  var store = await readMonthStore(env.SITE_KV, want);
+  var grid = slotGrid(store, want, Date.now());
+  if (!grid) return json({ ok: false, error: 'month must be YYYY-MM' }, 400);
+  return json(grid, 200, { 'cache-control': 'public, max-age=30' });
+}
+
+async function handleSlotBid(req, env) {
+  if (!env || !env.SITE_KV) {
+    return json({ ok: false, error: 'KV not configured (SITE_KV binding missing)' }, 503);
+  }
+  var body;
+  try { body = await req.json(); }
+  catch (e) { return json({ ok: false, error: 'invalid JSON body' }, 400); }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return json({ ok: false, error: 'send one bid object: {campaign, slots[], bidder}' }, 400);
+  }
+
+  var now = Date.now();
+  var bidder = capStr(body.bidder, BIDDER_MAX);
+  if (!bidder) {
+    return json({ ok: false, error: 'bidder is required — a contact email or handle' }, 400);
+  }
+  var raw = body.campaign;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return json({ ok: false, error: 'campaign object required' }, 400);
+  }
+  var camp = validateCampaigns([raw])[0];
+  if (!camp) {
+    return json({ ok: false, error: 'campaign needs an id and a sponsor (max 40 chars each)' }, 400);
+  }
+  if (!isValidHttpsUrl(capStr(raw.clickUrl, URL_MAX))) {
+    return json({ ok: false, error: 'clickUrl must be a valid https:// URL' }, 400);
+  }
+  if (!(Number(camp.cpm) >= SLOT_MIN_CPM)) {
+    return json({ ok: false, error: 'minimum bid is $' + SLOT_MIN_CPM + ' CPM' }, 400);
+  }
+  var slots = Array.isArray(body.slots) ? body.slots : [];
+  if (!slots.length) return json({ ok: false, error: 'select at least one slot' }, 400);
+  if (slots.length > SLOT_MAX_PER_REQUEST) {
+    return json({ ok: false, error: 'at most ' + SLOT_MAX_PER_REQUEST + ' slots per request' }, 400);
+  }
+
+  /* Sort the request into bookable slots and honest rejections. */
+  var byMonth = {}, rejected = [], seen = {}, count = 0;
+  for (var i = 0; i < slots.length; i++) {
+    var p = parseSlotId(slots[i]);
+    if (!p) { rejected.push({ slot: String(slots[i]).slice(0, 40), reason: 'not a valid slot id' }); continue; }
+    if (seen[p.id]) continue;
+    seen[p.id] = true;
+    if (p.startsAt <= now) { rejected.push({ slot: p.id, reason: 'slot already started' }); continue; }
+    if (p.startsAt > now + SLOT_MAX_AHEAD_DAYS * 86400000) {
+      rejected.push({ slot: p.id, reason: 'more than ' + SLOT_MAX_AHEAD_DAYS + ' days ahead' }); continue;
+    }
+    if (!byMonth[p.month]) byMonth[p.month] = [];
+    byMonth[p.month].push(p);
+    count++;
+  }
+  if (!count) {
+    return json({ ok: false, error: 'no bookable slots in the request', rejected: rejected }, 400);
+  }
+
+  /* Same per-IP daily limit as /submit. */
+  var rateKey = 'slotbid:' + clientIP(req) + ':' + todayKey(now);
+  var used = 0;
+  try { used = Number(await env.SITE_KV.get(rateKey)) || 0; } catch (e) { used = 0; }
+  if (used >= SLOT_RATE_PER_DAY) {
+    return json({ ok: false, error: 'daily bid limit reached (' + SLOT_RATE_PER_DAY + '/day per network)' }, 429);
+  }
+
+  var bid = normalizeBid({
+    id: camp.id, sponsor: camp.sponsor, tagline: camp.tagline,
+    clickUrl: raw.clickUrl, cpm: camp.cpm, logoText: camp.logoText,
+    accent: camp.accent, allowClicks: camp.allowClicks,
+    bidder: bidder, bidTs: now
+  }, now);
+  if (!bid) return json({ ok: false, error: 'bid could not be validated' }, 400);
+
+  var placed = [], winning = 0;
+  var months = Object.keys(byMonth);
+  for (var mIdx = 0; mIdx < months.length; mIdx++) {
+    var month = months[mIdx];
+    var store = await readMonthStore(env.SITE_KV, month);
+    var group = byMonth[month];
+    for (var g = 0; g < group.length; g++) {
+      var s = group[g];
+      if (!store[s.date]) store[s.date] = {};
+      var existing = store[s.date][s.block] || [];
+      var next = placeBid(existing, bid);
+      store[s.date][s.block] = next;
+      var w = slotWinner(next);
+      var isTop = !!(w && w.campaignId === bid.campaignId);
+      if (isTop) winning++;
+      placed.push({
+        slot: s.id, top: isTop,
+        topCpm: w ? w.cpm : null,
+        topSponsor: w ? w.sponsor : null,
+        outbid: !isTop && w ? w.cpm : null
+      });
+    }
+    try {
+      await env.SITE_KV.put('slots:' + month, JSON.stringify(store));
+    } catch (e2) {
+      return json({ ok: false, error: 'ledger unavailable', placed: placed }, 503);
+    }
+  }
+
+  try {
+    await env.SITE_KV.put(rateKey, String(used + 1), { expirationTtl: 86400 });
+  } catch (e3) { /* rate-limit write failed — the bids are already the record */ }
+
+  return json({
+    ok: true,
+    campaignId: bid.campaignId,
+    cpm: bid.cpm,
+    placed: placed.length,
+    winning: winning,
+    outbidOn: placed.length - winning,
+    slots: placed,
+    rejected: rejected,
+    note: winning === placed.length
+      ? 'You hold the top bid on every slot selected.'
+      : 'You hold ' + winning + ' of ' + placed.length +
+        ' — raise your CPM to take the rest. Highest bid per slot wins it outright.'
+  }, 200);
+}
+
 /* ------------------------------ entrypoint ------------------------------ */
 async function handleFetch(request, env, ctx) {
   try {
@@ -1129,6 +1768,19 @@ async function handleFetch(request, env, ctx) {
       }
       case 'adminFeed':
         return await handleAdminFeed(request, env);
+      case 'submit':
+        return await handleSubmit(request, env);
+      case 'adminQueue':
+        return await handleAdminQueue(request, env);
+      case 'adminReview':
+        return await handleAdminReview(request, env);
+      case 'slots':
+        return await handleSlots(env, url.searchParams.get('month'));
+      case 'slotBid':
+        return await handleSlotBid(request, env);
+      case 'slotCurrent':
+        return json({ ok: true, slot: await currentSlot(env, Date.now()) }, 200,
+          { 'cache-control': 'public, max-age=15' });
       case 'health':
         return json({ ok: true }, 200);
     }
@@ -1173,6 +1825,8 @@ export {
   /* flywheel */
   normalizeRefCode,
   normalizePlatform,
+  normalizeRegion,
+  shareList,
   bumpPlatform,
   platformsOf,
   applyReferralRegister,
@@ -1185,5 +1839,21 @@ export {
   REFERRAL_TERM_DAYS,
   REFERRAL_GATE_MINUTES,
   REFERRAL_GATE_DAYS,
-  REFERRALS_MAX
+  REFERRALS_MAX,
+  /* slot auction */
+  slotIdOf,
+  slotMonthOf,
+  parseSlotId,
+  normalizeBid,
+  slotWinner,
+  sortBids,
+  placeBid,
+  bidToCampaign,
+  normalizeMonthStore,
+  slotGrid,
+  SLOT_BLOCK_HOURS,
+  SLOT_BLOCKS_PER_DAY,
+  SLOT_MIN_CPM,
+  SLOT_BIDS_KEPT,
+  SLOT_MAX_PER_REQUEST
 };

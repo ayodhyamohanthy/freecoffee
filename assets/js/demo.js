@@ -989,6 +989,7 @@
         { id: 'github', label: 'GitHub', href: attributedUrl(c, 'github', DIST_REPO) },
         { id: 'agent', label: 'AI agent (MCP)', href: attributedUrl(c, 'agent', 'https://freecoffee.tech/agents.html') },
         { id: 'x', label: 'X', href: 'https://twitter.com/intent/tweet?url=' + enc(attributedUrl(c, 'x', t)) + '&text=' + enc(SHARE_TEXT) },
+        { id: 'whatsapp', label: 'WhatsApp', href: 'https://wa.me/?text=' + enc(SHARE_TEXT + '\n\n' + attributedUrl(c, 'whatsapp', t)) },
         { id: 'linkedin', label: 'LinkedIn', href: 'https://www.linkedin.com/sharing/share-offsite/?url=' + enc(attributedUrl(c, 'linkedin', t)) },
         { id: 'reddit', label: 'Reddit', href: 'https://www.reddit.com/submit?url=' + enc(attributedUrl(c, 'reddit', t)) + '&title=' + enc(HN_TEXT) },
         { id: 'hn', label: 'Hacker News', href: 'https://news.ycombinator.com/submitlink?u=' + enc(attributedUrl(c, 'hn', t)) + '&t=' + enc(HN_TEXT) },

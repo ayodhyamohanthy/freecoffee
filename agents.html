@@ -5,6 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Agents — FreeCoffee</title>
 <meta name="description" content="FreeCoffee ships an MCP-compatible HTTP API — let your AI agent create campaigns, read performance, and fund the coffee money. Demo.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="FreeCoffee">
+<meta property="og:title" content="Agents — FreeCoffee">
+<meta property="og:description" content="Drive FreeCoffee from any MCP-capable AI agent: campaigns, earnings, delivery.">
+<meta property="og:url" content="https://freecoffee.tech/agents.html">
+<meta property="og:image" content="https://freecoffee.tech/assets/icons/icon-512.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Agents — FreeCoffee">
+<meta name="twitter:description" content="Drive FreeCoffee from any MCP-capable AI agent: campaigns, earnings, delivery.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2314100D'/%3E%3Cpath d='M8 13h11a1 1 0 0 1 1 1v5a4 4 0 0 1-4 4h-5a4 4 0 0 1-4-4v-5a1 1 0 0 1 1-1z' fill='%23E0A93E'/%3E%3Cpath d='M20 14h2.2a2.4 2.4 0 0 1 0 4.8H20v-1.6h2.2a.8.8 0 0 0 0-1.6H20z' fill='%23E0A93E'/%3E%3Crect x='7' y='10.6' width='13.5' height='1.6' rx='.8' fill='%23E0A93E'/%3E%3C/svg%3E">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#F7F6F3">
@@ -12,7 +21,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<link rel="stylesheet" href="assets/css/styles.css?v=124">
+<link rel="stylesheet" href="assets/css/styles.css?v=1002004">
 </head>
 <body data-page="agents" class="theme-light">
 
@@ -162,6 +171,23 @@
   "description": "Menu-bar advertising on FreeCoffee — create campaigns, read earnings.",
   "tools": [
     {
+      "name": "freecoffee_submit_campaign",
+      "description": "Submit ONE campaign to the open auction (no token). Lands in the human-review queue; serves only after approval. Highest CPM wins the minute.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id":       { "type": "string", "maxLength": 40 },
+          "sponsor":  { "type": "string", "maxLength": 40 },
+          "tagline":  { "type": "string", "maxLength": 90 },
+          "clickUrl": { "type": "string", "pattern": "^https://" },
+          "cpm":      { "type": "number", "minimum": 1, "maximum": 100 },
+          "logoText": { "type": "string", "maxLength": 2 },
+          "accent":   { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" }
+        },
+        "required": ["id", "sponsor", "clickUrl", "cpm"]
+      }
+    },
+    {
       "name": "freecoffee_publish_feed",
       "description": "Replace the current ad feed with a validated campaign array (max 20).",
       "inputSchema": {
@@ -270,7 +296,7 @@
 
 <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="false"></div>
 
-<script src="assets/js/demo.js?v=124"></script>
+<script src="assets/js/demo.js?v=1002004"></script>
 <script>
 /* Agents page — Copy buttons (same pattern as referrals.html). */
 (function () {

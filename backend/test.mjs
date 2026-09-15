@@ -16,6 +16,8 @@ import {
   workerFetch,
   normalizeRefCode,
   normalizePlatform,
+  normalizeRegion,
+  shareList,
   bumpPlatform,
   platformsOf,
   applyReferralRegister,
@@ -23,7 +25,21 @@ import {
   applyReferralAccrual,
   applyReferralCredit,
   refereeView,
-  referralView
+  referralView,
+  /* slot auction */
+  slotIdOf,
+  slotMonthOf,
+  parseSlotId,
+  normalizeBid,
+  slotWinner,
+  sortBids,
+  placeBid,
+  bidToCampaign,
+  normalizeMonthStore,
+  slotGrid,
+  SLOT_BLOCK_HOURS,
+  SLOT_BLOCKS_PER_DAY,
+  SLOT_BIDS_KEPT
 } from './src/worker.js';
 
 /* Fixed device ids (hex-only per DEVICE_ID_RE) used by the flywheel groups. */
@@ -341,7 +357,8 @@ function pass(name) { n++; console.log('PASS ' + name); }
   // No KV at all → honest zeros, still 200.
   const bare = await workerFetch(new Request('https://x.test/stats'), {}, {});
   assert.equal(bare.status, 200);
-  assert.deepEqual((await bare.json()).totals, { impressions: 0, clicks: 0, spend: 0, earners: 0 });
+  assert.deepEqual((await bare.json()).totals,
+    { impressions: 0, clicks: 0, spend: 0, earners: 0, hours: 0, devices: 0 });
 
   // Wrong method → 404 like every other unknown route.
   const bad = await workerFetch(new Request('https://x.test/stats', { method: 'POST' }), env, {});
@@ -597,6 +614,419 @@ function pass(name) { n++; console.log('PASS ' + name); }
   assert.deepEqual(stats.platforms, [{ platform: 'mac', minutes: 60, clicks: 0 }]);
 
   pass('loop end-to-end: claim → gate → referrer paid → public mix, no ids leaked');
+}
+
+/* ------------------------------------------------------------------------
+   18. Open submission: anyone posts ONE campaign → pending-review queue →
+       admin approve/reject. Spam controls: id+sponsor required, https
+       destination required, $1 CPM floor, no duplicate ids, 5/day per IP,
+       queue capped at 50, feed capped at 20.
+   ------------------------------------------------------------------------ */
+{
+  const store = {};
+  const kv = {
+    get: async (k) => (k in store ? store[k] : null),
+    put: async (k, v) => { store[k] = String(v); },
+    list: async () => ({ keys: [], list_complete: true, cursor: '' })
+  };
+  const env = { SITE_KV: kv, ADMIN_TOKEN: 'test-token' };
+  const post = (path, body, headers) => workerFetch(new Request('https://x.test' + path, {
+    method: 'POST',
+    headers: Object.assign({ 'Content-Type': 'application/json' }, headers || {}),
+    body: JSON.stringify(body)
+  }), env, {});
+  const authed = { Authorization: 'Bearer test-token' };
+  const good = (id, cpm) => ({
+    id, sponsor: 'Sponsor ' + id, tagline: 'Real test ad',
+    clickUrl: 'https://ads.example/' + id, cpm: cpm === undefined ? 6 : cpm
+  });
+
+  let r = await post('/submit', good('sub1'));
+  assert.equal(r.status, 200, 'valid submit accepted');
+  assert.deepEqual(await r.json().then((b) => [b.status, b.id]), ['pending-review', 'sub1']);
+
+  assert.equal((await post('/submit', { id: 'x' })).status, 400, 'missing sponsor rejected');
+  assert.equal((await post('/submit', { id: 'x', sponsor: 'S', clickUrl: 'http://nope.example/' })).status, 400, 'http destination rejected');
+  assert.equal((await post('/submit', good('cheap', 0.5))).status, 400, 'sub-$1 bid rejected');
+  assert.equal((await post('/submit', [good('arr')])).status, 400, 'array body rejected');
+  assert.equal((await post('/submit', good('sub1'))).status, 409, 'duplicate id rejected');
+
+  // Rate limit: 5/day per IP, 6th refused (distinct IP per submitter).
+  for (let i = 2; i <= 6; i++) {
+    const rr = await post('/submit', good('rl' + i), { 'cf-connecting-ip': '9.9.9.9' });
+    assert.equal(rr.status, 200, 'submit ' + i + '/5 for one IP accepted');
+  }
+  assert.equal((await post('/submit', good('rl7'), { 'cf-connecting-ip': '9.9.9.9' })).status, 429, '6th submit in a day refused');
+
+  // Admin gates.
+  const noAuth = await workerFetch(new Request('https://x.test/admin/queue'), env, {});
+  assert.equal(noAuth.status, 401, 'queue needs the token');
+  const q = await (await workerFetch(new Request('https://x.test/admin/queue', { headers: authed }), env, {})).json();
+  assert.ok(q.campaigns.some((c) => c.id === 'sub1'), 'sub1 waits in the queue');
+  const badReview = await post('/admin/review', { id: 'sub1', approve: true });
+  assert.equal(badReview.status, 401, 'review needs the token');
+
+  // Approve → live in /feed.json; reject → gone.
+  assert.equal((await post('/admin/review', { id: 'sub1', approve: true }, authed)).status, 200, 'approve ok');
+  const feed = await (await workerFetch(new Request('https://x.test/feed.json'), env, {})).json();
+  assert.ok(feed.campaigns.some((c) => c.id === 'sub1'), 'approved campaign serves');
+  assert.equal((await post('/admin/review', { id: 'nope', approve: true }, authed)).status, 404, 'unknown id → 404');
+  await post('/submit', good('subrej'), authed);
+  assert.equal((await post('/admin/review', { id: 'subrej', approve: false }, authed)).status, 200, 'reject ok');
+  const q2 = await (await workerFetch(new Request('https://x.test/admin/queue', { headers: authed }), env, {})).json();
+  assert.ok(!q2.campaigns.some((c) => c.id === 'subrej'), 'rejected campaign leaves the queue');
+
+  // Feed full (20) → approve refuses with 409, queue keeps the entry.
+  const full = [];
+  for (let i = 0; i < 20; i++) full.push(good('fill' + i));
+  assert.equal((await post('/admin/feed', full, authed)).status, 200, 'feed filled to 20');
+  await post('/submit', good('toofull'), authed);
+  assert.equal((await post('/admin/review', { id: 'toofull', approve: true }, authed)).status, 409, 'approve into a full feed refused');
+
+  // Queue full (50) → submit refused with 429.
+  const fifty = [];
+  for (let i = 0; i < 50; i++) fifty.push(good('qfill' + i));
+  await kv.put('queue:campaigns', JSON.stringify(fifty));
+  assert.equal((await post('/submit', good('one-more'), authed)).status, 429, 'submit into a full queue refused');
+
+  pass('open submission: validate → queue → approve/reject, floors, caps, auth');
+}
+
+/* ------------------------------------------------------------------------
+   19. Slot ids — 4-hour blocks, UTC boundaries, invalid shapes rejected
+   ------------------------------------------------------------------------ */
+{
+  assert.equal(SLOT_BLOCK_HOURS, 4);
+  assert.equal(SLOT_BLOCKS_PER_DAY, 6);
+
+  const t = Date.UTC(2026, 8, 16, 9, 30, 0);      // 09:30 UTC → block 2 (08–12)
+  assert.equal(slotIdOf(t), '2026-09-16#2');
+  assert.equal(slotMonthOf(t), '2026-09');
+
+  const p = parseSlotId('2026-09-16#2');
+  assert.equal(p.startsAt, Date.UTC(2026, 8, 16, 8, 0, 0));
+  assert.equal(p.endsAt, Date.UTC(2026, 8, 16, 12, 0, 0));
+  assert.equal(p.month, '2026-09');
+  assert.equal(p.date, '2026-09-16');
+  assert.equal(p.block, 2);
+
+  // Boundaries: 00:00 → block 0, 23:59 → block 5.
+  assert.equal(slotIdOf(Date.UTC(2026, 8, 16, 0, 0, 0)), '2026-09-16#0');
+  assert.equal(slotIdOf(Date.UTC(2026, 8, 16, 23, 59, 59)), '2026-09-16#5');
+  assert.equal(slotIdOf(Date.UTC(2026, 8, 16, 4, 0, 0)), '2026-09-16#1');
+
+  // Garbage is rejected, never silently coerced into a real slot.
+  ['', 'nope', '2026-09-16', '2026-09-16#6', '2026-09-16#-1', '2026-09-16#2#3',
+   '2026-13-01#0', '2026-02-31#0', '2026-00-10#0', null, 42, {}].forEach((bad) => {
+    assert.equal(parseSlotId(bad), null, 'rejects ' + JSON.stringify(bad));
+  });
+  // The 31st of a 30-day month rolls over and must not become Oct 1.
+  assert.equal(parseSlotId('2026-09-31#0'), null, 'rolled-over date rejected');
+  assert.equal(parseSlotId('2026-02-29#0'), null, 'non-leap Feb 29 rejected');
+  assert.ok(parseSlotId('2028-02-29#0'), 'leap-year Feb 29 accepted');
+
+  pass('slot ids: 4h UTC blocks, boundaries exact, invalid shapes rejected');
+}
+
+/* ------------------------------------------------------------------------
+   20. Auction — highest CPM wins, ties to the earlier bid, re-bid replaces
+   ------------------------------------------------------------------------ */
+{
+  const bid = (id, cpm, ts) => ({ campaignId: id, sponsor: 'S ' + id, cpm, bidTs: ts });
+
+  assert.equal(slotWinner([bid('a', 2, 1), bid('b', 6, 9), bid('c', 4, 5)]).campaignId, 'b');
+  assert.equal(slotWinner([bid('late', 6, 500), bid('early', 6, 100)]).campaignId, 'early',
+    'equal CPM → earliest bid takes it');
+  assert.equal(slotWinner([]), null);
+  assert.equal(slotWinner(null), null);
+  assert.equal(slotWinner([null, undefined]), null, 'junk bids never throw');
+
+  assert.deepEqual(
+    sortBids([bid('x', 3, 5), bid('y', 9, 9), bid('z', 3, 1)]).map((b) => b.campaignId),
+    ['y', 'z', 'x'], 'CPM desc, then earliest first');
+
+  // Re-bidding REPLACES that campaign's bid on the slot rather than stacking.
+  let list = placeBid([], bid('a', 2, 1));
+  list = placeBid(list, bid('b', 5, 2));
+  list = placeBid(list, bid('a', 7, 3));
+  assert.equal(list.length, 2, 'a raise replaced the old bid, not appended');
+  assert.equal(slotWinner(list).campaignId, 'a');
+  assert.equal(slotWinner(list).cpm, 7);
+
+  // Capped, and the cap keeps the BEST bids.
+  let many = [];
+  for (let i = 0; i < SLOT_BIDS_KEPT + 10; i++) many = placeBid(many, bid('c' + i, i + 1, i));
+  assert.equal(many.length, SLOT_BIDS_KEPT);
+  assert.equal(many[0].cpm, SLOT_BIDS_KEPT + 10, 'highest bid survives the cap');
+
+  // normalizeBid: floor, required fields, clamps, default clock.
+  assert.equal(normalizeBid({ id: 'a', sponsor: 'S', cpm: 0.5 }, 7), null, 'below $1 floor rejected');
+  assert.equal(normalizeBid({ sponsor: 'S', cpm: 5 }, 7), null, 'no id rejected');
+  assert.equal(normalizeBid(null, 7), null);
+  assert.equal(normalizeBid({ id: 'a', sponsor: 'S', cpm: 150 }, 7).cpm, 100, 'cpm clamped to 100');
+  assert.equal(normalizeBid({ id: 'a', sponsor: 'S', cpm: 5 }, 1234).bidTs, 1234,
+    'missing bidTs defaults to the injected clock');
+
+  pass('auction: highest CPM wins, ties earliest, re-bid replaces, capped at ' + SLOT_BIDS_KEPT);
+}
+
+/* ------------------------------------------------------------------------
+   21. Month store + grid — dirty KV is contained, grid is complete
+   ------------------------------------------------------------------------ */
+{
+  assert.deepEqual(normalizeMonthStore(null), {});
+  assert.deepEqual(normalizeMonthStore('x'), {});
+  assert.deepEqual(normalizeMonthStore([]), {});
+
+  const dirty = normalizeMonthStore({
+    '2026-09-16': {
+      '2': [{ campaignId: 'a', sponsor: 'S', cpm: 6, bidTs: 1 }],
+      '9': [{ campaignId: 'b', sponsor: 'S', cpm: 9, bidTs: 1 }]   // block out of range
+    },
+    'not-a-date': { '0': [{ campaignId: 'c', sponsor: 'S', cpm: 9, bidTs: 1 }] },
+    '2026-09-17': 'garbage'
+  });
+  assert.deepEqual(Object.keys(dirty), ['2026-09-16'], 'bad dates and non-objects dropped');
+  assert.deepEqual(Object.keys(dirty['2026-09-16']), ['2'], 'out-of-range block dropped');
+
+  const store = { '2026-09-16': { 2: [{ campaignId: 'a', sponsor: 'Acme', cpm: 6, bidTs: 1 }] } };
+  const g = slotGrid(store, '2026-09', Date.UTC(2026, 8, 16, 9, 0, 0));
+  assert.equal(g.month, '2026-09');
+  assert.equal(g.blockHours, 4);
+  assert.equal(g.blocksPerDay, 6);
+  assert.equal(g.timezone, 'UTC');
+  assert.equal(g.slots.length, 30 * 6, 'every day × every block is offered');
+
+  const byId = {};
+  g.slots.forEach((s) => { byId[s.id] = s; });
+  assert.equal(byId['2026-09-16#2'].state, 'active', 'the slot containing now is active');
+  assert.equal(byId['2026-09-16#2'].topCpm, 6);
+  assert.equal(byId['2026-09-16#2'].topSponsor, 'Acme');
+  assert.equal(byId['2026-09-16#2'].bidCount, 1);
+  assert.equal(byId['2026-09-16#0'].state, 'past');
+  assert.equal(byId['2026-09-16#3'].state, 'open');
+  assert.equal(byId['2026-09-17#0'].topCpm, null, 'untouched slot has no top bid');
+  assert.equal(byId['2026-09-17#0'].bidCount, 0);
+
+  assert.equal(slotGrid({}, '2026-13', 0), null, 'month 13 → null');
+  assert.equal(slotGrid({}, 'nope', 0), null);
+  assert.equal(slotGrid({}, '2026-02', 0).slots.length, 28 * 6, 'February is 28 days');
+  assert.equal(slotGrid({}, '2028-02', 0).slots.length, 29 * 6, 'leap-year February is 29');
+
+  pass('month store + grid: dirty KV contained, every day/block offered, month lengths exact');
+}
+
+/* ------------------------------------------------------------------------
+   22. Slot auction over HTTP — bid, outbid, per-slot rejections, guards
+   ------------------------------------------------------------------------ */
+{
+  const store = {};
+  const kv = {
+    get: async (k) => (k in store ? store[k] : null),
+    put: async (k, v) => { store[k] = String(v); },
+    list: async () => ({ keys: [], list_complete: true, cursor: '' })
+  };
+  const env = { SITE_KV: kv };
+  const post = (path, body) => workerFetch(new Request('https://x.test' + path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  }), env, {});
+  const camp = (id, cpm) => ({
+    id, sponsor: 'Sponsor ' + id, tagline: 't',
+    clickUrl: 'https://ads.example/' + id, cpm
+  });
+
+  const slot = slotIdOf(Date.now() + 3 * 86400000);   // comfortably bookable
+  const month = slot.split('#')[0].slice(0, 7);
+
+  let r = await post('/slots/bid', { campaign: camp('slotA', 6), slots: [slot], bidder: 'a@example.com' });
+  assert.equal(r.status, 200, 'bid accepted');
+  let b = await r.json();
+  assert.equal(b.placed, 1);
+  assert.equal(b.winning, 1, 'first bid holds the slot');
+  assert.equal(b.slots[0].top, true);
+
+  // A higher CPM takes the slot outright.
+  b = await (await post('/slots/bid', { campaign: camp('slotB', 9), slots: [slot], bidder: 'b@example.com' })).json();
+  assert.equal(b.winning, 1, 'the higher bid takes the slot');
+  assert.equal(b.outbidOn, 0);
+
+  const g = await (await workerFetch(new Request('https://x.test/slots?month=' + month), env, {})).json();
+  const cell = g.slots.find((s) => s.id === slot);
+  assert.equal(cell.topCampaignId, 'slotB');
+  assert.equal(cell.topCpm, 9);
+  assert.equal(cell.bidCount, 2, 'both bids are retained behind the winner');
+
+  // Losing bidders are told they were outbid, and by how much.
+  b = await (await post('/slots/bid', { campaign: camp('slotC', 4), slots: [slot], bidder: 'c@example.com' })).json();
+  assert.equal(b.winning, 0);
+  assert.equal(b.outbidOn, 1);
+  assert.equal(b.slots[0].outbid, 9, 'reports the number to beat');
+
+  // Multiple slots in one request — the whole point of the picker.
+  const many = [slotIdOf(Date.now() + 4 * 86400000), slotIdOf(Date.now() + 5 * 86400000)];
+  b = await (await post('/slots/bid', { campaign: camp('slotD', 7), slots: many, bidder: 'd@example.com' })).json();
+  assert.equal(b.placed, 2, 'one request books several slots');
+  assert.equal(b.winning, 2);
+
+  // Rejections are reported per slot rather than swallowed.
+  b = await (await post('/slots/bid', { campaign: camp('slotE', 5), slots: ['nonsense', slot], bidder: 'e@example.com' })).json();
+  assert.equal(b.placed, 1, 'the valid slot still lands');
+  assert.ok(b.rejected.some((x) => x.slot === 'nonsense'), 'the invalid slot is reported');
+
+  // A slot that already started cannot be bought.
+  const past = slotIdOf(Date.now() - 3 * 86400000);
+  b = await (await post('/slots/bid', { campaign: camp('old', 5), slots: [past], bidder: 'o@example.com' })).json();
+  assert.ok(b.rejected.some((x) => /already started/.test(x.reason)), 'past slot refused');
+
+  // Guards.
+  assert.equal((await post('/slots/bid', { campaign: camp('z', 5), slots: [], bidder: 'z@x.com' })).status, 400, 'no slots → 400');
+  assert.equal((await post('/slots/bid', { campaign: camp('z', 5), slots: [slot] })).status, 400, 'no bidder → 400');
+  assert.equal((await post('/slots/bid', { campaign: camp('z', 0.5), slots: [slot], bidder: 'z@x.com' })).status, 400, 'sub-$1 → 400');
+  assert.equal((await post('/slots/bid', {
+    campaign: { id: 'z', sponsor: 'S', clickUrl: 'http://nope.example/', cpm: 5 },
+    slots: [slot], bidder: 'z@x.com'
+  })).status, 400, 'http destination → 400');
+  assert.equal((await post('/slots/bid', { campaign: camp('z', 5), slots: [slot], bidder: '' })).status, 400, 'blank bidder → 400');
+
+  // Route surface.
+  assert.equal((await workerFetch(new Request('https://x.test/slots?month=2026-13'), env, {})).status, 400, 'bad month → 400');
+  assert.equal((await workerFetch(new Request('https://x.test/slots/current'), env, {})).status, 200);
+  assert.equal((await workerFetch(new Request('https://x.test/slots/bid'), env, {})).status, 404, 'GET on bid → 404');
+
+  pass('slot auction over HTTP: bid, outbid, multi-slot, per-slot rejections, guards');
+}
+
+/* ------------------------------------------------------------------------
+   23. Winner takes all — an active slot suppresses the open feed, and the
+       money follows the SERVING list, not the raw feed
+   ------------------------------------------------------------------------ */
+{
+  const store = {};
+  const kv = {
+    get: async (k) => (k in store ? store[k] : null),
+    put: async (k, v) => { store[k] = String(v); },
+    list: async () => ({ keys: [], list_complete: true, cursor: '' })
+  };
+  const env = { SITE_KV: kv };
+  const now = Date.now();
+  const cur = slotIdOf(now);
+  const p = parseSlotId(cur);
+
+  const mkBid = (id, cpm, ts) => ({
+    campaignId: id, sponsor: 'Sponsor ' + id, tagline: 't',
+    clickUrl: 'https://ads.example/' + id, cpm, logoText: 'XX',
+    accent: '#C98F4E', allowClicks: true, bidder: id + '@x.com', bidTs: ts
+  });
+  // Written directly: a bid can only be placed before its slot starts.
+  const day = {};
+  day[p.block] = [mkBid('win1', 8, 1), mkBid('lose1', 3, 2)];
+  store['slots:' + p.month] = JSON.stringify({ [p.date]: day });
+  // An open feed whose CPM is far higher — it must still be suppressed.
+  store['feed:current'] = JSON.stringify([
+    { id: 'open1', sponsor: 'Open Co', tagline: 'o', clickUrl: 'https://ads.example/o', cpm: 20 }
+  ]);
+
+  const feed = await (await workerFetch(new Request('https://x.test/feed.json'), env, {})).json();
+  assert.equal(feed.campaigns.length, 1, 'winner takes the whole slot');
+  assert.equal(feed.campaigns[0].id, 'win1');
+  assert.equal(feed.slot.id, cur, 'the feed reports which slot is running');
+  assert.equal(feed.slot.winner.id, 'win1');
+  assert.equal(feed.slot.topCpm, 8);
+  assert.equal(feed.openFeedCount, 1, 'the suppressed open feed is still counted honestly');
+
+  const track = (campaignId, minutes) => workerFetch(new Request('https://x.test/track', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      deviceId: OWNER_DEV, type: 'impression', campaignId, minutes,
+      platform: 'mac', region: 'US'
+    })
+  }), env, {});
+
+  // 60 min at $8 CPM × 65% = $0.312 → served at 2 decimals.
+  const win = await (await track('win1', 60)).json();
+  assert.equal(win.earned, 0.31, 'the slot winner is paid at its own CPM');
+
+  // The suppressed campaign earns NOTHING while the slot runs.
+  const sup = await (await track('open1', 60)).json();
+  assert.equal(sup.earned, 0, 'a suppressed open-feed campaign cannot be paid during a slot');
+
+  // With no slot winner the open auction serves as before.
+  delete store['slots:' + p.month];
+  const feed2 = await (await workerFetch(new Request('https://x.test/feed.json'), env, {})).json();
+  assert.equal(feed2.campaigns.length, 1);
+  assert.equal(feed2.campaigns[0].id, 'open1', 'open feed resumes once the slot is clear');
+  assert.equal(feed2.slot.winner, null);
+
+  pass('winner takes all: active slot suppresses the open feed, and pay follows the serving list');
+}
+
+/* ------------------------------------------------------------------------
+   24. Delivery report — time, distinct devices, surfaces, regions
+   ------------------------------------------------------------------------ */
+{
+  const mk = (devId, rows) => ({ deviceId: devId, rows });
+
+  const agg = aggregateStats([
+    mk('dev-a', [
+      { t: 1, type: 'impression', campaignId: 'c1', amount: 0.1, minutes: 30, platform: 'mac', region: 'US' },
+      { t: 2, type: 'impression', campaignId: 'c1', amount: 0.1, minutes: 30, platform: 'mac', region: 'US' },
+      { t: 3, type: 'click', campaignId: 'c1', amount: 0.05, platform: 'mac', region: 'US' }
+    ]),
+    mk('dev-b', [
+      { t: 4, type: 'impression', campaignId: 'c1', amount: 0.1, minutes: 60, platform: 'web', region: 'IN' },
+      { t: 5, type: 'impression', campaignId: 'c2', amount: 0.2, minutes: 60, platform: 'pwa', region: 'DE' }
+    ])
+  ], [{ id: 'c1', sponsor: 'One' }, { id: 'c2', sponsor: 'Two' }]);
+
+  const c1 = agg.campaigns.find((c) => c.id === 'c1');
+  assert.equal(c1.impressions, 120, 'verified minutes summed');
+  assert.equal(c1.hours, 2, 'and the same figure in hours');
+  assert.equal(c1.devices, 2, 'two distinct devices reached');
+  assert.equal(c1.clicks, 1);
+  assert.equal(c1.sponsor, 'One', 'sponsor joined from the served feed');
+
+  assert.deepEqual(c1.surfaces.map((s) => [s.surface, s.minutes]), [['mac', 60], ['web', 60]]);
+  // Equal minutes → deterministic alphabetical tiebreak, so the order is stable.
+  assert.deepEqual(c1.regions.map((r) => [r.region, r.minutes]), [['IN', 60], ['US', 60]]);
+  assert.equal(c1.surfaces[0].share, 50, 'shares are a percentage of served time');
+  assert.equal(c1.regions[0].share, 50);
+
+  assert.equal(agg.campaigns.find((c) => c.id === 'c2').devices, 1);
+  assert.equal(agg.totals.devices, 2, 'network reach counts each device once');
+  assert.equal(agg.totals.hours, 3);
+  assert.equal(agg.regions.length, 3, 'network-wide region mix');
+
+  // A click with no served time must not inflate reach.
+  const clickOnly = aggregateStats([mk('dev-c', [
+    { t: 9, type: 'click', campaignId: 'c1', amount: 0.05, platform: 'mac', region: 'US' }
+  ])], []);
+  assert.equal(clickOnly.campaigns[0].impressions, 0);
+  assert.equal(clickOnly.campaigns[0].devices, 0, 'a click alone is not a reached device');
+
+  // Rows written before delivery reporting read as unknown, never crash.
+  const legacy = aggregateStats([{ deviceId: 'dev-d', rows: [
+    { t: 1, type: 'impression', campaignId: 'c1', amount: 0.1 }
+  ] }], []);
+  assert.equal(legacy.campaigns[0].regions[0].region, 'unknown');
+  assert.equal(legacy.campaigns[0].surfaces[0].surface, 'unknown');
+
+  // An unstamped ledger still counts as exactly one device, never zero or two.
+  const unstamped = aggregateStats([{ rows: [
+    { t: 1, type: 'impression', campaignId: 'c1', amount: 0.1, minutes: 5 }
+  ] }], []);
+  assert.equal(unstamped.campaigns[0].devices, 1);
+
+  // Region is a 2-letter code or unknown — nothing else is ever stored.
+  assert.equal(normalizeRegion('us'), 'US');
+  assert.equal(normalizeRegion(' US '), 'US');
+  assert.equal(normalizeRegion('USA'), 'unknown');
+  assert.equal(normalizeRegion('<script>'), 'unknown');
+  assert.equal(normalizeRegion(null), 'unknown');
+
+  pass('delivery report: time, distinct devices, surfaces, regions — counts only, no ids');
 }
 
 console.log('ALL TESTS PASSED (' + n + ' groups)');
