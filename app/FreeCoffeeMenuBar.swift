@@ -1332,17 +1332,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Two-line chip title (headline + description), like the reference
-    /// pill. Tahoe's taller menu bar fits 13pt + 9pt; the description is
+    /// pill. Tahoe's taller menu bar fits 12pt + 8pt; the description is
     /// capped short. Adaptive label colors track light/dark menu bars.
+    /// (13/9 clipped the headline's cap-height — keep this compact.)
     private func chipTitle(headline: String, description: String?) -> NSAttributedString {
         let head = NSMutableAttributedString(
-            string: truncateForBar(headline),
-            attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .regular),
+            string: truncateForBar(headline, max: 18),
+            attributes: [.font: NSFont.systemFont(ofSize: 12, weight: .regular),
                          .foregroundColor: NSColor.labelColor])
         if let d = description, !d.isEmpty {
             let desc = NSAttributedString(
-                string: "\n" + truncateForBar(d, max: 24),
-                attributes: [.font: NSFont.systemFont(ofSize: 9, weight: .regular),
+                string: "\n" + truncateForBar(d, max: 22),
+                attributes: [.font: NSFont.systemFont(ofSize: 8, weight: .regular),
                              .foregroundColor: NSColor.secondaryLabelColor])
             head.append(desc)
         }
@@ -1372,7 +1373,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let mono = monogram.isEmpty ? "☕" : monogram
         let key = mono + "|" + accentHex
         if let cached = Self.tileCache[key] { return cached }
-        let pt: CGFloat = 18
+        let pt: CGFloat = 16
         // Drawing-handler initializer: resolution-independent, crisp on Retina.
         let img = NSImage(size: NSSize(width: pt, height: pt), flipped: false) { dst in
             let path = NSBezierPath(roundedRect: dst, xRadius: pt * 0.3, yRadius: pt * 0.3)
