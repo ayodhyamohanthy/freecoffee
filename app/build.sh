@@ -430,16 +430,29 @@ lipo -info "$DIST/$BUNDLE/Contents/MacOS/FreeCoffeeMenuBar" || true
 
 # PWA lockstep: every DMG version bump also busts the installed web app's
 # cache, so the PWA can never lag the shipped native app. ASSET_V tracks
-# max(stripped APP_VERSION, current ASSET_V) — monotonic, and rebuilding the
-# same version is a no-op. Manual web-only bumps (edit sw.js + ?v=, guarded
-# by test.sh check 7) keep working: a PWA already ahead of the DMG is left
-# alone. python3 rewrites (never `sed -i`: BSD/GNU differ — see step 3 note).
+# max(padded APP_VERSION, current ASSET_V) — monotonic, and rebuilding the
+# same version is a no-op. Segments are zero-padded (1.2.3 → 1002003) so
+# 2.0.0 always beats 1.2.10. Manual web-only bumps (edit sw.js + ?v= with
+# any larger integer, guarded by test.sh checks 7-8) keep working: a PWA
+# already ahead of the DMG is left alone. python3 rewrites (never `sed -i`:
+# BSD/GNU differ — see step 3 note). The sync is auxiliary: a failure warns
+# loudly but never fails the DMG build (test.sh check 8 catches drift).
+padded_version() {
+  # "1.2.3" → 1002003 ; garbage → 0
+  case "$1" in ''|*[!0-9.]*|*.*.*.*) echo 0; return 0;; esac
+  local a=0 b=0 c=0
+  IFS=. read -r a b c <<EOF
+$1
+EOF
+  case "$a$b$c" in ''|*[!0-9]*) echo 0; return 0;; esac
+  echo $((10#$a * 1000000 + 10#$b * 1000 + 10#$c))
+}
 CUR_V="$(python3 -c "import re,sys; m=re.search(r\"var ASSET_V *= *'([0-9]+)'\", open('../sw.js').read()); print(m.group(1) if m else '')")"
-DERIVED_V="$(printf '%s' "$APP_VERSION" | tr -cd '0-9')"
-if [ -n "$CUR_V" ] && [ -n "$DERIVED_V" ]; then
+DERIVED_V="$(padded_version "$APP_VERSION")"
+if [ -n "$CUR_V" ] && [ "$DERIVED_V" -gt 0 ]; then
   if [ "$DERIVED_V" -gt "$CUR_V" ]; then NEW_V="$DERIVED_V"; else NEW_V="$CUR_V"; fi
   if [ "$NEW_V" != "$CUR_V" ]; then
-    python3 - "$NEW_V" "$CUR_V" <<'PY'
+    python3 - "$NEW_V" "$CUR_V" <<'PY' || echo "  WARNING: PWA sync failed — bump sw.js ASSET_V/CACHE + ?v= by hand (test.sh check 8 will fail until then)" >&2
 import glob, re, sys
 new_v, cur_v = sys.argv[1], sys.argv[2]
 sw = '../sw.js'

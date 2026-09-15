@@ -231,12 +231,18 @@ function pass(name) { n++; console.log('PASS ' + name); }
   const e = pickRoute('GET', '/earnings/abcd1234-abcd-abcd-abcd-abcd1234abcd');
   assert.equal(e.route, 'earnings');
   assert.equal(e.deviceId, 'abcd1234-abcd-abcd-abcd-abcd1234abcd');
+  assert.equal(pickRoute('POST', '/referral').route, 'referral');
+  const r = pickRoute('GET', '/referrals/astra-1');
+  assert.equal(r.route, 'referrals');
+  assert.equal(r.code, 'astra-1');
+  assert.equal(pickRoute('GET', '/referrals/').handled, false, 'empty code not routed');
+  assert.equal(pickRoute('POST', '/referrals/astra-1').handled, false, 'wrong method not routed');
   assert.equal(pickRoute('OPTIONS', '/track').route, 'preflight');
   assert.equal(pickRoute('OPTIONS', '/admin/feed').route, 'preflight');
   assert.equal(pickRoute('GET', '/earnings/').handled, false, 'empty deviceId not routed');
   assert.equal(pickRoute('PUT', '/track').handled, false, 'wrong method not routed');
   assert.equal(pickRoute('GET', '/nope').handled, false);
-  pass('pickRoute maps all five routes + preflight, rejects the rest');
+  pass('pickRoute maps all seven routes + preflight, rejects the rest');
 }
 
 /* ------------------------------------------------------------------------
