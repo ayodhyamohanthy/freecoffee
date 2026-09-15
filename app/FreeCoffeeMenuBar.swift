@@ -1141,7 +1141,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var snoozeOffItem: NSMenuItem!
     private var loginItem: NSMenuItem!
     private var updateMenuItem: NSMenuItem!
-    private var countdownTimer: Timer?
     private var loginItemFailed = false   // sticky: a failed toggle must survive refreshLoginItem()
 
     private var sleepObserver: NSObjectProtocol?
@@ -1378,13 +1377,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// The bar sizes the button to the title alone, which lets long lines
     /// slide under the status dot. Widen by the dot zone + padding after
-    /// every title change (refreshUI covers all branches).
+    /// every title change (refreshUI covers all branches). Skips redundant
+    /// resizes so the 1 s heartbeat can't fight the status-bar layout.
+    private var lastChipWidth: CGFloat = 0
+
     private func fitChipWidth() {
         guard let button = statusItem.button else { return }
         button.sizeToFit()
+        let want = button.frame.width + 20
         var f = button.frame
-        f.size.width += 20
+        f.size.width = (abs(want - lastChipWidth) > 0.5) ? want : lastChipWidth
         button.frame = f
+        lastChipWidth = f.size.width
     }
 
     /// Dark pill behind logo + texts, like the reference (opaque dark
@@ -1421,7 +1425,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Menu-bar tile: accent rounded square + monogram, i.e. the reference
     /// pill's logo + headline (a description line can't fit the bar — it
     /// lives in the tooltip on hover and in the popover header instead).
-    private static var tileCache: [String: NSImage] = [:]
+    /// Menu-bar tile cache — NSCache (bounded, main-thread only like all
+    /// refreshUI callers) instead of an unbounded dict.
+    private static let tileCache: NSCache<NSString, NSImage> = {
+        let c = NSCache<NSString, NSImage>()
+        c.countLimit = 40
+        return c
+    }()
 
     private static func hexToColor(_ hex: String) -> NSColor? {
         var h = hex.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1434,8 +1444,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func chipTile(monogram: String, accentHex: String) -> NSImage? {
         let mono = monogram.isEmpty ? "☕" : monogram
-        let key = mono + "|" + accentHex
-        if let cached = Self.tileCache[key] { return cached }
+        let key = (mono + "|" + accentHex) as NSString
+        if let cached = Self.tileCache.object(forKey: key) { return cached }
         let pt: CGFloat = 16
         // Drawing-handler initializer: resolution-independent, crisp on Retina.
         let img = NSImage(size: NSSize(width: pt, height: pt), flipped: false) { dst in
@@ -1454,7 +1464,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return true
         }
         img.isTemplate = false
-        Self.tileCache[key] = img
+        Self.tileCache.setObject(img, forKey: key)
         return img
     }
 
@@ -1485,12 +1495,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             popover.performClose(nil)
         } else if statusItem.button != nil {
             refreshUI()
-            // Present on the next runloop turn, activated: presenting a
+            // Present on the next runloop turn, activated (only when another
+            // app is frontmost — never steal focus otherwise): presenting a
             // transient popover synchronously inside the opening click's
             // mouse-up makes newer macOS dismiss it immediately, so the
             // panel never appears. Activation keeps .transient
             // click-outside-to-close semantics for a background app.
-            NSApp.activate(ignoringOtherApps: true)
+            if !NSApp.isActive { NSApp.activate(ignoringOtherApps: true) }
             DispatchQueue.main.async { [weak self] in
                 guard let self, let button = self.statusItem.button,
                       !self.popover.isShown else { return }
@@ -1874,13 +1885,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 paused = false
                 persist()
             }
-        } else if !popover.isShown {
-            // Idle heartbeat: nothing snoozed and no popover to keep live.
+            refreshUI()
             return
         }
-        // Snoozed countdown, or a live open popover (balance, chart,
-        // sponsor, CTA states refresh in place, no reopen needed).
-        refreshUI()
+        // Open popover only: keep it live (balance, chart, sponsor, CTA)
+        // without the full menu/login-item refresh the snoozed path needs.
+        if popover.isShown { popoverVC?.refresh() }
     }
 
     // MARK: Real-advertiser bridge (config.json → feed → cache → UI)

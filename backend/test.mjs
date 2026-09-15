@@ -13,8 +13,24 @@ import {
   pickRoute,
   ledgerView,
   getFeed,
-  workerFetch
+  workerFetch,
+  normalizeRefCode,
+  normalizePlatform,
+  bumpPlatform,
+  platformsOf,
+  applyReferralRegister,
+  applyReferralClaim,
+  applyReferralAccrual,
+  applyReferralCredit,
+  refereeView,
+  referralView
 } from './src/worker.js';
+
+/* Fixed device ids (hex-only per DEVICE_ID_RE) used by the flywheel groups. */
+const OWNER_DEV = 'aa11bb22-cc33-dd44-ee55-ff6677889900';
+const REF_DEV = '11223344-5566-7788-99aa-bbccddeeff00';
+const THIRD_DEV = 'cccc3333-3333-4333-8333-333333333333';
+const DAY_MS = 86400000;
 
 /* Fixed clocks: 2026-09-06 12:00 UTC and the next day. */
 const T1 = Date.UTC(2026, 8, 6, 12, 0, 0);
@@ -326,6 +342,255 @@ function pass(name) { n++; console.log('PASS ' + name); }
   assert.equal(bad.status, 404);
 
   pass('GET /stats aggregates delivery publicly; zeros when empty; POST → 404');
+}
+
+/* ------------------------------------------------------------------------
+   10. referral lifecycle — the gate HOLDS 10%, releases it retroactively the
+       moment 60 verified minutes land inside the first 30 days, and voids a
+       late or term-expired referral. Pure: bindings are never mutated.
+   ------------------------------------------------------------------------ */
+{
+  const CODE = 'astra-1';
+  const BASE30 = 0.117;            // 30 min @ $6 CPM × 65% = 0.117
+
+  assert.equal(normalizeRefCode(' Astra-1 '), 'astra-1', 'codes normalize + lowercase');
+  assert.equal(normalizeRefCode('!!'), '', 'garbage code rejected');
+  assert.equal(normalizeRefCode('ab'), '', 'too-short code rejected');
+
+  const reg = applyReferralRegister(null, OWNER_DEV, CODE, T1);
+  assert.equal(reg.created, true, 'owner registers their share code');
+  assert.deepEqual(reg.record, { code: CODE, deviceId: OWNER_DEV, t: T1 });
+
+  const taken = applyReferralRegister(reg.record, THIRD_DEV, CODE, T1 + 1000);
+  assert.equal(taken.created, false, 'a registered code is never re-pointable');
+  assert.match(String(taken.note), /already registered to another device/);
+  assert.ok(applyReferralRegister(null, 'not-a-device', CODE, T1).error, 'bad deviceId rejected');
+  assert.ok(applyReferralClaim(null, 'UPPER!!', T1).error, 'invalid code rejected on claim');
+
+  const claim = applyReferralClaim(null, CODE, T1);
+  assert.equal(claim.claimed, true, 'referee binds to the code');
+  assert.equal(claim.record.gated, false);
+  const rebound = applyReferralClaim(claim.record, 'someone-else', T1 + 9);
+  assert.equal(rebound.claimed, false, 'first claim wins — never re-bound');
+  assert.match(String(rebound.note), /already bound to astra-1/);
+
+  const h1 = applyReferralAccrual(claim.record, 30, BASE30, T1 + 3600000);
+  assert.equal(h1.credit, 0, 'nothing is paid before the gate');
+  assert.ok(Math.abs(h1.binding.pending - 0.0117) < 1e-9, '10% of base is held');
+  assert.equal(h1.binding.gated, false);
+  assert.match(String(h1.note), /gate pending/);
+
+  const h2 = applyReferralAccrual(h1.binding, 30, BASE30, T1 + 7200000);
+  assert.equal(h2.binding.gated, true, '60 verified minutes passes the gate');
+  assert.ok(Math.abs(h2.credit - 0.0234) < 1e-9, 'held 0.0117 + new 0.0117 released at once');
+  assert.equal(h2.binding.pending, 0, 'nothing left held');
+  assert.equal(h2.note, 'gate passed — held credit released');
+
+  const h3 = applyReferralAccrual(h2.binding, 10, 0.078, T1 + DAY_MS);
+  assert.ok(Math.abs(h3.credit - 0.0078) < 1e-9, 'in-term credit is immediate');
+
+  const dead = applyReferralAccrual(h3.binding, 60, BASE30, T1 + 366 * DAY_MS);
+  assert.equal(dead.credit, 0, 'no credit past the 12-month term');
+  assert.equal(dead.binding.void, true);
+  assert.match(String(dead.note), /term ended/);
+
+  const late = applyReferralAccrual(applyReferralClaim(null, CODE, T1).record, 40, BASE30, T1 + 31 * DAY_MS);
+  assert.equal(late.credit, 0, 'late activation pays nothing');
+  assert.equal(late.binding.void, true);
+  assert.equal(late.binding.pending, 0, 'held credit is burned, never released');
+  assert.match(String(late.note), /gate missed/);
+
+  const snapshot = JSON.stringify(claim.record);
+  applyReferralAccrual(claim.record, 60, BASE30, T1);
+  assert.equal(JSON.stringify(claim.record), snapshot, 'input binding never mutated');
+
+  assert.equal(refereeView(null), null, 'no binding → no referee block');
+  const rv = refereeView(h2.binding, T1 + 3600000);
+  assert.equal(rv.refereeOf, 'astra-1');
+  assert.equal(rv.gate, 'passed');
+  assert.equal(rv.gateMinutes, 60);
+  assert.equal(refereeView(claim.record, T1 + 3600000).gate, 'pending');
+
+  pass('referral: gate holds 10%, releases retroactively, voids late/expired');
+}
+
+/* ------------------------------------------------------------------------
+   11. the referrer's credit lands in the referrer's OWN ledger — and never
+       inside a campaign's delivery numbers.
+   ------------------------------------------------------------------------ */
+{
+  const credit = applyReferralCredit(null, 0.0234, T1);
+  assert.ok(Math.abs(credit.total - 0.0234) < 1e-9, 'credit joins the referrer total');
+  assert.ok(Math.abs(credit.referral.total - 0.0234) < 1e-9, 'and the referral accumulator');
+  assert.equal(credit.rows.length, 1);
+  assert.equal(credit.rows[0].type, 'referral');
+  assert.equal(credit.rows[0].campaignId, '', 'no campaign id — platform-side money');
+  assert.equal(credit.rows[0].minutes, 0, 'a referral is not delivery');
+
+  const zero = applyReferralCredit(credit, 0, T1);
+  assert.equal(zero.rows.length, 1, 'a zero credit adds no row');
+  assert.ok(Math.abs(zero.total - 0.0234) < 1e-9);
+
+  const agg = aggregateStats([credit], [{ id: 'camp_1', sponsor: 'S', cpm: 6 }]);
+  assert.equal(agg.totals.spend, 0, 'referral cost is not campaign spend');
+  assert.equal(agg.campaigns.length, 0, 'no campaign row invented for a referral');
+  assert.equal(agg.referralSpend, 0.02, 'published separately as platform-side cost');
+  assert.equal(agg.totals.earners, 1, 'a referrer still counts as an earner');
+  assert.equal(ledgerView(credit).referral.total, 0.02, 'ledgerView exposes the referral total');
+
+  const view = referralView('astra-1', [
+    { code: 'astra-1', t0: T1, minutes: 74, windowMinutes: 74, pending: 0, paid: 0.0224, gated: true },
+    { code: 'astra-1', t0: T1, minutes: 41, windowMinutes: 41, pending: 0.0058, paid: 0, gated: false },
+    { code: 'astra-1', t0: T1, minutes: 12, windowMinutes: 12, pending: 0, paid: 0, gated: false, void: true }
+  ], credit);
+  assert.equal(view.totals.referees, 3);
+  assert.equal(view.totals.gated, 1);
+  assert.equal(view.totals.minutes, 127);
+  assert.equal(view.totals.accrued, 0.02, 'released only');
+  assert.equal(view.totals.held, 0.01, 'gated credit is reported as held, never paid');
+  assert.deepEqual(view.referees.map((r) => r.label), ['referee 1', 'referee 2', 'referee 3']);
+  assert.deepEqual(view.referees.map((r) => r.gate), ['passed', 'pending', 'void']);
+  assert.equal(view.ledgerTotal, 0.02);
+
+  const snapshot = JSON.stringify(credit);
+  applyReferralCredit(credit, 1, T1);
+  assert.equal(JSON.stringify(credit), snapshot, 'input ledger never mutated');
+
+  pass('referral credit is platform-side: separate accumulator, never campaign spend');
+}
+
+/* ------------------------------------------------------------------------
+   12. platform attribution — where the verified minutes actually happened.
+   ------------------------------------------------------------------------ */
+{
+  assert.equal(normalizePlatform('MAC'), 'mac', 'case-normalized');
+  assert.equal(normalizePlatform('  pwa '), 'pwa', 'trimmed');
+  assert.equal(normalizePlatform('x'.repeat(40)), 'unknown', 'over-long → unknown, never dropped');
+  assert.equal(normalizePlatform(''), 'unknown');
+  assert.equal(normalizePlatform(undefined), 'unknown');
+  assert.equal(normalizePlatform('../etc/passwd'), 'unknown', 'no path junk becomes a key');
+  assert.equal(normalizePlatform('agent'), 'agent');
+
+  const unknown = applyEarnings(null, { type: 'impression', campaignId: 'camp_1', minutes: 1 }, FEED, T1);
+  assert.equal(unknown.platform, 'unknown', 'a report without a platform is counted as unknown');
+
+  let l = applyEarnings(null, { type: 'impression', campaignId: 'camp_1', minutes: 5, platform: 'mac' }, FEED, T1).ledger;
+  l = applyEarnings(l, { type: 'impression', campaignId: 'camp_1', minutes: 5, platform: 'pwa' }, FEED, T1).ledger;
+  l = applyEarnings(l, { type: 'click', campaignId: 'camp_1', platform: 'mac' }, FEED, T1).ledger;
+  const ps = platformsOf(l.counters);
+  assert.deepEqual(ps.map((p) => p.platform), ['mac', 'pwa'], 'sorted by minutes, then name');
+  assert.equal(ps[0].minutes, 5);
+  assert.equal(ps[0].clicks, 1, 'clicks are attributed to their platform too');
+  assert.equal(ps[1].minutes, 5);
+  assert.deepEqual(ledgerView(l).platforms, ps, 'ledgerView serves the same mix');
+
+  // Keys are bounded: beyond PLATFORM_MAX distinct keys everything folds into
+  // 'other', so a hostile client cannot grow a ledger key-by-key.
+  const counters = { platforms: {} };
+  for (const key of ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l']) {
+    bumpPlatform(counters, key, 1, 0);
+  }
+  assert.equal(Object.keys(counters.platforms).length, 12, 'twelve distinct keys tracked');
+  assert.equal(bumpPlatform(counters, 'zzz', 1, 0), 'other', 'the 13th folds into other');
+  assert.equal(bumpPlatform(counters, 'a', 1, 0), 'a', 'existing keys keep counting');
+
+  pass('platform attribution: normalized, sorted, bounded, never affects money');
+}
+
+/* ------------------------------------------------------------------------
+   13. the loop end-to-end over HTTP: register → claim → 60 verified minutes
+       (attributed to a platform) → the referrer is paid → the public views
+       show the mix without leaking a single device id.
+   ------------------------------------------------------------------------ */
+{
+  const store = {};
+  const kv = {
+    get: async (k) => (k in store ? store[k] : null),
+    put: async (k, v) => { store[k] = String(v); },
+    list: async ({ prefix, limit, cursor }) => {
+      const names = Object.keys(store).filter((k) => k.indexOf(prefix) === 0);
+      const start = cursor ? Number(cursor) || 0 : 0;
+      const slice = names.slice(start, start + (limit || 100));
+      return {
+        keys: slice.map((name) => ({ name })),
+        list_complete: start + slice.length >= names.length,
+        cursor: String(start + slice.length)
+      };
+    }
+  };
+  const env = { SITE_KV: kv };
+  await kv.put('feed:current', JSON.stringify([{ id: 'camp_1', sponsor: 'S1', clickUrl: 'https://x.example/', cpm: 6 }]));
+
+  const post = (path, body) => workerFetch(new Request('https://x.test' + path, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+  }), env, {});
+  const get = (path) => workerFetch(new Request('https://x.test' + path), env, {});
+
+  let j = await (await post('/referral', { deviceId: OWNER_DEV, code: 'astra-1', action: 'register' })).json();
+  assert.equal(j.created, true, 'owner registers the share code');
+  j = await (await post('/referral', { deviceId: THIRD_DEV, code: 'astra-1', action: 'register' })).json();
+  assert.equal(j.created, false, 'a second registration never re-points the code');
+
+  j = await (await post('/referral', { deviceId: REF_DEV, code: 'astra-1' })).json();
+  assert.equal(j.claimed, true, 'referee claims the code');
+  j = await (await post('/referral', { deviceId: REF_DEV, code: 'astra-1' })).json();
+  assert.equal(j.claimed, false, 'a second claim is refused');
+  j = await (await post('/referral', { deviceId: OWNER_DEV, code: 'astra-1' })).json();
+  assert.equal(j.claimed, false, 'self-referral refused');
+  assert.match(String(j.note), /self-referral/);
+  j = await (await post('/referral', { deviceId: THIRD_DEV, code: 'nobody-here' })).json();
+  assert.equal(j.claimed, false, 'unknown code');
+  assert.match(String(j.note), /unknown referral code/);
+  assert.equal((await post('/referral', { deviceId: 'x', code: 'astra-1' })).status, 400, 'bad deviceId → 400');
+  assert.equal((await post('/referral', { deviceId: OWNER_DEV, code: '!!' })).status, 400, 'bad code → 400');
+
+  // One 60-minute placement batch: the referee earns the full 65%, the gate
+  // passes, and the referrer's held 10% is released in the same call.
+  const tr = await post('/track', {
+    deviceId: REF_DEV, type: 'impression', campaignId: 'camp_1', minutes: 60, platform: 'mac'
+  });
+  assert.equal(tr.status, 200);
+  const trBody = await tr.json();
+  assert.equal(trBody.platform, 'mac', 'the report says which platform it came from');
+  assert.equal(trBody.earned, 0.23, 'referee keeps the full 65% share');
+  assert.equal(trBody.referral.referrer, 'astra-1');
+  assert.equal(trBody.referral.credited, true, 'referrer paid at the gate');
+  assert.equal(trBody.referral.released, 0.02, '0.0234 served at 2 decimals');
+
+  const own = await (await get('/earnings/' + OWNER_DEV)).json();
+  assert.equal(own.total, 0.02, 'referral credit lands in the referrer ledger');
+  assert.equal(own.referral.total, 0.02);
+  assert.equal(own.rows[0].type, 'referral');
+  assert.deepEqual(own.platforms, [], 'a referrer without placements has no platform mix');
+
+  const mine = await (await get('/earnings/' + REF_DEV)).json();
+  assert.equal(mine.referee.refereeOf, 'astra-1', 'referee sees its own gate status');
+  assert.equal(mine.referee.gate, 'passed');
+  assert.equal(mine.referee.minutes, 60);
+  assert.equal(mine.platforms.length, 1);
+  assert.equal(mine.platforms[0].platform, 'mac');
+  assert.equal(mine.platforms[0].minutes, 60);
+
+  const view = await (await get('/referrals/astra-1')).json();
+  assert.equal(view.registered, true);
+  assert.equal(view.totals.referees, 1);
+  assert.equal(view.totals.gated, 1);
+  assert.equal(view.totals.accrued, 0.02);
+  assert.equal(view.referees[0].label, 'referee 1');
+  const viewText = JSON.stringify(view);
+  assert.ok(viewText.indexOf(REF_DEV) === -1, 'no referee device id leaks');
+  assert.ok(viewText.indexOf(OWNER_DEV) === -1, 'no owner device id leaks');
+  assert.equal((await get('/referrals/nope%21%21')).status, 400, 'junk code → 400');
+
+  // /stats publishes the flywheel mix — and keeps referral cost out of spend.
+  const stats = await (await get('/stats')).json();
+  assert.equal(stats.totals.impressions, 60, 'referee delivery only — a referral is not delivery');
+  assert.equal(stats.totals.spend, 0.23, 'campaign spend is the referee share alone');
+  assert.equal(stats.totals.earners, 2, 'referee + referrer both have ledgers');
+  assert.equal(stats.referralSpend, 0.02, 'referral cost published separately');
+  assert.deepEqual(stats.platforms, [{ platform: 'mac', minutes: 60, clicks: 0 }]);
+
+  pass('loop end-to-end: claim → gate → referrer paid → public mix, no ids leaked');
 }
 
 console.log('ALL TESTS PASSED (' + n + ' groups)');
