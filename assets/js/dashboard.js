@@ -92,7 +92,10 @@
 
   function $(id) { return document.getElementById(id); }
 
-  function money(n) { return '$' + Number(n).toFixed(2); }
+  function money(n) {
+    var v = Number(n);
+    return '$' + (isFinite(v) ? v : 0).toFixed(2);   // corrupted rows can never render $NaN
+  }
 
   function fmtClock(ts) {
     var d = new Date(ts);
