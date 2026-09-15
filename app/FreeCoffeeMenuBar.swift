@@ -1282,6 +1282,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // connected; acquisition slot when the feed is empty; otherwise the
         // rotating fictional demo sponsors (simulated, display only).
         if snoozed {
+            chipLogo.isHidden = true
+            chipHeadline.isHidden = true
+            chipDescription.isHidden = true
             statusItem.button?.image = nil
             // Single line, untruncated in code (the bar itself clips) so the
             // resume time is never cut by the 18-char headline cap. Same dot
@@ -1299,29 +1302,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 "Earning resumes automatically. Nothing is collected."
             chipDotColor = Coffee.textFaint
         } else if let camp = currentLiveCampaign {
-            statusItem.button?.image = chipTile(
-                monogram: chipMonogram(logoText: camp.logoText, sponsor: camp.sponsor),
-                accentHex: camp.accent)
-            statusItem.button?.attributedTitle = chipTitle(
+            setChipContent(
+                image: chipTile(monogram: chipMonogram(logoText: camp.logoText, sponsor: camp.sponsor), accentHex: camp.accent),
                 headline: camp.sponsor,
                 description: camp.tagline.isEmpty ? "LIVE" : camp.tagline)
             statusItem.button?.toolTip = "FreeCoffee — LIVE: \(camp.sponsor)" +
                 (camp.tagline.isEmpty ? "" : " — \(camp.tagline)") + ". Nothing is collected."
             chipDotColor = Coffee.success
         } else if awaitingSponsors {
-            statusItem.button?.image = NSImage(systemSymbolName: "megaphone",
-                                               accessibilityDescription: "Advertise")
-            statusItem.button?.attributedTitle = chipTitle(
+            setChipContent(
+                image: chipTile(monogram: "FC", accentHex: "#E0A93E"),
                 headline: "Your brand here",
                 description: "No sponsors available")
             statusItem.button?.toolTip = "No sponsors right now — put your brand in this menu bar. " +
                 "Click for details."
             chipDotColor = Coffee.waiting
         } else {
-            statusItem.button?.image = chipTile(
-                monogram: chipMonogram(logoText: "", sponsor: demoSponsor),
-                accentHex: "#E0A93E")
-            statusItem.button?.attributedTitle = chipTitle(
+            setChipContent(
+                image: chipTile(monogram: chipMonogram(logoText: "", sponsor: demoSponsor), accentHex: "#E0A93E"),
                 headline: demoSponsor,
                 description: "Demo · fictional")
             statusItem.button?.toolTip = "FreeCoffee demo sponsor (simulated) — no real campaign, " +
@@ -1386,21 +1384,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func fitChipWidth() {
         guard let button = statusItem.button else { return }
-        button.sizeToFit()
-        let want = button.frame.width + 18
+        let textWidth = max(chipHeadline.intrinsicContentSize.width, chipDescription.intrinsicContentSize.width)
+        let want = min(max(118, 7 + 18 + 8 + textWidth + 26), 230)
         var f = button.frame
-        f.size.width = (abs(want - lastChipWidth) > 0.5) ? want : lastChipWidth
+        f.size.width = want
         button.frame = f
-        lastChipWidth = f.size.width
+        lastChipWidth = want
+        chipLogo.frame = NSRect(x: 7, y: (button.bounds.height - 18) / 2, width: 18, height: 18)
+        let textX: CGFloat = 33
+        chipHeadline.frame = NSRect(x: textX, y: button.bounds.midY, width: want - textX - 22, height: 12)
+        chipDescription.frame = NSRect(x: textX, y: button.bounds.midY - 10, width: want - textX - 22, height: 10)
+    }
+
+    private func setChipContent(image: NSImage?, headline: String, description: String) {
+        statusItem.button?.image = nil
+        statusItem.button?.attributedTitle = NSAttributedString(string: "")
+        chipLogo.image = image
+        chipHeadline.stringValue = truncateForBar(headline, max: 22)
+        chipDescription.stringValue = truncateForBar(description, max: 28)
+        chipLogo.isHidden = false
+        chipHeadline.isHidden = false
+        chipDescription.isHidden = false
     }
 
     /// Dark pill behind logo + texts, like the reference (opaque dark
     /// capsule + trailing status dot). Layer-backed status button — no
     /// deprecated statusItem.view involved. Called once at launch.
     private let chipDot = NSView(frame: NSRect(x: 0, y: 0, width: 6, height: 6))
+    private let chipLogo = NSImageView(frame: NSRect(x: 7, y: 4, width: 18, height: 18))
+    private let chipHeadline = NSTextField(labelWithString: "")
+    private let chipDescription = NSTextField(labelWithString: "")
 
     private func setupChipPill() {
         guard let button = statusItem.button else { return }
+        chipLogo.imageScaling = .scaleProportionallyDown
+        chipHeadline.font = NSFont.systemFont(ofSize: 10.5, weight: .bold)
+        chipHeadline.textColor = .white
+        chipHeadline.lineBreakMode = .byTruncatingTail
+        chipDescription.font = NSFont.systemFont(ofSize: 8.5, weight: .regular)
+        chipDescription.textColor = NSColor(srgbRed: 0xB0 / 255.0, green: 0xB0 / 255.0, blue: 0xB8 / 255.0, alpha: 1)
+        chipDescription.lineBreakMode = .byTruncatingTail
+        button.addSubview(chipLogo)
+        button.addSubview(chipHeadline)
+        button.addSubview(chipDescription)
         button.imagePosition = .imageLeading
         button.imageScaling = .scaleProportionallyDown
         button.alignment = .left
