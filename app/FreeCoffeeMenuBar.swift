@@ -1358,17 +1358,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func chipTitle(headline: String, description: String?) -> NSAttributedString {
         let head = NSMutableAttributedString(
             string: truncateForBar(headline, max: 18),
-            attributes: [.font: NSFont.systemFont(ofSize: 11.5, weight: .regular),
+            attributes: [.font: NSFont.systemFont(ofSize: 10.5, weight: .bold),
                          .foregroundColor: NSColor.white])
         if let d = description, !d.isEmpty {
             let desc = NSAttributedString(
                 string: "\n" + truncateForBar(d, max: 22),
-                attributes: [.font: NSFont.systemFont(ofSize: 7.5, weight: .regular),
+                attributes: [.font: NSFont.systemFont(ofSize: 8.5, weight: .regular),
                              .foregroundColor: NSColor(srgbRed: 0xB0 / 255.0, green: 0xB0 / 255.0, blue: 0xB8 / 255.0, alpha: 1)])
             head.append(desc)
         }
         let para = NSMutableParagraphStyle()
         para.lineSpacing = 0
+        para.minimumLineHeight = 10
+        para.maximumLineHeight = 10
+        para.alignment = .left
         para.lineBreakMode = .byTruncatingTail
         head.addAttribute(.paragraphStyle, value: para,
                           range: NSRange(location: 0, length: head.length))
@@ -1384,7 +1387,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func fitChipWidth() {
         guard let button = statusItem.button else { return }
         button.sizeToFit()
-        let want = button.frame.width + 20
+        let want = button.frame.width + 18
         var f = button.frame
         f.size.width = (abs(want - lastChipWidth) > 0.5) ? want : lastChipWidth
         button.frame = f
@@ -1398,9 +1401,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func setupChipPill() {
         guard let button = statusItem.button else { return }
+        button.imagePosition = .imageLeading
+        button.imageScaling = .scaleProportionallyDown
+        button.alignment = .left
         button.wantsLayer = true
+        button.layer?.masksToBounds = true
         button.layer?.backgroundColor = NSColor(srgbRed: 0x2C / 255.0, green: 0x2C / 255.0, blue: 0x30 / 255.0, alpha: 0.95).cgColor
-        button.layer?.cornerRadius = 9
+        button.layer?.cornerRadius = 8
         // (NSButton has no contentInsets: left padding comes from the tile
         // itself, right padding from the dot's 8pt trailing offset below.)
         chipDot.wantsLayer = true

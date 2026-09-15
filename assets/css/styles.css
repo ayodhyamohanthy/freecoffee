@@ -1484,3 +1484,207 @@ body.theme-light .codeblock { background: #FAFAF9; border-color: var(--line); }
   .plat-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 560px) { .loop { grid-template-columns: 1fr; } }
+
+/* ==========================================================================
+   SLOT AUCTION (Sep 2026) — inventory picker on advertisers.html and the
+   per-campaign delivery report on campaigns.html.
+
+   Both pages carry body.theme-light, but every colour below is expressed
+   through the custom properties, so the same rules render correctly if a
+   page is ever switched back to the dark shell. No hardcoded darks except
+   the two hover washes, which use --gold-dim (theme-aware by definition).
+   ========================================================================== */
+
+/* ---------- campaigns.html: five-cell stats strip ----------
+   .balcard-divs is 4-up by default and its responsive rules live earlier in
+   the file, so the 5-up variant carries its own breakpoints here. */
+.balcard-divs.cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+
+/* ---------- campaigns.html: per-campaign delivery report ---------- */
+.deliv-row {
+  display: grid; gap: 10px;
+  padding: 13px 14px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--panel-2);
+}
+.deliv-row + .deliv-row { margin-top: 8px; }
+.deliv-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.deliv-name { font-weight: 700; font-size: 0.95rem; color: var(--text); }
+.deliv-id { font-family: var(--mono); font-size: 0.72rem; color: var(--text-faint); }
+.deliv-spend {
+  margin-left: auto; font-family: var(--mono); font-variant-numeric: tabular-nums;
+  font-size: 0.92rem; font-weight: 600; color: var(--gold-bright); white-space: nowrap;
+}
+.deliv-nums { display: flex; gap: 20px; flex-wrap: wrap; margin: 0; }
+.deliv-metric { min-width: 0; }
+.deliv-metric dt {
+  margin: 0; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.09em;
+  text-transform: uppercase; color: var(--text-faint);
+}
+.deliv-metric dd {
+  margin: 2px 0 0; font-family: var(--mono); font-variant-numeric: tabular-nums;
+  font-size: 0.94rem; font-weight: 600; color: var(--text);
+}
+.deliv-mix { display: grid; gap: 6px; border-top: 1px solid var(--line); padding-top: 9px; }
+.deliv-mix-row { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.deliv-mix-lbl {
+  width: 60px; flex: none;
+  font-size: 0.62rem; font-weight: 700; letter-spacing: 0.09em;
+  text-transform: uppercase; color: var(--text-faint);
+}
+.mix-chip {
+  display: inline-flex; align-items: baseline; gap: 5px;
+  font-size: 0.72rem; padding: 3px 9px; border-radius: 999px;
+  background: var(--bg-raised); border: 1px solid var(--line); color: var(--text-dim);
+}
+.mix-chip b { font-family: var(--mono); font-weight: 600; color: var(--text); }
+
+/* ---------- advertisers.html: month bar ---------- */
+.slot-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.slot-nav {
+  display: inline-flex; align-items: center; gap: 3px;
+  border: 1px solid var(--line); border-radius: 999px; padding: 3px;
+  background: var(--panel);
+}
+.slot-nav-btn {
+  font: inherit; font-size: 0.95rem; line-height: 1;
+  width: 30px; height: 28px; border-radius: 999px; border: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; color: var(--text-dim); cursor: pointer;
+}
+.slot-nav-btn:hover:not(:disabled) { background: var(--gold-dim); color: var(--text); }
+.slot-nav-btn:disabled { opacity: 0.35; cursor: default; }
+.slot-month {
+  min-width: 140px; text-align: center;
+  font-weight: 700; font-size: 0.95rem; color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.slot-tz { font-size: 0.72rem; color: var(--text-faint); }
+.slot-count { margin-left: auto; font-size: 0.84rem; color: var(--text-dim); white-space: nowrap; }
+
+/* ---------- advertisers.html: month calendar ---------- */
+.slot-cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.slot-dow {
+  padding: 4px 0; text-align: center;
+  font-size: 0.6rem; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--text-faint);
+}
+.slot-day {
+  font: inherit; text-align: left; cursor: pointer;
+  display: flex; flex-direction: column; gap: 5px;
+  min-height: 58px; padding: 6px 6px 7px;
+  border: 1px solid var(--line); border-radius: 9px;
+  background: var(--panel); color: var(--text);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.slot-day:hover { border-color: var(--gold); }
+.slot-day.is-blank {
+  border-color: transparent; background: transparent;
+  pointer-events: none; cursor: default;
+}
+.slot-day.is-past { opacity: 0.5; }
+.slot-day.is-open { border-color: var(--gold); background: var(--gold-dim); }
+.slot-day.is-picked { border-color: var(--success); }
+.slot-day.is-open.is-picked { border-color: var(--success); background: var(--success-dim); }
+.slot-daynum { font-size: 0.78rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.slot-day.is-today .slot-daynum::after {
+  content: "today"; margin-left: 5px;
+  font-size: 0.55rem; font-weight: 600; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--gold-bright);
+}
+.slot-dots { display: flex; gap: 3px; margin-top: auto; }
+.slot-dot { flex: 1; height: 5px; border-radius: 2px; background: var(--line); }
+.slot-dot.is-past { opacity: 0.4; }
+.slot-dot.is-bid { background: var(--gold); }
+.slot-dot.is-picked { background: var(--success); }
+
+/* ---------- advertisers.html: block editor for the focused day ---------- */
+.slot-editor { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 12px; }
+.slot-editor-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.slot-editor-head h3 { margin: 0; font-size: 0.95rem; }
+.slot-editor-sub { font-size: 0.76rem; color: var(--text-faint); }
+.slot-chips { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.slot-chip {
+  font: inherit; text-align: left; cursor: pointer;
+  display: grid; gap: 3px; padding: 8px 10px;
+  border: 1px solid var(--line); border-radius: 9px;
+  background: var(--panel); color: var(--text);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.slot-chip:hover:not(:disabled) { border-color: var(--gold); }
+.slot-chip:disabled { cursor: default; opacity: 0.55; }
+.slot-chip.is-picked { border-color: var(--success); background: var(--success-dim); }
+.slot-chip-h { font-family: var(--mono); font-size: 0.76rem; font-weight: 600; }
+.slot-chip-p { font-size: 0.7rem; color: var(--text-faint); }
+.slot-chip.is-taken .slot-chip-p { color: var(--gold-bright); font-weight: 600; }
+.slot-chip.is-picked .slot-chip-p { color: var(--success); font-weight: 600; }
+
+/* ---------- advertisers.html: selection summary + bid controls ---------- */
+.slot-sum { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 12px; }
+.slot-sum-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.slot-sum-head h3 { margin: 0; font-size: 0.95rem; }
+.slot-sum-clear {
+  margin-left: auto; font: inherit; font-size: 0.78rem;
+  background: transparent; border: 0; padding: 0;
+  color: var(--text-dim); cursor: pointer; text-decoration: underline;
+}
+.slot-sum-clear:hover { color: var(--text); }
+.slot-sum-list { display: grid; gap: 5px; max-height: 214px; overflow-y: auto; }
+.slot-sum-row {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 6px 9px; font-size: 0.78rem;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--panel);
+}
+.slot-sum-when { font-family: var(--mono); color: var(--text); }
+.slot-sum-top {
+  margin-left: auto; font-family: var(--mono);
+  font-variant-numeric: tabular-nums; color: var(--text-faint);
+}
+.slot-sum-row.is-win .slot-sum-top { color: var(--success); font-weight: 600; }
+.slot-sum-row.is-lose .slot-sum-top { color: var(--danger); font-weight: 600; }
+.slot-sum-empty { font-size: 0.8rem; color: var(--text-faint); }
+.slot-bid-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin-top: 12px; }
+.slot-bid-bar .field { margin: 0; }
+.slot-bid-bar .input { width: 132px; }
+.slot-bid-bar .btn { flex: none; }
+
+.slot-results { display: grid; gap: 5px; max-height: 200px; overflow-y: auto; margin-top: 10px; }
+.slot-res {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 6px 9px; font-size: 0.78rem;
+  border: 1px solid var(--line); border-radius: 8px;
+}
+.slot-res.win { border-color: var(--success); background: var(--success-dim); }
+.slot-res.lose { border-color: var(--danger); background: var(--danger-dim); }
+.slot-res .when { font-family: var(--mono); color: var(--text); }
+.slot-res .why {
+  margin-left: auto; font-family: var(--mono);
+  font-variant-numeric: tabular-nums; color: var(--text-dim);
+}
+
+.slot-note { font-size: 0.8rem; color: var(--text-faint); margin-top: 10px; }
+.slot-note.is-ok { color: var(--success); }
+.slot-note.is-bad { color: var(--danger); }
+.slot-legend {
+  display: flex; gap: 14px; flex-wrap: wrap;
+  margin-top: 12px; font-size: 0.72rem; color: var(--text-faint);
+}
+.slot-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.slot-key { width: 13px; height: 5px; border-radius: 2px; background: var(--line); flex: none; }
+.slot-key.is-bid { background: var(--gold); }
+.slot-key.is-picked { background: var(--success); }
+.slot-key.is-past { opacity: 0.4; }
+
+@media (max-width: 1080px) {
+  /* Two-up beats five cramped cells — matches the base .balcard-divs rule. */
+  .balcard-divs.cols-5 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 860px) {
+  .slot-chips { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 620px) {
+  .balcard-divs.cols-5 { grid-template-columns: 1fr 1fr; }
+  .slot-cal { gap: 3px; }
+  .slot-day { min-height: 46px; padding: 5px; }
+  .slot-day.is-today .slot-daynum::after { content: none; }
+  .deliv-nums { gap: 14px; }
+}
