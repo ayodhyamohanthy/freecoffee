@@ -481,7 +481,7 @@ fi
 # it is what makes checksum-verified auto-updates possible.
 if [ -n "$DMG_SHA" ]; then
 cat > "$DIST/release-notes.md" <<EOF
-FreeCoffee v${APP_VERSION} — menu-bar earnings demo.
+FreeCoffee v${APP_VERSION} — Mac status area earnings demo.
 
 **Download:** FreeCoffee.dmg (universal binary, arm64 + x86_64)
 SHA256: ${DMG_SHA}

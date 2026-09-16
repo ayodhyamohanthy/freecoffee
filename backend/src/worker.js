@@ -91,7 +91,7 @@ var REGION_LIST_MAX = 40;         // regions/surfaces reported per campaign
 
 /* --------------------------------- slots ---------------------------------
    A SLOT is one hour-block on one UTC calendar day: the atomic unit of
-   menu-bar inventory. Advertisers bid a CPM on any number of slots; on each
+   Mac status area inventory. Advertisers bid a CPM on any number of slots; on each
    slot the HIGHEST BID takes the whole window (winner takes all), ties going
    to the earlier bid. Slots are independent — winning Tue 08–12 says nothing
    about Tue 12–16.

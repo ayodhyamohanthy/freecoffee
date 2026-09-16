@@ -81,7 +81,7 @@ jobs:
 
             url "${DMG_URL}"
             name "FreeCoffee"
-            desc "Menu-bar advertising demo — your menu bar buys the coffee"
+            desc "Mac status area advertising demo — your Mac status area buys the coffee"
             homepage "https://ayodhyamohanthy.github.io/freecoffee/"
 
             app "FreeCoffee.app"
