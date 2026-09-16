@@ -2,12 +2,19 @@
 #
 # Two deployment paths exist (see backend/README.md):
 #   A. Cloudflare Workers Builds (dashboard "Connect to Git") — this workflow
-#      is then redundant; it will still run tests and stay green.
+#      is then redundant. If you adopt that path, DELETE THIS FILE rather than
+#      leaving a permanently red check behind.
 #   B. This workflow — requires the CLOUDFLARE_API_TOKEN repo secret.
 #
-# The run NEVER fails when the secret is absent: secrets cannot be referenced
-# from `if:` directly, so the presence check is published to a step output via
-# an env var (the env-echo trick) and the deploy step keys off that output.
+# WHEN THE SECRET IS ABSENT THIS RUN FAILS ON PURPOSE.
+# It used to exit green. That meant a missing token skipped the deploy silently
+# while every check stayed green, and the live worker drifted NINE ROUTES behind
+# the repo (/slots, /slots/bid, /submit, /stats, /referral …all 404) with nobody
+# the wiser. A red check is the only signal that reliably gets looked at.
+#
+# The account id is deliberately NOT read from a secret: it is not sensitive and
+# already lives in backend/wrangler.toml. To override it, add a
+# CLOUDFLARE_ACCOUNT_ID secret and an env line to the deploy step.
 
 name: Deploy backend
 
@@ -28,10 +35,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node 20
+      # Node 20 went EOL 2026-04-30. Note the "Node.js 20 is deprecated"
+      # annotation is about actions/checkout@v4 and actions/setup-node@v4
+      # running on GitHub's forced Node 24 — it is NOT fixed by this line.
+      - name: Setup Node 22
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Unit tests (pure helpers, no network)
         working-directory: backend
@@ -46,24 +56,29 @@ jobs:
           HAS_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
         run: echo "has_token=$HAS_TOKEN" >> "$GITHUB_OUTPUT"
 
+      # wrangler is pinned to the major declared in backend/package.json
+      # (^3.0.0). `wrangler@latest` is now 4.x, so CI was silently deploying
+      # with a different major than a local `npm run deploy`. There is no
+      # lockfile in backend/, so an exact pin is not possible without adding one.
       - name: Deploy to Cloudflare Workers
         if: steps.token.outputs.has_token == 'true'
         working-directory: backend
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npx wrangler@latest deploy
+        run: npx wrangler@3 deploy
 
-      - name: Deploy skipped — how to enable auto-deploy
+      - name: Fail — CLOUDFLARE_API_TOKEN missing, nothing was deployed
         if: steps.token.outputs.has_token != 'true'
         run: |
-          echo "Set CLOUDFLARE_API_TOKEN secret to enable auto-deploy (or use Workers Builds)."
+          echo "::error title=Deploy skipped::CLOUDFLARE_API_TOKEN is not set, so this run deployed NOTHING. This check is red on purpose — see the header of .github/workflows/deploy-backend.yml."
           echo ""
-          echo "  Option A (no token at all): dash.cloudflare.com → Workers & Pages →"
-          echo "    Create → Connect to Git → this repo, root directory: backend."
+          echo "  Option A (no token at all): dash.cloudflare.com -> Workers & Pages ->"
+          echo "    Create -> Connect to Git -> this repo, root directory: backend."
+          echo "    Then delete .github/workflows/deploy-backend.yml."
           echo "  Option B (this workflow):"
-          echo "    1. dash.cloudflare.com → My Profile → API Tokens → Create Token →"
-          echo "       'Edit Cloudflare Workers' template → Create."
-          echo "    2. GitHub → this repo → Settings → Secrets and variables → Actions →"
-          echo "       New repository secret → Name: CLOUDFLARE_API_TOKEN."
-          echo "    3. Push again (or Actions → Deploy backend → Run workflow)."
+          echo "    1. dash.cloudflare.com -> My Profile -> API Tokens -> Create Token ->"
+          echo "       'Edit Cloudflare Workers' template -> Create."
+          echo "    2. GitHub -> this repo -> Settings -> Secrets and variables -> Actions ->"
+          echo "       New repository secret -> Name: CLOUDFLARE_API_TOKEN."
+          echo "    3. Actions -> Deploy backend -> Run workflow (no new commit needed)."
+          exit 1
