@@ -659,6 +659,24 @@
         .catch(function () { /* keep the last known id */ });
     }
 
+    /* Coarse region for the delivery report: the country subtag of the user's
+       own locale, e.g. 'en-IN' → 'IN'. Deliberately locale-derived rather than
+       IP-derived — the advertiser report labels regions "device-reported, not
+       verified", and this keeps that claim true. Returns '' when the locale
+       carries no region, so the server's 'unknown' bucket stays honest instead
+       of being handed a guess. */
+    function currentRegion() {
+      try {
+        var langs = (navigator.languages && navigator.languages.length)
+          ? navigator.languages : [navigator.language || ''];
+        for (var i = 0; i < langs.length; i++) {
+          var m = /[-_]([A-Za-z]{2})(?:[-_]|$)/.exec(String(langs[i] || ''));
+          if (m) return m[1].toUpperCase();
+        }
+      } catch (e) { /* locale unavailable — report no region at all */ }
+      return '';
+    }
+
     function trackImpression() {
       if (state.paused || document.hidden) return;   // visible + not paused only
       if (!trackedCampaignId) return;                // nothing served → nothing to report
@@ -670,7 +688,9 @@
             deviceId: dev, type: 'impression', campaignId: trackedCampaignId, minutes: 1,
             /* which platform this placement happened on (mac | pwa | web-mac …) —
                the public /stats mix is built from this field */
-            platform: (typeof D.currentPlatform === 'function') ? D.currentPlatform() : 'web'
+            platform: (typeof D.currentPlatform === 'function') ? D.currentPlatform() : 'web',
+            /* which coarse region — the second axis of the same mix */
+            region: currentRegion()
           })
         }).catch(function () { /* best-effort — silent */ });
       } catch (e) { /* best-effort — silent */ }

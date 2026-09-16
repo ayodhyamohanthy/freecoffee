@@ -920,6 +920,10 @@ a.crumb:hover { color: var(--gold-bright); text-decoration: none; }
 .sim > h2 { margin-bottom: 2px; }
 .sim .section-sub { margin-bottom: 22px; }
 .sim-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 30px; }
+/* Grid children default to min-width:auto, which lets a wide range input push
+   the column past its track and overflow the card. Pin it to 0 so the sliders
+   shrink with the track instead. */
+.sim-controls { min-width: 0; }
 .slider-row { margin-bottom: 20px; }
 .slider-row label {
   display: flex; justify-content: space-between; align-items: baseline;
