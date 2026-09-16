@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FreeCoffee — design directions</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0d0b08;color:#e9e3d9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;padding:2rem;display:grid;grid-template-columns:repeat(2,1fr);gap:2rem;max-width:1500px;margin:0 auto}
+@media(max-width:900px){body{grid-template-columns:1fr}}
+.card{border-radius:16px;overflow:hidden;border:1px solid #2a2118;min-height:420px;display:flex;flex-direction:column}
+.head{padding:1.1rem 1.4rem;border-bottom:1px solid #2a2118;display:flex;align-items:baseline;gap:.9rem}
+.head h2{font-size:1rem;letter-spacing:.04em}
+.head p{font-size:.75rem;color:#8d8377;letter-spacing:.02em}
+.hero{flex:1;padding:1.6rem 1.4rem;display:flex;flex-direction:column;justify-content:center;gap:.9rem}
+.eye{font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;opacity:.75}
+.h1{font-size:2rem;line-height:1.08;letter-spacing:-.01em}
+.sub{font-size:.85rem;line-height:1.5;opacity:.85;max-width:44ch}
+.cta{display:inline-flex;gap:.6rem;margin-top:.4rem}
+.btn{border-radius:8px;padding:.55rem 1.1rem;font-size:.8rem;font-weight:600;border:1px solid transparent}
+.pri{background:#e0a93e;color:#14100d}
+.ghost{border-color:rgba(255,255,255,.18);color:inherit;background:transparent}
+.chip{display:inline-flex;align-items:center;gap:.55rem;background:#2c2c30;border-radius:10px;padding:.4rem .7rem;font-size:.75rem;width:-moz-fit-content;width:fit-content;margin-top:.5rem}
+.tile{width:16px;height:16px;border-radius:4.5px;background:#e0a93e;color:#14100d;font-weight:700;font-size:.6rem;display:flex;align-items:center;justify-content:center}
+.ld{color:#b0b0b8;font-size:.62rem}
+.dot{width:5px;height:5px;border-radius:50%;background:#6fbf8b;margin-left:.35rem}
+.bars{display:flex;gap:5px;align-items:flex-end;height:44px;margin-top:.8rem}
+.bar{flex:1;background:linear-gradient(#efbe5a,#c97b2d);border-radius:3px}
+.q{color:#efbe5a}
+
+/* A — elevated light paper */
+.a{background:#f7f4ee;color:#241f18;border-color:#e3ded4}
+.a .head{border-color:#e3ded4}
+.a .hero{max-height:420px}
+.a .h1{color:#1d1913}
+.a .sub{color:#5d564a}
+.a .eye{color:#9a8f7d}
+.a .h1 em{font-style:normal;color:#6c5a34}
+
+/* B — dark coffee */
+.b{background:linear-gradient(155deg,#181310,#221a13 60%,#181310)}
+.b .h1 em{color:#efbe5a;font-style:normal;text-shadow:0 0 26px rgba(224,169,62,.28)}
+.b .ghost{border-color:rgba(224,169,62,.3)}
+
+/* C — bold product marketing */
+.c{background:linear-gradient(150deg,#171b2e,#3a1b4f 55%,#7a2410)}
+.c .h1{letter-spacing:-.02em}
+.c .h1 em{font-style:normal;background:linear-gradient(90deg,#ffd166,#ff9866);-webkit-background-clip:text;background-clip:text;color:transparent}
+.c .chip{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14)}
+
+/* D — utility dashboard */
+.d{background:#f2f2f3;color:#1a1a1c;border-color:#dcdce0}
+.d .head{border-color:#dcdce0}
+.d .h1{font-size:1.5rem;letter-spacing:-.005em}
+.d .sub{color:#4a4a4f}
+.d .eye{color:#7a7a82}
+.d .pri{background:#1769e0;color:#fff}
+.d .chip{background:#fff;border:1px solid #dcdce0}
+.d .ld{color:#7a7a82}
+.d .tile{background:#1769e0;color:#fff}
+.d .bar{background:#c6c9d0}
+.bar:last-child{border:2px solid #e0a93e;vertical-align:top;margin-top:auto}
+</style>
+</head>
+<body>
+
+<div class="card a">
+  <div class="head"><h2>A — Elevated light paper</h2><p>Calm editorial, quiet trust</p></div>
+  <div class="hero">
+    <p class="eye">MAC ADVERTISING, ON YOUR TERMS</p>
+    <h1 class="h1">Let your Mac pay <br>for the <em>next coffee.</em></h1>
+    <p class="sub">Verified minute-long placements. Transparent 65% share. Pause anytime.</p>
+    <div class="chip"><span class="tile">FC</span>Fernhill Coffee<span class="ld">Sponsored placement</span><span class="dot"></span></div>
+    <div class="cta"><a class="btn pri">Join the waitlist</a><a class="btn ghost">Advertise</a></div>
+    <div class="bars"><div class="bar" style="height:60%"></div><div class="bar" style="height:85%"></div><div class="bar" style="height:48%"></div><div class="bar" style="height:75%"></div><div class="bar" style="height:$0"></div><div class="bar" style="height:30%"></div><div class="bar" style="height:52%"></div><div class="bar" style="height:66%;background:#135c0f"></div></div>
+  </div>
+</div>
+
+<div class="card b">
+  <div class="head"><h2>B — Rich dark, coffee-warm</h2><p>Matches the app icon + menubar</p></div>
+  <div class="hero">
+    <p class="eye">MAC ADVERTISING, ON YOUR TERMS</p>
+    <h1 class="h1">Let your Mac pay <br>for the <em>next coffee.</em></h1>
+    <p class="sub">Verified minute-long placements in the quietest slot on your screen.</p>
+    <div class="chip"><span class="tile">FC</span>Fernhill Coffee<span class="ld">Fresh roast days</span><span class="dot"></span></div>
+    <div class="cta"><a class="btn pri">Join the waitlist</a><a class="btn ghost">Advertise</a></div>
+    <div class="bars"><div class="bar" style="height:60%"></div><div class="bar" style="height:85%"></div><div class="bar" style="height:48%"></div><div class="bar" style="height:75%"></div><div class="bar" style="height:0"></div><div class="bar" style="height:30%"></div><div class="bar" style="height:52%"></div><div class="bar" style="height:66%"></div></div>
+  </div>
+</div>
+
+<div class="card c">
+  <div class="head"><h2>C — Bold product marketing</h2><p>Gradient-heavy conversion page</p></div>
+  <div class="hero">
+    <p class="eye">BUILT LIVE. IN PUBLIC.</p>
+    <h1 class="h1">Your menu bar<br><em>earns while you wait.</em></h1>
+    <p class="sub">Minute bids. Proxied slots. Proof-of-play receipts. Zero delivery faked.</p>
+    <div class="chip"><span class="tile">FC</span><b>Fernhill Coffee</b><span class="ld">Fresh roast days</span><span class="dot"></span></div>
+    <div class="cta"><a class="btn pri">Join the waitlist</a><a class="btn ghost" style="border-color:rgba(255,255,255,.25)">Sell a slot</a></div>
+  </div>
+</div>
+
+<div class="card d">
+  <div class="head"><h2>D — Utility dashboard</h2><p>Operable, dense, no frills</p></div>
+  <div class="hero">
+    <p class="eye">FREECOFFEE — MENU-BAR SLOTS</p>
+    <h1 class="h1">Compact placements<br>with a public ledger.</h1>
+    <p class="sub">65% to the viewer. CPM floors per tier. Immediate, auditable settlement.</p>
+    <div class="chip"><span class="tile">FC</span>Fernhill Coffee<span class="ld">Fresh roast days</span><span class="dot"></span></div>
+    <div class="cta"><a class="btn pri">Join waitlist</a><a class="btn ghost">Advertise</a></div>
+    <p class="ld" style="margin-top:.8rem">Today: 0 live slots · avg eye. $4.00 · 0 purchases</p>
+  </div>
+</div>
+
+</body>
+</html>
