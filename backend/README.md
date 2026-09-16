@@ -90,6 +90,35 @@ backend/
    `npx wrangler deploy` on every push that touches `backend/**`. Until the
    secret exists the workflow simply prints a reminder and **never fails**.
 
+> ### Verify what is actually deployed — do this before debugging any page
+>
+> "Never fails" has a cost: both paths above can leave the live Worker silently
+> behind the repo, with every check still green. That is not hypothetical. On
+> **2026-09-16** the deployed Worker answered `/health`, `/feed.json`,
+> `/earnings/{id}`, `/track` and `/admin/feed`, while **`/stats`, `/slots`,
+> `/slots/current`, `/slots/bid`, `/submit`, `/admin/queue`, `/admin/review`,
+> `/referral` and `/referrals/{code}` all returned
+> `404 {"ok":false,"error":"not found"}`.** The delivery report on
+> `campaigns.html`, the slot picker on `advertisers.html`, the submission form
+> and the whole referral loop therefore could not work in production, and the
+> site was promising all four.
+>
+> ```bash
+> B=https://freecoffee-backend.ayodhya-711.workers.dev
+> for p in /health /feed.json /stats /slots /slots/current; do
+>   printf '%-18s %s\n' "$p" "$(curl -s -o /dev/null -w '%{http_code}' "$B$p")"
+> done
+> ```
+>
+> Read the codes carefully: **404 means the route is absent from the
+> deployment.** A 400 or 401 means the route exists and rejected the empty
+> request — which is the answer you want. Note the real paths are `/feed.json`
+> and `/earnings/{deviceId}`, not `/feed` and `/earnings`.
+>
+> Fix it with `cd backend && npx wrangler deploy`, or set the
+> `CLOUDFLARE_API_TOKEN` repo secret so the workflow stops skipping, or switch
+> to Workers Builds (Path A) which deploys on push with no token at all.
+
 ### ② Create the KV namespace and bind it
 
 1. Dashboard → **Workers & Pages → KV → Create a namespace** → name it

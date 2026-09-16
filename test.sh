@@ -182,12 +182,14 @@ else
 fi
 
 # ------------------------------------------------------------------ 6. Asset presence
-step "7/8 Referenced local files exist"
+step "7/8 Referenced local files exist + in-page fragments resolve"
 python3 - <<'PY'
 import re, glob, os, sys
 missing = []
+srcs = {}
 for f in glob.glob('*.html'):
     src = open(f, encoding='utf-8').read()
+    srcs[f] = src
     for m in re.findall(r'(?:href|src)="([^"#][^"]*)"', src):
         if m.startswith(('http:', 'https:', 'mailto:', 'data:')): continue
         clean = m.split('#')[0].split('?')[0]
@@ -201,8 +203,29 @@ if missing:
     for m in missing: print('    FAIL missing: ' + m)
     sys.exit(1)
 print('    ok   every local href/src resolves to a real file')
+
+# Fragment targets. A link to page.html#frag is only honest if page.html actually
+# has id="frag". This is the check that was missing when a page redesign deleted
+# its #faq section but left 13 links pointing at it — every one of them "resolved
+# to a real file" while scrolling nowhere.
+ids = dict((f, set(re.findall(r'\bid=["\']([^"\']+)["\']', s))) for f, s in srcs.items())
+dead = []
+for f, src in srcs.items():
+    for m in re.findall(r'href="([^"]*#[^"]+)"', src):
+        if m.startswith(('http:', 'https:', 'mailto:', 'data:')): continue
+        target, frag = m.split('#', 1)
+        target = target or f
+        if not target.endswith('.html') or target not in ids: continue
+        if frag in ids[target]: continue
+        # An id the target's own script creates at runtime still counts as present.
+        if re.search(r'["\']%s["\']' % re.escape(frag), srcs[target]): continue
+        dead.append('%s -> %s' % (f, m))
+if dead:
+    for d in dead: print('    FAIL dead anchor: ' + d)
+    sys.exit(1)
+print('    ok   every in-page fragment resolves to a real id')
 PY
-[ $? -eq 0 ] && ok "asset references" || bad "asset references"
+[ $? -eq 0 ] && ok "asset references + fragment anchors" || bad "asset references + fragment anchors"
 
 # ------------------------------------------------------------------ 7. Asset version pairing
 step "8/8 Asset version pairing (?v= <-> sw.js ASSET_V <-> CACHE)"

@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Advertise — FreeCoffee</title><meta name="description" content="Submit a compact creative, bid on a four-hour block, and receive verified proof of play."><link rel="stylesheet" href="assets/css/styles.css?v=1002006"></head><body class="fc-public theme-light"><a class="skip-link" href="#main">Skip to content</a><div class="fc-announce"><span>Built in public · launch access opening in stages</span><a href="advertisers.html">Ad slots open →</a></div><header class="fc-nav"><a class="fc-wordmark" href="index.html">freecoffee.tech</a><button class="fc-menu" aria-label="Open menu" onclick="this.parentElement.classList.toggle('open')">Menu</button><nav><a href="index.html#earn">Earn</a><a href="advertisers.html">Advertise</a><a href="agents.html">Agents</a><a href="install-guide.html">Download</a><a href="index.html#faq">FAQ</a><a class="fc-pill" href="profile.html">Sign in</a></nav></header><main id="main"><section class="fc-hero fc-adhero"><div><p class="fc-eye">FOUR-HOUR MAC AD SLOTS</p><h1>Your brand, in a <em>quieter place.</em></h1><p>Reach Mac users through compact ad slots they chose to see.</p><div class="fc-actions"><a class="fc-primary" href="campaigns.html">Submit an ad</a><a href="#picker">Browse slots</a></div><div class="fc-auction"><small>NEXT AUCTION</small><p>Inventory opens in stages. Reserve and close time appear only when a real slot is available.</p></div></div><div class="fc-adunit"><span class="fc-logo">FC</span><p><b>One clear headline</b><small>One quiet line of useful context</small></p><i></i></div></section>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Advertise — FreeCoffee</title><meta name="description" content="Submit a compact creative, bid on a four-hour block, and receive verified proof of play."><link rel="stylesheet" href="assets/css/styles.css?v=1002007"></head><body class="fc-public theme-light"><a class="skip-link" href="#main">Skip to content</a><div class="fc-announce"><span>Built in public · launch access opening in stages</span><a href="advertisers.html">Ad slots open →</a></div><header class="fc-nav"><a class="fc-wordmark" href="index.html">freecoffee.tech</a><button class="fc-menu" aria-label="Open menu" onclick="this.parentElement.classList.toggle('open')">Menu</button><nav><a href="index.html#earn">Earn</a><a href="advertisers.html">Advertise</a><a href="agents.html">Agents</a><a href="install-guide.html">Download</a><a href="index.html#faq">FAQ</a><a class="fc-pill" href="profile.html">Sign in</a></nav></header><main id="main"><section class="fc-hero fc-adhero"><div><p class="fc-eye">FOUR-HOUR MAC AD SLOTS</p><h1>Your brand, in a <em>quieter place.</em></h1><p>Reach Mac users through compact ad slots they chose to see.</p><div class="fc-actions"><a class="fc-primary" href="campaigns.html">Submit an ad</a><a href="#picker">Browse slots</a></div><div class="fc-auction"><small>NEXT AUCTION</small><p>Inventory opens in stages. Reserve and close time appear only when a real slot is available.</p></div></div><div class="fc-adunit"><span class="fc-logo">FC</span><p><b>One clear headline</b><small>One quiet line of useful context</small></p><i></i></div></section>
 <section class="fc-dark fc-split" id="slots"><div><p class="fc-eye">SLOT AUCTION</p><h2>How a slot works.</h2><p>Every day is six four-hour blocks, in UTC. Set your CPM on the blocks you want — the highest bid on a block takes every impression in it.</p></div><dl class="fc-ledger"><span>Slot <b>4 hours · 6 per day, UTC</b></span><span>Auction <b>Highest CPM wins</b></span><span>Winner pays <b>Their winning bid</b></span><span>Tie-break <b>Earliest bid wins</b></span><span>Minimum bid <b>$1 CPM</b></span><span>Revenue split <b>65% viewers · 35% FreeCoffee</b></span></dl></section>
 <section class="fc-flow" id="picker">
   <p class="fc-eye">LIVE INVENTORY</p>
@@ -130,10 +130,31 @@
      3. A verdict is deleted the moment its block is unpicked, so no stale
         win/lose badge can survive a selection change. */
 (function () {
-  var BACKEND = 'https://freecoffee-backend.ayodhya-711.workers.dev';
+  var PROD_BACKEND = 'https://freecoffee-backend.ayodhya-711.workers.dev';
   var STORE_KEY = 'freecoffee:slotCampaign';
   var MAX_AHEAD = 400;                    // mirrors SLOT_MAX_AHEAD_DAYS
   var $ = function (id) { return document.getElementById(id); };
+
+  /* Same override the app shell uses (Profile → BACKEND API URL, persisted in
+     freecoffee:v1 → profile.backendUrl). A visitor who has pointed the app at
+     their own backend should have the public grid read from it too.
+
+     https is required for any real host, because a bid is a money-adjacent
+     write. http://localhost and http://127.0.0.1 are allowed as well: the
+     WHATWG spec classes them as secure contexts, and without the exception the
+     grid cannot be exercised against a local worker at all. */
+  function backendBase() {
+    try {
+      var raw = localStorage.getItem('freecoffee:v1');
+      var s = raw ? JSON.parse(raw) : null;
+      var url = (s && s.profile && typeof s.profile.backendUrl === 'string')
+        ? s.profile.backendUrl.trim() : '';
+      var ok = /^https:\/\//i.test(url) || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(url);
+      if (ok) return url.replace(/\/+$/, '');
+    } catch (e) { /* unreadable storage → fall through to production */ }
+    return PROD_BACKEND;
+  }
+  var BACKEND = backendBase();
 
   var cal = $('slotCal');
   if (!cal || !window.fetch) return;

@@ -991,6 +991,12 @@ input[type="range"]::-moz-range-thumb {
    ========================================================================== */
 .linkbox { display: flex; gap: 10px; align-items: stretch; margin-top: 14px; flex-wrap: wrap; }
 .linkbox .input { flex: 1; min-width: 220px; font-family: var(--mono); font-size: 0.86rem; }
+/* Share targets sit under the copy-link row. A grid rather than a flex row so
+   the labels stay aligned when the third one wraps on a narrow card. */
+.share-row {
+  display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+}
+.share-row .btn { min-width: 0; }
 .promptbox {
   width: 100%; min-height: 190px; resize: vertical;
   background: var(--input-bg); border: 1px solid var(--input-line);
