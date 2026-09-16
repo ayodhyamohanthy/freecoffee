@@ -1,7 +1,7 @@
 /*
  * FreeCoffeeMenuBar.swift
  * =======================
- * FreeCoffee demo — a single-file macOS menu-bar app (AppKit + Foundation only,
+ * FreeCoffee demo — a single-file macOS status area app (AppKit + Foundation only,
  * macOS 13+). Builds with:
  *
  *     swiftc -O FreeCoffeeMenuBar.swift -o FreeCoffeeMenuBar
@@ -44,9 +44,9 @@
   *     slot, megaphone + "Your brand here", and the popover + menu offer
   *     "Advertise here", opening the public advertiser pitch. The full
   *     description lives in the tooltip on hover and the popover header —
-  *     two lines can't fit the menu bar. Zero earnings impact.
+  *     two lines can't fit the Mac status area. Zero earnings impact.
  *
- * SNOOZE SEMANTICS: while snoozed the menu-bar chip reads
+ * SNOOZE SEMANTICS: while snoozed the Mac status area chip reads
  * "☕ FreeCoffee — snoozed until HH:MM", no earning ticks accrue, no live
  * ad rotation happens, and the deadline auto-resumes earning via a
  * Date-based check in the 60 s sponsor timer (plus the 1 s countdown
@@ -60,7 +60,7 @@
  *   URLs, trimmed/capped strings, cpm clamped 0–100, deduped by id, cap 20
  *   — mirroring assets/js/demo.js → fetchLiveCampaigns), caches the last
  *   good list to campaigns-cache.json, and shows those campaigns in the
- *   menu-bar chip and popover, marked LIVE. Highest bid wins: the shown
+ *   Mac status area chip and popover, marked LIVE. Highest bid wins: the shown
  *   list is pickAd(campaigns, minCPM) — sorted cpm DESC (ties by id ASC),
  *   and campaigns below the optional config.json "minCPM" floor (default 0)
  *   are filtered out entirely. Any failure falls back to the fictional
@@ -581,7 +581,7 @@ final class PopoverViewController: NSViewController {
 
         // ---- Tip line.
         let tip = NSTextField(wrappingLabelWithString:
-            "Tip: Hold ⌘ and drag menu-bar items to rearrange them.")
+            "Tip: Hold ⌘ and drag Mac status area items to rearrange them.")
         tip.font = NSFont.systemFont(ofSize: 9.5)
         tip.textColor = Coffee.textFaint
         tip.preferredMaxLayoutWidth = 268
@@ -1166,7 +1166,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var demoSponsor: String { Self.demoSponsors[demoSponsorIndex % Self.demoSponsors.count] }
 
     /// Feed configured but nothing usable right now (empty feed, all below
-    /// the floor, fetch failing on an empty cache). The menu bar turns into
+    /// the floor, fetch failing on an empty cache). The Mac status area turns into
     /// advertiser acquisition instead of a dead end.
     var awaitingSponsors: Bool { adFeedURL != nil && currentLiveCampaign == nil }
 
@@ -1278,7 +1278,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func refreshUI() {
-        // Menu-bar chip: snoozed → countdown; live sponsor when a feed is
+        // Mac status area chip: snoozed → countdown; live sponsor when a feed is
         // connected; acquisition slot when the feed is empty; otherwise the
         // rotating fictional demo sponsors (simulated, display only).
         if snoozed {
@@ -1314,7 +1314,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 image: chipTile(monogram: "FC", accentHex: "#E0A93E"),
                 headline: "Your brand here",
                 description: "No sponsors available")
-            statusItem.button?.toolTip = "No sponsors right now — put your brand in this menu bar. " +
+            statusItem.button?.toolTip = "No sponsors right now — put your brand in this Mac status area. " +
                 "Click for details."
             chipDotColor = Coffee.waiting
         } else {
@@ -1341,15 +1341,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return formatter.string(from: until)
     }
 
-    /// Chip-safe sponsor name: the menu bar is narrow.
+    /// Chip-safe sponsor name: the Mac status area is narrow.
     private func truncateForBar(_ s: String, max: Int = 20) -> String {
         s.count <= max ? s : String(s.prefix(max - 1)) + "…"
     }
 
     /// Two-line chip title (headline + description), like the reference
-    /// pill. Tahoe's taller menu bar fits 11.5pt + 7.5pt; the description is
+    /// pill. Tahoe's taller Mac status area fits 11.5pt + 7.5pt; the description is
     /// capped short. Fixed light colors — the chip always sits on the dark
-    /// pill background (see setupChipPill), never on the bare menu bar.
+    /// pill background (see setupChipPill), never on the bare Mac status area.
     /// NOTE: no tailIndent here — the bar sizes the button to the title, so
     /// any right inset only shrinks the drawing area and truncates text.
     /// The dot zone comes from fitChipWidth() widening the button instead.
@@ -1455,10 +1455,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         chipDot.layer?.backgroundColor = color.cgColor
     }
 
-    /// Menu-bar tile: accent rounded square + monogram, i.e. the reference
+    /// Mac status area tile: accent rounded square + monogram, i.e. the reference
     /// pill's logo + headline (a description line can't fit the bar — it
     /// lives in the tooltip on hover and in the popover header instead).
-    /// Menu-bar tile cache — NSCache (bounded, main-thread only like all
+    /// Mac status area tile cache — NSCache (bounded, main-thread only like all
     /// refreshUI callers) instead of an unbounded dict.
     private static let tileCache: NSCache<NSString, NSImage> = {
         let c = NSCache<NSString, NSImage>()
@@ -2188,7 +2188,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let alert = NSAlert()
         alert.messageText = "FreeCoffee demo"
         alert.informativeText = """
-        Your menu bar buys the coffee. Menu-bar advertising demo — without a configured ad feed, \
+        Your Mac status area buys the coffee. Mac status area advertising demo — without a configured ad feed, \
         sponsors, bids, and earnings are simulated; no real money moves and nothing is collected: \
         no screen contents, files, browser history, keystrokes, screenshots, or window titles. \
         Optionally, config.json can point at an HTTPS advertiser feed — the app fetches that one \

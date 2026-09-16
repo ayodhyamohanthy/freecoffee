@@ -83,7 +83,7 @@ done
 [ "$JS_FAIL" = "0" ] && ok "assets/js/*.js + backend/src/worker.js parse cleanly"
 
 # Swift parse gate (macOS only, best-effort): catches typos/bracket slips in
-# the menu-bar app without a full typecheck. Skipped, not failed, off-Mac.
+# the Mac status area app without a full typecheck. Skipped, not failed, off-Mac.
 if command -v xcrun >/dev/null 2>&1; then
   if xcrun -sdk macosx swiftc -parse app/FreeCoffeeMenuBar.swift >/dev/null 2>&1; then
     ok "FreeCoffeeMenuBar.swift parses (xcrun swiftc -parse)"

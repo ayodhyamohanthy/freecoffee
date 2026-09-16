@@ -35,11 +35,11 @@ Numbers you can say out loud:
 
 ## Email 1 — first contact (dev tools / Mac apps)
 
-Subject: 1-line pitch: your product on a Mac menu bar for $99
+Subject: 1-line pitch: your product on a Mac status area for $99
 
 > Hi <name>,
 >
-> I built FreeCoffee — a Mac menu-bar app + PWA where users watch one
+> I built FreeCoffee — a Mac status area app + PWA where users watch one
 > sponsor slide per session and real micro-earnings accrue to a public
 > ledger. It just shipped (v1.1.4, universal DMG + release notes on
 > GitHub: https://github.com/ayodhyamohanthy/freecoffee-dist).

@@ -1,12 +1,12 @@
 # FreeCoffee
 
-**Your menu bar buys the coffee.** FreeCoffee is a Mac menu-bar advertising product: advertisers
-bid in a real-time auction for minute-long placements in the empty stretch of your menu bar, and
+**Your Mac status area buys the coffee.** FreeCoffee is a Mac status area advertising product: advertisers
+bid in a real-time auction for minute-long placements in the empty stretch of your Mac status area, and
 you keep a transparent share of every winning bid — enough, on the demo numbers, for the coffee
 (**1 cup = $5**, so every balance also reads "≈ N cups").
 
 This repository is a **complete local demo** — a static marketing/demo site plus a real, compiled
-macOS menu-bar app. Everything runs on your machine: no backend, no frameworks, no build step for
+macOS status area app. Everything runs on your machine: no backend, no frameworks, no build step for
 the web layer, no CDNs, no external fonts, no npm.
 
 > **FreeCoffee demo — simulated data.**
@@ -27,7 +27,7 @@ That's it — any static file server works.
 
 | Page | What it is |
 |---|---|
-| `index.html` | Landing page: hero with a **live CSS/DOM mock of the macOS menu bar** (rotating sponsor chip, ticking clock, growing balance) **plus a mock of the menu-bar popover** (TOTAL BALANCE block with cups hint, caramel boost line, 7-day bar chart, footer buttons), how-it-works, the privacy data boundary, FAQ. |
+| `index.html` | Landing page: hero with a **live CSS/DOM mock of the macOS status area** (rotating sponsor chip, ticking clock, growing balance) **plus a mock of the Mac status area popover** (TOTAL BALANCE block with cups hint, caramel boost line, 7-day bar chart, footer buttons), how-it-works, the privacy data boundary, FAQ. |
 | `dashboard.html` | App-shell page (**Earn › Overview**, light theme). Sidebar + breadcrumb shell, balance stat card (Total **$28.55** "≈ 5 cups", Available, Pending, This week, payout-progress toward the $2 minimum), a 14-day SVG area chart (slate-teal line `#4C7A8A` on fill `#DFE9ED`, y-grid, dotted markers), the full ledger with winning bids and exact cuts, an "Action required" panel, a "Recent sponsors" list, and the live payout simulator. Dismissible Setup-guide ("1 of 4 complete") and dark promo cards in the sidebar. `localStorage` key: `freecoffee:v1`. |
 | `payouts.html` | App-shell page (**Earn › Payouts**, light theme). Choose how you get paid: Stripe (gold gradient CTA) and Whop (orange gradient CTA) rails split by a divider — clicking marks `freecoffee:v1 → profile.payoutRail` connected (demo-only until the backend payout integration), a Balance 3-stat strip (Total/Available/Pending from the seeded ledger), and the Withdrawal history table fed by simulated `paidOut` records (empty state until the first simulated payout). |
 | `model.html` | App-shell page (**Account › Payout model**, light theme). The payout model in plain numbers: lever table, honesty policy, sustainability math (worked example), anti-fraud controls, payout rails. |
@@ -36,14 +36,14 @@ That's it — any static file server works.
 | `referrals.html` | App-shell page (**Earn › Referrals**). Referral link card (URL + Copy → clipboard), rewards cards, a 3-stat row (referred users **2** / referral earnings **$2.82** / next tier), and the referee table from the seeded ledger. The link itself is real and attributed (`?ref=<your code>`); a `REAL (backend)` line appears above the seeded numbers once a backend URL is configured. |
 | `flywheel.html` | App-shell page (**Earn › Flywheel**). The growth loop as code: the five stages (capture → activate → earn → share → advertise) with the back-edge that makes it compound, your own share kit (code + attributed link + Web Share), **ten platform artifacts** (Mac .dmg · Homebrew · PWA · GitHub · AI agent/MCP · X · LinkedIn · Reddit · Hacker News · email) each labelled *attributed* or *no referrer*, three live tile counts (`—` until a backend is configured, never a fake zero), the full "what is live today / what is not" audit table, and the compounding argument. `localStorage`: `freecoffee:refcode`, `freecoffee:refcapture`. |
 | `advertisers.html` | App-shell page (**Advertise › Campaigns**). The advertiser pitch + self-serve onboarding: hero, how-it-works (submit feed → review → live), the copyable feed contract JSON, the honesty box (what the client reports today vs what needs the platform backend), pricing (auction CPM with tier floors, $15 minimum, 65% to the user), and the contact card (`advertisers@freecoffee.tech`). |
-| `assets/js/demo.js` | Seeded PRNG (mulberry32, seed 42), history generator, projection math, cups helper, menu-bar demo + popover mock cycler, and the live-feed bridge (`fetchLiveCampaigns` — the AD FEED CONTRACT client). Also CommonJS-exported — `node` can `require` it. |
+| `assets/js/demo.js` | Seeded PRNG (mulberry32, seed 42), history generator, projection math, cups helper, Mac status area demo + popover mock cycler, and the live-feed bridge (`fetchLiveCampaigns` — the AD FEED CONTRACT client). Also CommonJS-exported — `node` can `require` it. |
 | `assets/js/dashboard.js` | Dashboard rendering + interactions, plus the live-campaign surfaces (banner under the balance card, LIVE rows in Recent sponsors, disconnect). All dynamic strings go through `textContent`/`createElement` — no `innerHTML` with dynamic data. |
-| `assets/css/styles.css` | The whole design system: espresso darks, coffee-gold `#E0A93E` family, the app-shell (sidebar / breadcrumb / cards), popover panel, forms, tables, chips, toggles, sliders, toasts, the menu-bar mock, responsive stacking, `:focus-visible`, `prefers-reduced-motion`. |
+| `assets/css/styles.css` | The whole design system: espresso darks, coffee-gold `#E0A93E` family, the app-shell (sidebar / breadcrumb / cards), popover panel, forms, tables, chips, toggles, sliders, toasts, the Mac status area mock, responsive stacking, `:focus-visible`, `prefers-reduced-motion`. |
 | `manifest.webmanifest` + `sw.js` | The PWA layer: installable manifest (standalone display, `#E0A93E` theme) and the service worker that precaches all eight pages. See **PWA — installable web app** below. |
 | `assets/icons/` | Generated PWA icons (192, 512, 512 maskable) — same coffee-cup generator as the Mac app icon. |
-| `app/` | The Mac menu-bar app (see below). |
+| `app/` | The Mac status area app (see below). |
 
-## The Mac menu-bar app
+## The Mac status area app
 
 A single-file Swift/AppKit app — no Xcode project needed. `build.sh` produces the
 bare dev binary **and** an installable `dist/FreeCoffee.app` + `dist/FreeCoffee.dmg`:
@@ -51,7 +51,7 @@ bare dev binary **and** an installable `dist/FreeCoffee.app` + `dist/FreeCoffee.
 ```bash
 cd freecoffee/app
 ./build.sh             # swiftc build → icons → dist/FreeCoffee.app → ad-hoc sign → dist/FreeCoffee.dmg
-./FreeCoffeeMenuBar    # bare dev run: "☕ FreeCoffee" appears at the top-right of your menu bar
+./FreeCoffeeMenuBar    # bare dev run: "☕ FreeCoffee" appears at the top-right of your Mac status area
 ```
 
 ### What it does
@@ -63,7 +63,7 @@ cd freecoffee/app
   - caramel boost line **"☕ 65% base share — always on"**,
   - **Earnings · 7 days** inset bar chart (M T W T F S S with value labels, drawn from the
     persisted per-day history by a custom `NSView`),
-  - the gray **"Tip: Hold ⌘ and drag menu-bar items to rearrange them."** line,
+  - the gray **"Tip: Hold ⌘ and drag Mac status area items to rearrange them."** line,
   - divider → footer **Settings · Snooze · Disable · Account** buttons:
     Settings opens the live dashboard (`https://freecoffee.tech/dashboard.html`),
     Snooze pauses earning for 30 minutes with a live countdown,
@@ -87,7 +87,7 @@ cd freecoffee/app
 2. **First launch only:** right-click FreeCoffee → **Open** → confirm (see the Gatekeeper
    note in [`app/Info-howto.md`](app/Info-howto.md)), or use System Settings → Privacy & Security →
    **Open Anyway**.
-3. That's it — the ☕ status item appears at the top-right of the menu bar.
+3. That's it — the ☕ status item appears at the top-right of the Mac status area.
 
 ### Launch at Login
 
@@ -150,7 +150,7 @@ published economics: the 65%→70% ratchet, the $2 payout floor, and the tier fl
 
 FreeCoffee has a pluggable ad-feed contract: when you obtain **any** real ad campaign — an affiliate
 feed, an offerwall, or a direct sponsor — it plugs in by pasting **one HTTPS URL**. No rebuild, no
-backend, no code changes. Campaigns from the feed render with a **LIVE** marker in the menu bar,
+backend, no code changes. Campaigns from the feed render with a **LIVE** marker in the Mac status area,
 on the dashboard, and on the landing demo; the honest labels say what is true: live campaigns are
 *connected*, but their **earnings settle once the platform backend is live** — they never inject
 anything into the simulated demo ledger.
@@ -192,12 +192,12 @@ the fictional demo sponsors without touching earnings math.
 
 1. **Affiliate feeds** — networks like **Impact** or **PartnerStack** expose offer feeds / APIs you
    can transform into the JSON shape above with a small script hosted anywhere. Fastest route to a
-   real, varied inventory; you pick offers that fit a menu-bar audience.
+   real, varied inventory; you pick offers that fit a Mac status area audience.
 2. **Offerwall APIs** — **BitLabs**, **TapResearch**, and similar offerwall APIs return JSON offer
    lists (surveys, app trials) with payout rates; map their fields to the contract (`cpm` ← their
    payout rate) and the bridge does the rest.
 3. **Direct sponsors** — coffee brands are the natural pitch: a roaster's "20% off your first bag"
-   chip in the menu bar of people who literally measure their day in cups. One sponsor, one JSON
+   chip in the Mac status area of people who literally measure their day in cups. One sponsor, one JSON
    file on their CDN — the pitch page is [`advertisers.html`](advertisers.html).
 
 ### The self-serve flow (advertisers.html)
@@ -206,7 +206,7 @@ The **Advertise › Campaigns** page (`advertisers.html`) is the pitch + onboard
 how review works, the copyable feed spec, the honesty box, and the pricing card (auction CPM with
 the published tier floors, $15 minimum campaign spend, 65% to the user). The flow: host the JSON
 anywhere HTTPS (GitHub raw, your CDN, your server) → paste the URL into **Profile › Ad feed URL**
-(Test button verifies it) → campaigns appear in the menu bar and dashboard. Email
+(Test button verifies it) → campaigns appear in the Mac status area and dashboard. Email
 `advertisers@freecoffee.tech` for the review step — every campaign is human-reviewed before it can
 reach other users.
 
@@ -216,7 +216,7 @@ reach other users.
 client counts impressions/clicks locally (demo accounting on simulated numbers) and we do not
 pretend otherwise: no fabricated delivery dashboards, no invoices until the platform backend and
 payment rails exist. What you can honestly demo today is the full placement experience — your
-brand rotating in the menu bar, LIVE-marked everywhere, with the exact verification rules the
+brand rotating in the Mac status area, LIVE-marked everywhere, with the exact verification rules the
 production platform will bill on.
 
 ## Demo-data honesty
@@ -264,8 +264,8 @@ make that day come faster — each item is a channel, not a guess.
    $15 minimum and the platform cut on the first $100 for the first 10. Prospect list to work by
    hand (email `advertisers@freecoffee.tech` is already on the page): indie macOS app makers
    (they're your natural audience — they ship on Macs), developer-tool SaaS, coffee/desk brands,
-   and any brand already buying menu-bar or desktop placements elsewhere (proven buyers of this
-   exact format). Each gets a two-minute pitch: "menu bar, 1 minute, your CPM, your dashboard — 0
+   and any brand already buying Mac status area or desktop placements elsewhere (proven buyers of this
+   exact format). Each gets a two-minute pitch: "Mac status area, 1 minute, your CPM, your dashboard — 0
    competition today because the room is empty."
 2. **Ship the universal DMG + Homebrew tap before pitching.** `app/build.sh` now builds
    arm64+x86_64 with a `/Applications` link in the DMG; a `v1.1.0` release makes the download
