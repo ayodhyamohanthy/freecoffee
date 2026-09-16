@@ -112,3 +112,20 @@ Subject: 1-line pitch: your product on a Mac status area for $99
 - The 50k-impressions guarantee: impressions are what KV counted
   (`counters.impressions`), not "opportunities". Quote it exactly.
 - All money talk stays in email; the repo never contains advertiser PII.
+
+## Launch pack (what to post when we go)
+
+Four files under `launch/` — pick whichever stage fits today:
+
+- `launch/x-thread.md` — the X attention stretch; pivot topic is "your Mac
+  pops, but it's paid" — not "installation".
+- `launch/landing-hero.md` — replace the site hero when slots go on sale.
+- `launch/linkedin-post.md` — founder story for the 25-target niche.
+- `launch/founder-email.md` — the first 10 direct sponsors.
+
+Publishing order: X first (members land and install), LinkedIn right after,
+then the two emails on the same day the first member count updates.
+
+Planning hit: the slot price (4h, "$6 CPM") stays locked to our delivery truth
+— these are selling *slots*, not impressions. If users sell out, the same copy
+works verbatim (just edit the count in line 2).
