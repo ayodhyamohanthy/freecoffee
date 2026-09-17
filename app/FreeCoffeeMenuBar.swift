@@ -514,7 +514,7 @@ final class PopoverViewController: NSViewController {
     weak var app: AppDelegate?
 
     private let statusDot = NSView()
-    private let statusLabel = NSTextField(labelWithString: "Earning")
+    private let statusLabel = NSTextField(labelWithString: "Waiting")
     private let sponsorLine = NSTextField(labelWithString: "")
     private let balanceField = NSTextField(labelWithString: "$0.00")
     private let splitLabel = NSTextField(labelWithString: "")
@@ -610,7 +610,7 @@ final class PopoverViewController: NSViewController {
 
         // ---- TOTAL BALANCE block.
         let totalCaption = NSTextField(labelWithAttributedString:
-            tracked("TOTAL BALANCE", size: 8.5, weight: .bold, color: Coffee.textFaint))
+            tracked("DEMO BALANCE", size: 8.5, weight: .bold, color: Coffee.textFaint))
         balanceField.font = NSFont.monospacedDigitSystemFont(ofSize: 27, weight: .bold)
         balanceField.textColor = Coffee.text
         splitLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 9.5, weight: .regular)
@@ -620,7 +620,7 @@ final class PopoverViewController: NSViewController {
         cupsLabel.textColor = Coffee.textFaint
 
         // ---- Boost line (caramel gradient tint).
-        let boost = NSTextField(labelWithString: "☕ 65% base share — always on")
+        let boost = NSTextField(wrappingLabelWithString: "70% base + 10% launch share\nLaunch bonus funded by the platform")
         boost.font = NSFont.systemFont(ofSize: 10.5, weight: .semibold)
         boost.textColor = Coffee.goldBright
         let boostBox = NSView()
@@ -740,17 +740,17 @@ final class PopoverViewController: NSViewController {
 
         // Status dot + label: Earning / Waiting / Disabled, with a LIVE
         // marker while a real-advertiser campaign is showing.
-        let earning = !state.disabled && !state.paused && app.isAwake
+        let earning = app.demoEligible
         let (dotColor, textColor, label): (NSColor, NSColor, String) = {
             if state.disabled { return (Coffee.textFaint, Coffee.textFaint, "Disabled") }
             if !earning { return (Coffee.waiting, Coffee.waiting, "Waiting") }
-            return (Coffee.success, Coffee.success, "Earning")
+            return (Coffee.success, Coffee.success, "Demo")
         }()
         statusDot.layer?.backgroundColor = dotColor.cgColor
         statusLabel.textColor = textColor
         if let camp = app.currentLiveCampaign {
-            statusLabel.stringValue = label + " · LIVE"
-            sponsorLine.stringValue = "LIVE · \(camp.sponsor)" +
+            statusLabel.stringValue = "Preview"
+            sponsorLine.stringValue = "Feed preview · \(camp.sponsor)" +
                 (camp.tagline.isEmpty ? "" : " — \(camp.tagline)")
             sponsorLine.font = NSFont.systemFont(ofSize: 9.5, weight: .medium)
             sponsorLine.textColor = Coffee.goldBright
@@ -773,8 +773,8 @@ final class PopoverViewController: NSViewController {
         }
 
         balanceField.stringValue = money(state.balanceCents)
-        splitLabel.stringValue = "available \(money(state.availableCents)) · pending \(money(state.pendingCents))"
-        cupsLabel.stringValue = "≈ \(state.balanceCents / 500) cups of coffee"
+        splitLabel.stringValue = "Simulated only · not withdrawable"
+        cupsLabel.stringValue = "$2 CPM · $0.0016 per eligible 60 seconds"
 
         chartView.values = state.weekValues
         chartView.labels = state.weekLetters
@@ -1203,7 +1203,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var eligibilityObservers: [NSObjectProtocol] = []
     private var clock: () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
     private(set) var demoEligible = false
-    private var lastIdleSeconds: TimeInterval? = 0
     private var history: [String: Int] = [:]   // yyyy-MM-dd → cents earned
     private var lastTick: Date?
     private var updateSeen: String?             // release version already auto-staged once
@@ -2010,7 +2009,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         conditions.awake = isAwake && displaysAwake
         conditions.unlocked = sessionActive && onConsole && !screenLocked && !locked
         conditions.idleSeconds = idleSeconds()
-        if conditions.idleSeconds == nil && lastIdleSeconds == nil { conditions.idleSeconds = lastIdleSeconds }
         conditions.placementVisible = placementVisible
         conditions.demo = adFeedURL == nil
         conditions.creative = demoSponsor

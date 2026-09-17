@@ -79,6 +79,70 @@ program += '''
 private let h = Harness()
 private let item = NSMenuItem()
 private let eligible = DemoEligibility.Conditions()
+private var gate = DemoEligibility()
+for t in 0..<60 { precondition(!gate.sample(at: Double(t), conditions: eligible)) }
+precondition(gate.sample(at: 60, conditions: eligible))
+precondition(!gate.sample(at: 60, conditions: eligible))
+for t in 61..<120 { precondition(!gate.sample(at: Double(t), conditions: eligible)) }
+precondition(gate.sample(at: 120, conditions: eligible))
+for change in 0..<14 {
+    gate.reset()
+    for t in 0..<60 { precondition(!gate.sample(at: Double(t), conditions: eligible)) }
+    var blocked = eligible
+    switch change {
+    case 0: blocked.paused = true
+    case 1: blocked.disabled = true
+    case 2: blocked.snoozed = true
+    case 3: blocked.awake = false
+    case 4: blocked.unlocked = false
+    case 5: blocked.idleSeconds = 300.001
+    case 6: blocked.placementVisible = false
+    case 7: blocked.demo = false
+    case 8: blocked.creative = "changed"
+    case 9: blocked.creative = nil
+    case 10: blocked.idleSeconds = nil
+    case 11: blocked.idleSeconds = .nan
+    case 12: blocked.idleSeconds = -1
+    default: blocked.creative = ""
+    }
+    precondition(!gate.sample(at: 60, conditions: blocked))
+    for t in 61..<121 { precondition(!gate.sample(at: Double(t), conditions: eligible)) }
+    precondition(gate.sample(at: 121, conditions: eligible))
+}
+private var boundary = eligible
+boundary.idleSeconds = 300
+precondition(boundary.eligible)
+gate.reset()
+precondition(!gate.sample(at: 0, conditions: eligible))
+precondition(!gate.sample(at: 3600, conditions: eligible))
+precondition(!gate.sample(at: 0, conditions: eligible))
+precondition(!gate.sample(at: .nan, conditions: eligible))
+precondition(gate.startedAt == nil)
+private var restoredGate = DemoEligibility()
+precondition(!restoredGate.sample(at: 100_000, conditions: eligible))
+private var accrual = DemoAccrual()
+private let date = Date(timeIntervalSince1970: 1_700_000_000)
+private var cents = 0
+for _ in 0..<1000 { cents += accrual.credit(on: date).balance }
+precondition(cents == 160 && accrual.balanceRemainder == 0)
+private var fractional = DemoAccrual()
+for _ in 0..<6 { precondition(fractional.credit(on: date).balance == 0) }
+private let encoded = try JSONEncoder().encode(fractional)
+fractional = try JSONDecoder().decode(DemoAccrual.self, from: encoded)
+precondition(fractional.credit(on: date).balance == 1)
+private let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: date)!
+precondition(fractional.credit(on: tomorrow).today == 0 && fractional.dayRemainder == 1600)
+private let legacy = try JSONDecoder().decode(FreeCoffeeState.self, from: Data("{}".utf8))
+precondition(legacy.demoAccrual.balanceRemainder == 0)
+private var cal = Calendar(identifier: .gregorian)
+cal.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+for (month, day, hours) in [(3, 8, 23), (11, 1, 25)] {
+    let start = cal.date(from: DateComponents(year: 2026, month: month, day: day))!
+    let end = restOfDayDeadline(from: start, calendar: cal)!
+    precondition(end.timeIntervalSince(start) == Double(hours * 3600))
+    precondition(cal.component(.hour, from: end) == 0)
+}
+print("PASS: production gate boundaries, interruptions, clock gaps, no catch-up; $2 CPM fractional persistence; DST snooze")
 private func prime() {
     h.eligibility.reset()
     for t in 0..<60 { precondition(!h.eligibility.sample(at: Double(t), conditions: eligible)) }
