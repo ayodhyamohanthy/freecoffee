@@ -21,7 +21,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<link rel="stylesheet" href="assets/css/styles.css?v=1002007">
+<link rel="stylesheet" href="assets/css/styles.css?v=1002010">
 </head>
 <body data-page="dashboard" class="theme-light">
 
@@ -215,6 +215,41 @@
         </div>
       </section>
 
+      <!-- ============ MAC STATUS AREA PREVIEW ============
+           The same component the native app ships, driven by the demo ledger.
+           "Pause ads" above freezes it, so the control does something real. -->
+      <section aria-label="Mac status area preview" style="margin-top:20px">
+        <div class="chart-head">
+          <h2>Your Mac status area</h2>
+          <p class="chart-hint" id="mbPreviewHint">rotates every few seconds · simulated data</p>
+        </div>
+        <div class="menubar-demo">
+          <div class="menubar-frame">
+            <div class="menubar" id="demoMenuBar" data-live="true" role="img" aria-label="Simulated macOS menu bar with a rotating sponsor chip and growing balance">
+              <div class="mb-left">
+                <span class="mb-logo" aria-hidden="true"><svg width="13" height="13" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><path d="M8 13h11a1 1 0 0 1 1 1v5a4 4 0 0 1-4 4h-5a4 4 0 0 1-4-4v-5a1 1 0 0 1 1-1z" fill="currentColor"/><path d="M20 14h2.2a2.4 2.4 0 0 1 0 4.8H20v-1.6h2.2a.8.8 0 0 0 0-1.6H20z" fill="currentColor"/><rect x="7" y="10.6" width="13.5" height="1.6" rx=".8" fill="currentColor"/></svg></span>
+                <span class="mb-item mb-strong">☕ FreeCoffee</span>
+                <span class="mb-item">File</span>
+                <span class="mb-item">Ads</span>
+                <span class="mb-item">Edit</span>
+              </div>
+              <div class="mb-right">
+                <span class="mb-sponsor" id="demoSponsorChip" title="Current winning sponsor">
+                  <span class="mb-chip-mark" aria-hidden="true">NL</span>
+                  <span class="mb-chip-copy"><strong>Northline</strong><small>Shipping software, on schedule</small></span>
+                  <i class="mb-chip-dot" aria-hidden="true"></i>
+                </span>
+                <span class="mb-balance" id="demoBalance" title="Simulated balance">$0.00</span>
+                <span class="mb-item mb-icon" aria-hidden="true">◐</span>
+                <span class="mb-clock" id="demoClock">--:--</span>
+              </div>
+            </div>
+          </div>
+          <p class="menubar-sponsor-tag" id="demoSponsorTag">Fictional demo sponsor (simulated) — display only, nothing is collected.</p>
+          <p class="menubar-footnote">Fictional sponsors (Northline, Ledgerly, Fernhill Coffee, Breeze VPN, Kite Studio). <a href="index.html#privacy">The data boundary</a>.</p>
+        </div>
+      </section>
+
       <!-- ============ LIVE CAMPAIGN FEED BANNER (real-advertiser bridge) ============ -->
       <div class="live-banner" id="liveBanner" hidden>
         <p class="live-banner-text" id="liveBannerText"></p>
@@ -400,8 +435,8 @@
 
 <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="false"></div>
 
-<script src="assets/js/demo.js?v=1002007"></script>
-<script src="assets/js/dashboard.js?v=1002007"></script>
+<script src="assets/js/demo.js?v=1002010"></script>
+<script src="assets/js/dashboard.js?v=1002010"></script>
 <script>
 /* Sidebar dismiss cards — persisted per card in freecoffee:v1 (shellPrefs). */
 (function () {

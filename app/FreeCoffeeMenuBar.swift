@@ -1211,6 +1211,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // LEFT-click → popover; RIGHT-click → menu (see statusItemClicked).
         statusItem.button?.action = #selector(statusItemClicked(_:))
         statusItem.button?.target = self
+        statusItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
         setupChipPill()   // dark pill + status dot behind logo + texts
 
         observeSleepWake()
@@ -1287,8 +1288,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             chipDescription.isHidden = true
             statusItem.button?.image = nil
             // Single line, untruncated in code (the bar itself clips) so the
-            // resume time is never cut by the 18-char headline cap. Same dot
-            // zone reservation as chipTitle.
+            // resume time is never cut by the headline cap. The dot zone is
+            // reserved by fitChipWidth.
             let snoozePara = NSMutableParagraphStyle()
             snoozePara.lineBreakMode = .byTruncatingTail
             let snoozeTitle = NSMutableAttributedString(
@@ -1346,36 +1347,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         s.count <= max ? s : String(s.prefix(max - 1)) + "…"
     }
 
-    /// Two-line chip title (headline + description), like the reference
-    /// pill. Tahoe's taller Mac status area fits 11.5pt + 7.5pt; the description is
-    /// capped short. Fixed light colors — the chip always sits on the dark
-    /// pill background (see setupChipPill), never on the bare Mac status area.
-    /// NOTE: no tailIndent here — the bar sizes the button to the title, so
-    /// any right inset only shrinks the drawing area and truncates text.
-    /// The dot zone comes from fitChipWidth() widening the button instead.
-    private func chipTitle(headline: String, description: String?) -> NSAttributedString {
-        let head = NSMutableAttributedString(
-            string: truncateForBar(headline, max: 18),
-            attributes: [.font: NSFont.systemFont(ofSize: 10.5, weight: .bold),
-                         .foregroundColor: NSColor.white])
-        if let d = description, !d.isEmpty {
-            let desc = NSAttributedString(
-                string: "\n" + truncateForBar(d, max: 22),
-                attributes: [.font: NSFont.systemFont(ofSize: 8.5, weight: .regular),
-                             .foregroundColor: NSColor(srgbRed: 0xB0 / 255.0, green: 0xB0 / 255.0, blue: 0xB8 / 255.0, alpha: 1)])
-            head.append(desc)
-        }
-        let para = NSMutableParagraphStyle()
-        para.lineSpacing = 0
-        para.minimumLineHeight = 10
-        para.maximumLineHeight = 10
-        para.alignment = .left
-        para.lineBreakMode = .byTruncatingTail
-        head.addAttribute(.paragraphStyle, value: para,
-                          range: NSRange(location: 0, length: head.length))
-        return head
-    }
-
     /// The bar sizes the button to the title alone, which lets long lines
     /// slide under the status dot. Widen by the dot zone + padding after
     /// every title change (refreshUI covers all branches). Skips redundant
@@ -1384,16 +1355,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func fitChipWidth() {
         guard let button = statusItem.button else { return }
+        let h = button.bounds.height
+
+        // Snooze mode hides both labels and draws ONE attributed title on the
+        // button. Size the pill from that title — measuring the hidden labels
+        // instead used their stale (last sponsor) widths and clipped the
+        // countdown.
+        if chipHeadline.isHidden && chipDescription.isHidden {
+            let titleW = button.attributedTitle.size().width
+            let want = min(max(120, titleW + 22), 300)
+            if abs(want - lastChipWidth) > 0.5 { statusItem.length = want }
+            lastChipWidth = want
+            return
+        }
+
+        // Width goes through statusItem.length — resizing the button frame
+        // directly fights the Mac status bar's layout pass.
         let textWidth = max(chipHeadline.intrinsicContentSize.width, chipDescription.intrinsicContentSize.width)
-        let want = min(max(118, 7 + 18 + 8 + textWidth + 26), 230)
-        var f = button.frame
-        f.size.width = want
-        button.frame = f
+        let want = min(max(132, 7 + 16 + 8 + textWidth + 24), 236)
+        // Skip redundant writes so the 1 s heartbeat can never fight the
+        // status bar's own layout pass (statusItem.length is a setter that
+        // triggers a full bar relayout on every call).
+        if abs(want - lastChipWidth) > 0.5 { statusItem.length = want }
         lastChipWidth = want
-        chipLogo.frame = NSRect(x: 7, y: (button.bounds.height - 18) / 2, width: 18, height: 18)
-        let textX: CGFloat = 33
-        chipHeadline.frame = NSRect(x: textX, y: button.bounds.midY, width: want - textX - 22, height: 12)
-        chipDescription.frame = NSRect(x: textX, y: button.bounds.midY - 10, width: want - textX - 22, height: 10)
+
+        // Tile: 16pt, vertically centered.
+        chipLogo.frame = NSRect(x: 7, y: (h - 16) / 2, width: 16, height: 16)
+
+        // Two-line text block, vertically centered as ONE unit: 11pt headline
+        // over 8pt description. Anchoring both lines to midY (the old
+        // behaviour) pushed the block 4pt below center and let the headline
+        // clip on the stock 22pt bar.
+        let textX: CGFloat = 7 + 16 + 6            // tile + gap
+        let textW = max(24, want - textX - 20)     // reserve dot zone + padding
+        let headlineH: CGFloat = 11
+        let descH: CGFloat = 8
+        let blockH = headlineH + descH
+        let blockBottom = (h - blockH) / 2
+        chipDescription.frame = NSRect(x: textX, y: blockBottom, width: textW, height: descH)
+        chipHeadline.frame = NSRect(x: textX, y: blockBottom + descH, width: textW, height: headlineH)
     }
 
     private func setChipContent(image: NSImage?, headline: String, description: String) {
@@ -1417,11 +1417,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func setupChipPill() {
         guard let button = statusItem.button else { return }
+        // Compact two-line micro chip: 16px tile + 9.5pt semibold headline /
+        // 7.5pt secondary line + 6px status dot. Total text block ≈ 18pt so it
+        // sits comfortably inside the ~22pt status bar without clipping.
         chipLogo.imageScaling = .scaleProportionallyDown
-        chipHeadline.font = NSFont.systemFont(ofSize: 10.5, weight: .bold)
+        chipHeadline.font = NSFont.systemFont(ofSize: 9.5, weight: .semibold)
         chipHeadline.textColor = .white
         chipHeadline.lineBreakMode = .byTruncatingTail
-        chipDescription.font = NSFont.systemFont(ofSize: 8.5, weight: .regular)
+        chipDescription.font = NSFont.systemFont(ofSize: 7.5, weight: .regular)
         chipDescription.textColor = NSColor(srgbRed: 0xB0 / 255.0, green: 0xB0 / 255.0, blue: 0xB8 / 255.0, alpha: 1)
         chipDescription.lineBreakMode = .byTruncatingTail
         button.addSubview(chipLogo)
@@ -1449,7 +1452,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func placeChipDot(color: NSColor) {
         guard let button = statusItem.button else { return }
         let d: CGFloat = 6
-        chipDot.frame = NSRect(x: button.bounds.width - 8 - d,
+        // statusItem.length is the source of truth: button.bounds can still
+        // hold the PREVIOUS width on the frame where we widen the pill.
+        let w = max(button.bounds.width, lastChipWidth)
+        chipDot.frame = NSRect(x: w - 8 - d,
                                y: (button.bounds.height - d) / 2,
                                width: d, height: d)
         chipDot.layer?.backgroundColor = color.cgColor
@@ -2057,7 +2063,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func loadCampaignCache() -> [LiveCampaign] {
         do {
             let data = try Data(contentsOf: Self.campaignCacheURL())
-            let cache = try JSONDecoder().decode(CampaignCache.self, from: data)
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let cache = try decoder.decode(CampaignCache.self, from: data)
             guard cache.feedURL == adFeedURL?.absoluteString else { return [] }
             return sanitizeCampaigns(cache.campaigns)
         } catch {
@@ -2093,7 +2101,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: Actions
 
     @objc private func togglePause(_ sender: NSMenuItem) {
-        paused.toggle()
+        if disabled {
+            // The menu says "Enable earning": clear every earning blocker.
+            disabled = false
+            paused = false
+        } else {
+            paused.toggle()
+        }
         if !paused { snoozeUntil = nil }   // manual resume clears any snooze
         refreshUI()
         persist()
@@ -2149,7 +2163,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Disable = persisted earning kill-switch until re-enabled.
     func disableToggled() {
         disabled.toggle()
-        if !disabled { snoozeUntil = nil }
+        if !disabled {
+            snoozeUntil = nil
+            paused = false
+        }
         refreshUI()
         persist()
     }

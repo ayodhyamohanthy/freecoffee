@@ -571,13 +571,15 @@
     }
 
     D.fetchLiveCampaigns(feedUrl).then(function (res) {
+      // A disconnected/replaced feed must not be restored by an old request.
+      if (!state.profile || state.profile.adFeedUrl !== feedUrl) return;
       var campaigns = (res && res.campaigns) || [];
       var error = (res && res.error) || null;
-      if (campaigns.length) {
-        state.liveCampaigns = campaigns;      // cached for offline reloads
+      if (!error) {
+        state.liveCampaigns = campaigns;      // an empty successful feed clears stale campaigns
         saveState();
         renderLiveBanner(campaigns.length);
-      } else if (error) {
+      } else {
         renderLiveBanner(state.liveCampaigns ? state.liveCampaigns.length : 0, error);
       }
       renderSponsors();
@@ -758,6 +760,16 @@
       if (menubarDemo) menubarDemo.resume();
       $('dashStatus').textContent = 'Ads running — earning.';
     }
+    // The status-area preview reflects the same switch: its dot turns amber and
+    // the hint says so, instead of the chip silently keeping its green dot.
+    var previewChip = $('demoSponsorChip');
+    if (previewChip) previewChip.setAttribute('data-paused', paused ? 'true' : 'false');
+    var previewHint = $('mbPreviewHint');
+    if (previewHint) {
+      previewHint.textContent = paused
+        ? 'paused — the chip is frozen, as on a real menu bar'
+        : 'rotates every few seconds · simulated data';
+    }
     var btn = $('pauseToggle');
     btn.setAttribute('aria-pressed', paused ? 'true' : 'false');
     btn.classList.toggle('on', paused);
@@ -789,7 +801,9 @@
       return;
     }
     state.paidOut.push({ ts: Date.now(), amount: amount });
-    state.balanceOffset = 0;
+    // balanceOffset is cumulative simulated earnings, not an unpaid balance.
+    // paidOut already deducts this withdrawal; resetting it would deduct twice
+    // and incorrectly reduce lifetime earnings.
     saveState();
     renderBalances();
     toast('Payout simulated: ' + money(amount) + ' sent on the instant stablecoin rail. $0 fees. (demo)');

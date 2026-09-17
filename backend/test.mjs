@@ -164,8 +164,8 @@ function pass(name) { n++; console.log('PASS ' + name); }
    4. applyEarnings — click: $0.05, 5/day cap, ≤25% of monthly impressions
    ------------------------------------------------------------------------ */
 {
-  /* 20 impressions this month → share cap = exactly 5 clicks. */
-  let st = applyEarnings(null, { type: 'impression', campaignId: 'camp_1', minutes: 20 }, FEED, T1).ledger;
+  /* 40 impressions leave monthly allowance for testing the daily reset. */
+  let st = applyEarnings(null, { type: 'impression', campaignId: 'camp_1', minutes: 40 }, FEED, T1).ledger;
   for (let i = 0; i < 5; i++) {
     const r = applyEarnings(st, { type: 'click', campaignId: 'camp_1' }, FEED, T1);
     assert.equal(r.earned, 0.05, 'click ' + (i + 1) + ' pays $0.05');
@@ -178,7 +178,7 @@ function pass(name) { n++; console.log('PASS ' + name); }
   assert.ok(/daily/.test(r6.note), 'note names the daily cap');
   assert.equal(r6.ledger.total, st.total, 'capped click adds nothing');
 
-  /* Next day: daily counter resets; share cap (20 impressions → 5) still allows click #1. */
+  /* Next day: daily counter resets; unused monthly allowance permits a click. */
   const d2 = applyEarnings(r6.ledger, { type: 'click', campaignId: 'camp_1' }, FEED, T2);
   assert.equal(d2.earned, 0.05, 'daily cap resets across dates');
   assert.equal(d2.ledger.counters.todayClicks.date, '2026-09-07');
@@ -209,6 +209,39 @@ function pass(name) { n++; console.log('PASS ' + name); }
   assert.equal(c.earned, 0, 'campaign with allowClicks:false pays 0');
   assert.ok(/allow/.test(c.note), 'note says the campaign disallows clicks');
   pass('applyEarnings honors campaign allowClicks=false');
+}
+
+/* Monthly paid-click allowance must survive midnight and retained-row loss. */
+{
+  const click = { type: 'click', campaignId: 'camp_1' };
+  const impression = { type: 'impression', campaignId: 'camp_1', minutes: 4 };
+  let st = applyEarnings(null, impression, FEED, T1).ledger;
+  st = applyEarnings(st, click, FEED, T1).ledger;
+  assert.equal(st.monthly.paidClicks, 1);
+  st.rows = []; // historical rows are bounded; the counter must remain authoritative
+  const nextDay = applyEarnings(st, click, FEED, T2);
+  assert.equal(nextDay.earned, 0, 'midnight cannot renew the monthly allowance');
+  assert.match(nextDay.note, /monthly/);
+  assert.equal(nextDay.ledger.monthly.paidClicks, 1, 'unpaid attempts do not consume paid allowance');
+  const more = applyEarnings(nextDay.ledger, impression, FEED, T2).ledger;
+  const paid = applyEarnings(more, click, FEED, T2);
+  assert.equal(paid.earned, 0.05, 'additional impressions unlock another monthly click');
+  assert.equal(paid.ledger.monthly.paidClicks, 2);
+
+  const nextMonth = Date.UTC(2026, 9, 1, 12);
+  const rolled = applyEarnings(paid.ledger, impression, FEED, nextMonth).ledger;
+  assert.equal(rolled.monthly.paidClicks, 0);
+  assert.equal(applyEarnings(rolled, click, FEED, nextMonth).earned, 0.05);
+  const referralRolled = applyReferralCredit(paid.ledger, 0.01, nextMonth);
+  assert.equal(referralRolled.monthly.paidClicks, 0, 'referral-led rollover also resets the count');
+
+  const legacy = JSON.parse(JSON.stringify(st));
+  delete legacy.monthly.paidClicks;
+  const migrated = applyEarnings(legacy, click, FEED, T2);
+  assert.equal(migrated.earned, 0, 'legacy lifetime reports conservatively preserve used allowance');
+  assert.equal(migrated.ledger.monthly.paidClicks, 1);
+  assert.equal(legacy.monthly.paidClicks, undefined, 'migration remains pure');
+  pass('monthly paid clicks survive day rollover, reset monthly, and migrate legacy ledgers');
 }
 
 /* ------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Advertise — FreeCoffee</title><meta name="description" content="Submit a compact creative, bid on a four-hour block, and receive verified proof of play."><link rel="stylesheet" href="assets/css/styles.css?v=1002007"></head><body class="fc-public theme-light"><a class="skip-link" href="#main">Skip to content</a><div class="fc-announce"><span>Built in public · launch access opening in stages</span><a href="advertisers.html">Ad slots open →</a></div><header class="fc-nav"><a class="fc-wordmark" href="index.html">freecoffee.tech</a><button class="fc-menu" aria-label="Open menu" onclick="this.parentElement.classList.toggle('open')">Menu</button><nav><a href="index.html#earn">Earn</a><a href="advertisers.html">Advertise</a><a href="agents.html">Agents</a><a href="install-guide.html">Download</a><a href="index.html#faq">FAQ</a><a class="fc-pill" href="profile.html">Sign in</a></nav></header><main id="main"><section class="fc-hero fc-adhero"><div><p class="fc-eye">FOUR-HOUR MAC AD SLOTS</p><h1>Your brand, in a <em>quieter place.</em></h1><p>Reach Mac users through compact ad slots they chose to see.</p><div class="fc-actions"><a class="fc-primary" href="campaigns.html">Submit an ad</a><a href="#picker">Browse slots</a></div><div class="fc-auction"><small>NEXT AUCTION</small><p>Inventory opens in stages. Reserve and close time appear only when a real slot is available.</p></div></div><div class="fc-adunit"><span class="fc-logo">FC</span><p><b>One clear headline</b><small>One quiet line of useful context</small></p><i></i></div></section>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Advertise — FreeCoffee</title><meta name="description" content="Submit a compact creative, bid on a four-hour block, and receive verified proof of play."><link rel="stylesheet" href="assets/css/styles.css?v=1002010"><link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#F7F6F3"><link rel="apple-touch-icon" href="assets/icons/icon-192.png"></head><body class="fc-public theme-light"><a class="skip-link" href="#main">Skip to content</a><div class="fc-announce"><span>Built in public · launch access opening in stages</span><a href="advertisers.html">Ad slots open →</a></div><header class="fc-nav"><a class="fc-wordmark" href="index.html">freecoffee.tech</a><button class="fc-menu" aria-label="Open menu" onclick="this.parentElement.classList.toggle('open')">Menu</button><nav><a href="index.html#earn">Earn</a><a href="advertisers.html">Advertise</a><a href="agents.html">Agents</a><a href="install-guide.html">Download</a><a href="index.html#faq">FAQ</a><a class="fc-pill" href="profile.html">Sign in</a></nav></header><main id="main"><section class="fc-hero fc-adhero"><div><p class="fc-eye">FOUR-HOUR MAC AD SLOTS</p><h1>Your brand, in a <em>quieter place.</em></h1><p>Reach Mac users through compact ad slots they chose to see.</p><div class="fc-actions"><a class="fc-primary" href="campaigns.html">Submit an ad</a><a href="#picker">Browse slots</a></div><div class="fc-auction"><small>NEXT AUCTION</small><p>Inventory opens in stages. Reserve and close time appear only when a real slot is available.</p></div></div><div class="fc-adunit"><span class="fc-logo">FC</span><p><b>One clear headline</b><small>One quiet line of useful context</small></p><i></i></div></section>
 <section class="fc-dark fc-split" id="slots"><div><p class="fc-eye">SLOT AUCTION</p><h2>How a slot works.</h2><p>Every day is six four-hour blocks, in UTC. Set your CPM on the blocks you want — the highest bid on a block takes every impression in it.</p></div><dl class="fc-ledger"><span>Slot <b>4 hours · 6 per day, UTC</b></span><span>Auction <b>Highest CPM wins</b></span><span>Winner pays <b>Their winning bid</b></span><span>Tie-break <b>Earliest bid wins</b></span><span>Minimum bid <b>$1 CPM</b></span><span>Revenue split <b>65% viewers · 35% FreeCoffee</b></span></dl></section>
 <section class="fc-flow" id="picker">
   <p class="fc-eye">LIVE INVENTORY</p>
@@ -272,7 +272,7 @@
   /* ---------------- block editor for the focused day ---------------- */
   function paintChip(chip, id) {
     var s = known[id], b = +id.split('#')[1];
-    var started = !s || s.startsAt <= Date.now();
+    var started = !s || s.state !== 'open' || s.startsAt <= Date.now();
     var isPick = !!picked[id];
     var taken = !!(s && s.topCpm != null);
     var mine = !!(s && ((s.topCampaignId && s.topCampaignId === ourId) || s.mine === true));
@@ -343,9 +343,9 @@
     monthEl.textContent = new Date(Date.UTC(view.y, view.m - 1, 1))
       .toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' });
     var cur = { y: today.getUTCFullYear(), m: today.getUTCMonth() + 1 };
-    prevBtn.disabled = (view.y === cur.y && view.m === cur.m);
+    prevBtn.disabled = loading || (view.y === cur.y && view.m === cur.m);
     var ahead = (view.y - cur.y) * 12 + (view.m - cur.m);
-    nextBtn.disabled = ahead >= 13;
+    nextBtn.disabled = loading || ahead >= 13;
     renderCalendar();
     renderEditor();
     renderSum();
@@ -355,6 +355,7 @@
   function fetchMonth() {
     if (loading) return;
     loading = true;
+    render();
     var want = mKey(view);
     countEl.textContent = 'Loading…';
     fetch(BACKEND + '/slots?month=' + want, { headers: { accept: 'application/json' } })
@@ -365,9 +366,8 @@
         blocksPerDay = d.blocksPerDay || blocksPerDay;
         blockHours = d.blockHours || blockHours;
         d.slots.forEach(function (s) {
-          var prev = known[s.id];
+          // The server's current winner replaces any previous local verdict.
           known[s.id] = s;
-          if (prev && prev.mine) known[s.id].mine = true;
         });
         render();
         var open = 0;
@@ -435,12 +435,17 @@
   });
   dayAll.addEventListener('click', function () {
     if (!focusDay) return;
-    var allPicked = true;
-    for (var b = 0; b < blocksPerDay; b++) if (!picked[focusDay + '#' + b]) allPicked = false;
-    for (var i = 0; i < blocksPerDay; i++) {
-      var id = focusDay + '#' + i;
-      if (allPicked) delete picked[id]; else picked[id] = true;
+    var eligible = [];
+    for (var b = 0; b < blocksPerDay; b++) {
+      var id = focusDay + '#' + b, slot = known[id];
+      if (slot && slot.state === 'open' && slot.startsAt > Date.now()) eligible.push(id);
+      else delete picked[id];
     }
+    var allPicked = eligible.every(function (id) { return !!picked[id]; });
+    eligible.forEach(function (id) {
+      if (allPicked) delete picked[id]; else picked[id] = true;
+    });
+    renderCalendar();
     renderEditor();
     renderSum();
   });
@@ -497,7 +502,7 @@
           if (!known[p.slot]) known[p.slot] = { id: p.slot, state: 'open', topCpm: null, topCampaignId: null };
           if (p.topCpm != null) { known[p.slot].topCpm = p.topCpm; known[p.slot].topSponsor = p.topSponsor; }
           known[p.slot].mine = !!p.top;
-          if (p.top) known[p.slot].topCampaignId = ourId;
+          known[p.slot].topCampaignId = p.top ? ourId : null;
           known[p.slot].bidCount = (known[p.slot].bidCount || 0) + 1;
         });
         save(ourId);
@@ -516,4 +521,4 @@
   fetchMonth();
 })();
 </script>
-<script>document.addEventListener('click',e=>{if(!e.target.closest('.fc-nav'))document.querySelector('.fc-nav')?.classList.remove('open')})</script></body></html>
+<script>document.addEventListener('click',e=>{if(!e.target.closest('.fc-nav'))document.querySelector('.fc-nav')?.classList.remove('open')})</script><script>if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) { navigator.serviceWorker.register('sw.js').catch(function () {}); }</script></body></html>

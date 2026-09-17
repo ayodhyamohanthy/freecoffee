@@ -356,7 +356,7 @@ function applyReferralCredit(ledger, amount, now) {
   if (!l.referral || typeof l.referral !== 'object') l.referral = { total: 0 };
   if (!Array.isArray(l.rows)) l.rows = [];
   if (!l.today || l.today.date !== todayKey(ts)) l.today = { date: todayKey(ts), total: 0 };
-  if (!l.monthly || l.monthly.month !== monthKey(ts)) l.monthly = { month: monthKey(ts), total: 0, impressions: 0 };
+  if (!l.monthly || l.monthly.month !== monthKey(ts)) l.monthly = { month: monthKey(ts), total: 0, impressions: 0, paidClicks: 0 };
   if (amt > 0) {
     l.total = round4((Number(l.total) || 0) + amt);
     l.today.total = round4((Number(l.today.total) || 0) + amt);
@@ -457,7 +457,7 @@ function freshLedger(now) {
   return {
     total: 0,
     today: { date: todayKey(ts), total: 0 },
-    monthly: { month: monthKey(ts), total: 0, impressions: 0 },
+    monthly: { month: monthKey(ts), total: 0, impressions: 0, paidClicks: 0 },
     referral: { total: 0 },   // lifetime referral credit (referrer side)
     rows: [],
     counters: {
@@ -529,11 +529,18 @@ function applyEarnings(ledger, report, campaigns, now, referral) {
     l.counters.todayClicks = { date: day, count: 0 };
   }
   if (!l.today || l.today.date !== day) l.today = { date: day, total: 0 };
-  if (!l.monthly || l.monthly.month !== month) l.monthly = { month: month, total: 0, impressions: 0 };
+  if (!l.monthly || l.monthly.month !== month) l.monthly = { month: month, total: 0, impressions: 0, paidClicks: 0 };
   if (!l.referral || typeof l.referral !== 'object') l.referral = { total: 0 };
   if (!Array.isArray(l.rows)) l.rows = [];
 
   var attemptsToday = Number(l.counters.todayClicks.count) || 0;
+  /* Persist the monthly PAID count independently of daily attempts. Legacy
+     ledgers lack it and retained rows may be incomplete; lifetime reports
+     are a conservative upper bound until the next monthly rollover. */
+  if (!Number.isFinite(l.monthly.paidClicks) || l.monthly.paidClicks < 0) {
+    l.monthly.paidClicks = Math.max(0, Number(l.counters.clicks) || 0);
+  }
+  var monthClicks = l.monthly.paidClicks;
   var monthImpressions = Number(l.monthly.impressions) || 0;
   var earned = 0;
   var note = null;
@@ -574,13 +581,14 @@ function applyEarnings(ledger, report, campaigns, now, referral) {
 
     if (attemptsToday + 1 > CLICK_MAX_PER_DAY) {
       note = 'daily click cap reached (' + CLICK_MAX_PER_DAY + '/day)';
-    } else if (attemptsToday + 1 > capShare) {
+    } else if (monthClicks + 1 > capShare) {
       note = 'monthly click-share cap reached (≤' + Math.round(CLICK_CAP_SHARE * 100) +
         '% of ' + monthImpressions + ' impressions this month)';
     } else if (!clickAllowed) {
       note = campaign ? 'campaign does not allow paid clicks' : 'unknown campaign — not payable';
     } else {
       earned = round4(CLICK_BONUS);
+      l.monthly.paidClicks = monthClicks + 1;
     }
 
     l.total = round4((Number(l.total) || 0) + earned);

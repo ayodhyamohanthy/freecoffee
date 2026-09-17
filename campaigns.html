@@ -21,7 +21,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<link rel="stylesheet" href="assets/css/styles.css?v=1002007">
+<link rel="stylesheet" href="assets/css/styles.css?v=1002010">
 </head>
 <body data-page="campaigns" class="theme-light">
 
@@ -407,6 +407,7 @@
   req.then(function (res) {
     return (res && res.ok) ? res.json() : null;
   }).then(function (d) {
+    if (settled) return;
     if (!d || !d.totals) { finishFail(); return; }
     settled = true;
     if (timer) clearTimeout(timer);

@@ -592,6 +592,11 @@
     var chartEl = document.getElementById('demoChart');
     var weekSum = document.getElementById('demoWeekSum');
     var bar = document.getElementById('demoMenuBar');
+    /* Popover mock mirrors the bar chip. These used to be hardcoded figures in
+       the HTML, which let the popover and the live-ticking chip disagree. */
+    var popTotal = document.getElementById('popBalance');
+    var popAvailable = document.getElementById('popAvailable');
+    var popPending = document.getElementById('popPending');
     if (!chip && !clock && !balance && !chartEl) return null;
 
     var reduced = false;
@@ -602,10 +607,12 @@
     // Balance starts at the seeded ledger's lifetime so the landing demo
     // and the dashboard tell the same story.
     var balanceCents = 226;
+    var pendingCents = 0;                 // seeded pending bucket (mirrors the popover split)
     var history = null;
     try {
       history = generateHistory(SEED);
       balanceCents = Math.round((history.totals.available + history.totals.pending) * 100);
+      pendingCents = Math.round(history.totals.pending * 100);
     } catch (e) { /* keep fallback */ }
 
     // Popover web mock: 7 inset bars (weekday letter + value label) from
@@ -671,37 +678,79 @@
     function chipName(c) { return (c && (c.sponsor || c.name)) || ''; }
     function chipTag(c) { return (c && (c.tagline || c.tag)) || ''; }
 
+    /* Monogram for the chip tile: the campaign's logoText when the feed
+       supplied one, else word initials — the same rule as the native chip. */
+    function chipMonogram(name, sp) {
+      var t = (sp && typeof sp.logoText === 'string') ? sp.logoText.replace(/^\s+|\s+$/g, '') : '';
+      if (t) return t.slice(0, 2).toUpperCase();
+      var parts = String(name || '').split(/\s+/).filter(Boolean);
+      var initials = parts.map(function (w) { return w.charAt(0); }).join('');
+      return (initials.slice(0, 2) || 'FC').toUpperCase();
+    }
+
     function renderChip() {
       var useLive = liveCampaigns.length > 0;
       var sp = useLive ? liveCampaigns[idx % liveCampaigns.length] : order[idx % order.length];
+      var name = chipName(sp);
+      var sub = chipTag(sp);
+      var liveCpm = Number(sp && sp.cpm);
+
+      /* Two markup shapes are supported:
+           • structured menu-bar chip — .mb-chip-mark / .mb-chip-copy
+             (title + description INSIDE the bar, like the native pill)
+           • legacy single-line chip  — one text node
+         The structured path is preferred; the fallback keeps any older page
+         working instead of throwing on a missing node. */
+      var head = null, small = null, mark = null;
+      if (chip && chip.querySelector) {
+        head = chip.querySelector('.mb-chip-copy strong');
+        small = chip.querySelector('.mb-chip-copy small');
+        mark = chip.querySelector('.mb-chip-mark');
+      }
+      var structured = !!(head && small);
+
       if (chip) {
-        chip.textContent = chipName(sp);
-        if (useLive) {
-          chip.setAttribute('title', 'LIVE CAMPAIGN — ' + chipName(sp));
-          if (sp.accent && /^#[0-9a-fA-F]{6}$/.test(sp.accent)) {
-            chip.style.backgroundColor = sp.accent;
-          } else {
-            chip.style.backgroundColor = '';
+        if (structured) {
+          head.textContent = name;
+          small.textContent = sub;
+          if (mark) {
+            mark.textContent = chipMonogram(name, sp);
+            // A live campaign's validated accent tints the TILE, not the whole
+            // pill (a full-colour bar chip looks like a badge, not an ad slot).
+            if (useLive && sp.accent && /^#[0-9a-fA-F]{6}$/.test(sp.accent)) {
+              mark.style.backgroundColor = sp.accent;
+            } else {
+              mark.style.backgroundColor = '';
+            }
           }
         } else {
-          chip.setAttribute('title', 'Current winning sponsor');
-          chip.style.backgroundColor = '';
+          chip.textContent = name + (sub ? ' — ' + sub : '');
+        }
+        chip.setAttribute('title', useLive
+          ? 'LIVE CAMPAIGN — ' + name + (sub ? ' — ' + sub : '')
+          : 'Current winning sponsor (fictional demo sponsor)');
+        if (!structured) {
+          chip.style.backgroundColor = (useLive && sp.accent && /^#[0-9a-fA-F]{6}$/.test(sp.accent))
+            ? sp.accent : '';
         }
       }
+
       if (tag) {
-        // Micro-label before the tagline: "LIVE CAMPAIGN · $X.XX CPM" when a
-        // real feed is connected (the winning bid is always visible), the
-        // fictional-sponsor title otherwise.
         tag.textContent = '';
         if (useLive) {
+          // Micro-label first: the winning bid is always visible, and the
+          // destination rule is stated rather than implied.
           var label = document.createElement('span');
           label.className = 'mb-live-label';
-          var liveCpm = Number(sp.cpm);
           label.textContent = 'LIVE CAMPAIGN · $' + (isFinite(liveCpm) ? liveCpm : 0).toFixed(2) + ' CPM';
           tag.appendChild(label);
-          tag.appendChild(document.createTextNode(chipTag(sp)));
+          tag.appendChild(document.createTextNode(structured
+            ? 'validated https destination · highest bid wins the minute'
+            : sub));
         } else {
-          tag.appendChild(document.createTextNode(chipTag(sp)));
+          tag.appendChild(document.createTextNode(structured
+            ? 'Fictional demo sponsor (simulated) — display only, nothing is collected.'
+            : sub));
         }
       }
     }
@@ -718,6 +767,14 @@
       var dollars = balanceCents / 100;
       if (balance) balance.textContent = '$' + dollars.toFixed(2);
       if (cupsEl) cupsEl.textContent = '≈ ' + cups(dollars) + ' cups of coffee';
+      // Popover mock: same numbers as the bar chip, with available + pending
+      // always summing to the total (the demo ledger's own invariant).
+      var pendingDollars = pendingCents / 100;
+      if (popTotal) popTotal.textContent = '$' + dollars.toFixed(2);
+      if (popPending) popPending.textContent = '$' + pendingDollars.toFixed(2);
+      if (popAvailable) {
+        popAvailable.textContent = '$' + Math.max(0, dollars - pendingDollars).toFixed(2);
+      }
     }
 
     function tickBalance() {
@@ -848,8 +905,9 @@
   var DEVICE_STORE_KEY = 'freecoffee:device';
 
   function deviceId() {
-    if (typeof window === 'undefined' || !window.localStorage) return '';
+    if (typeof window === 'undefined') return '';
     try {
+      if (!window.localStorage) return '';
       var existing = window.localStorage.getItem(DEVICE_STORE_KEY);
       if (existing && /^[a-f0-9-]{8,64}$/i.test(existing)) return existing;
       var id;
@@ -869,8 +927,9 @@
   }
 
   function backendBase() {
-    if (typeof window === 'undefined' || !window.localStorage) return '';
+    if (typeof window === 'undefined') return '';
     try {
+      if (!window.localStorage) return '';
       var raw = window.localStorage.getItem('freecoffee:v1');
       var s = raw ? JSON.parse(raw) : null;
       var url = (s && s.profile && typeof s.profile.backendUrl === 'string')
@@ -916,8 +975,9 @@
   /* The user's own share code: 8 hex chars, generated once and kept locally.
      Hex-only so it always satisfies the server's code rules. */
   function referralCode() {
-    if (typeof window === 'undefined' || !window.localStorage) return '';
+    if (typeof window === 'undefined') return '';
     try {
+      if (!window.localStorage) return '';
       var existing = window.localStorage.getItem(REFCODE_KEY);
       if (existing && REF_CODE_RE.test(existing)) return existing;
       var hex = '0123456789abcdef';
@@ -1053,8 +1113,9 @@
 
   /* The last capture this browser saw (claimed or not) — for the flywheel page. */
   function inboundRef() {
-    if (typeof window === 'undefined' || !window.localStorage) return null;
+    if (typeof window === 'undefined') return null;
     try {
+      if (!window.localStorage) return null;
       var raw = window.localStorage.getItem(REFCAPTURE_KEY);
       if (!raw) return null;
       var parsed = JSON.parse(raw);

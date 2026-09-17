@@ -241,6 +241,32 @@ head.line(to: NSPoint(x: x1 - 10, y: ay + 52))
 head.close()
 head.fill()
 
+// A compact preview below the install icons mirrors the app's two-line chip.
+let pill = NSRect(x: 385, y: ty(595, 64), width: 430, height: 64)
+NSColor(calibratedWhite: 0.17, alpha: 1).setFill()
+NSBezierPath(roundedRect: pill, xRadius: 12, yRadius: 12).fill()
+gold.setFill()
+NSBezierPath(roundedRect: NSRect(x: 397, y: ty(611, 32), width: 32, height: 32),
+             xRadius: 8, yRadius: 8).fill()
+("FC" as NSString).draw(at: NSPoint(x: 401, y: ty(618, 18)), withAttributes: [
+    .font: NSFont.systemFont(ofSize: 14, weight: .bold), .foregroundColor: fg])
+("FreeCoffee" as NSString).draw(at: NSPoint(x: 441, y: ty(603, 26)), withAttributes: [
+    .font: NSFont.systemFont(ofSize: 22, weight: .semibold), .foregroundColor: NSColor.white])
+("One quiet ad. Your next coffee." as NSString).draw(
+    at: NSPoint(x: 441, y: ty(632, 19)), withAttributes: [
+        .font: NSFont.systemFont(ofSize: 16),
+        .foregroundColor: NSColor(calibratedWhite: 0.70, alpha: 1)])
+NSColor(red: 0.44, green: 0.55, blue: 0.47, alpha: 1).setFill()
+NSBezierPath(ovalIn: NSRect(x: 791, y: ty(621, 12), width: 12, height: 12)).fill()
+let developerSigning = !(ProcessInfo.processInfo.environment["FC_DEVELOPER_ID"] ?? "").isEmpty
+let signingNote = (developerSigning ? "FreeCoffee demo · simulated data"
+                                   : "Ad-hoc signed · not notarized") as NSString
+let noteAttrs: [NSAttributedString.Key: Any] = [
+    .font: NSFont.systemFont(ofSize: 22), .foregroundColor: subFg]
+let noteSize = signingNote.size(withAttributes: noteAttrs)
+signingNote.draw(at: NSPoint(x: (CGFloat(W) - noteSize.width) / 2, y: ty(700, noteSize.height)),
+                 withAttributes: noteAttrs)
+
 img.unlockFocus()
 guard let tiff = img.tiffRepresentation,
       let rep = NSBitmapImageRep(data: tiff),
