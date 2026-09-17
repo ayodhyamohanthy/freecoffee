@@ -19,6 +19,9 @@
 #      app/build.sh) so DMG bumps always bust the web cache, plus a
 #      single-declaration rule (a duplicated ASSET_V hides the real version)
 #   + Swift parse gate inside check 1 (macOS only, skipped elsewhere)
+#   8. Real-browser layout + interaction regressions on the dashboard
+#      (headless Chrome + CDP, zero npm deps; skipped cleanly when Chrome or
+#      Node 22+ WebSocket is unavailable — REQUIRE_BROWSER=1 forces a failure)
 #
 # Run from the repo root:   ./test.sh      (or:  bash test.sh)
 # Exit 0 when everything passes, non-zero otherwise.
@@ -304,6 +307,17 @@ if not asset_v.isdigit() or int(asset_v) < floor:
 print('    ok   ASSET_V=%s satisfies the APP_VERSION=%s floor (%d)' % (asset_v, m_app.group(1), floor))
 PY
 [ $? -eq 0 ] && ok "asset version pairing + PWA lockstep floor" || bad "asset version pairing"
+
+# Optional real-browser check: isolated Chrome profile + local server, no npm.
+# REQUIRE_BROWSER=1 turns missing Chrome/Node 22+ into a failure for CI.
+step "Browser layout and dashboard interactions (optional Chrome)"
+node tests/browser-regressions.cjs
+BROWSER_RESULT=$?
+case "$BROWSER_RESULT" in
+  0) ok "dashboard mobile/desktop layout + chip pause/resume" ;;
+  77) printf '    SKIP  browser prerequisites unavailable\n' ;;
+  *) bad "browser regressions" ;;
+esac
 
 # ------------------------------------------------------------------ summary
 echo
