@@ -131,19 +131,19 @@ function pass(name) { n++; console.log('PASS ' + name); }
    ------------------------------------------------------------------------ */
 {
   const r1 = applyEarnings(null, { type: 'impression', campaignId: 'camp_1', minutes: 1 }, FEED, T1);
-  assert.equal(r1.earned, 0.0039, '1 min @ $6 CPM → 0.65×6×1/1000 = $0.0039');
-  assert.equal(r1.ledger.total, 0.0039);
+  assert.equal(r1.earned, 0.0042, '1 min @ $6 CPM → 0.70×6×1/1000 = $0.0042');
+  assert.equal(r1.ledger.total, 0.0042);
   assert.equal(r1.ledger.counters.impressions, 1);
   assert.equal(r1.ledger.monthly.impressions, 1);
   assert.equal(r1.ledger.rows.length, 1);
-  assert.equal(r1.ledger.rows[0].amount, 0.0039);
+  assert.equal(r1.ledger.rows[0].amount, 0.0042);
   assert.equal(r1.ledger.rows[0].campaignId, 'camp_1');
 
   const r10 = applyEarnings(null, { type: 'impression', campaignId: 'camp_1', minutes: 10 }, FEED, T1);
-  assert.equal(r10.earned, 0.039, '10 min @ $6 CPM → $0.039');
+  assert.equal(r10.earned, 0.042, '10 min @ $6 CPM → $0.042');
 
   const r60 = applyEarnings(null, { type: 'impression', campaignId: 'camp_1', minutes: 90 }, FEED, T1);
-  assert.equal(r60.earned, 0.234, 'minutes clamped 90→60 → $0.234');
+  assert.equal(r60.earned, 0.252, 'minutes clamped 90→60 → $0.252');
   assert.equal(r60.ledger.counters.impressions, 60, 'clamped minutes counted');
 
   const r0 = applyEarnings(null, { type: 'impression', campaignId: 'camp_1', minutes: 'garbage' }, FEED, T1);
@@ -151,13 +151,50 @@ function pass(name) { n++; console.log('PASS ' + name); }
   assert.equal(r0.ledger.counters.impressions, 0);
 
   const rd = applyEarnings(null, { type: 'impression', campaignId: 'camp_1' }, FEED, T1);
-  assert.equal(rd.earned, 0.0039, 'absent minutes defaults to 1');
+  assert.equal(rd.earned, 0.0042, 'absent minutes defaults to 1');
 
   const rg = applyEarnings(null, { type: 'impression', campaignId: 'ghost', minutes: 5 }, FEED, T1);
   assert.equal(rg.earned, 0, 'unknown campaign pays 0');
   assert.ok(/unknown/.test(rg.note), 'note explains the zero');
-  assert.equal(rg.ledger.counters.impressions, 5, 'impressions still counted honestly');
+  assert.equal(rg.ledger.counters.impressions, 0, 'unknown campaigns are not valid impressions');
   pass('applyEarnings awards 0.65×cpm×minutes/1000, clamps 0–60, defaults 1');
+}
+
+/* ------------------------------------------------------------------------
+    3b. launch bonus, CPM floor, referral attribution lock
+    ------------------------------------------------------------------------ */
+{
+  const r = applyEarnings(null, { type: 'impression', campaignId: 'camp_1', minutes: 60 }, FEED, T1, null, true);
+  assert.equal(r.earned, 0.2772, '70% base + 10% of base launch bonus');
+  assert.equal(r.baseEarned, 0.252);
+  assert.equal(r.launchBonus, 0.0252);
+  assert.equal(r.refereeBonus, 0);
+  assert.equal(r.ledger.bonuses.launch, 0.0252);
+  assert.equal(r.ledger.rows[0].amount, 0.252, 'campaign row keeps the base only');
+  assert.equal(r.ledger.rows[1].type, 'launch');
+  assert.equal(r.ledger.rows[1].campaignId, '', 'launch bonus is platform-side');
+  assert.equal(aggregateStats([r.ledger], FEED).totals.spend, 0.25, 'launch bonus is not campaign spend');
+  assert.equal(ledgerView(r.ledger).bonuses.launch, 0.03);
+
+  const below = applyEarnings(null, { type: 'impression', campaignId: 'camp_low', minutes: 60 },
+    [{ id: 'camp_low', sponsor: 'Low', cpm: 1.99 }], T1);
+  assert.equal(below.earned, 0, 'cpm below the $2 floor pays nothing');
+  assert.match(below.note, /floor/);
+  const atFloor = applyEarnings(null, { type: 'impression', campaignId: 'camp_low', minutes: 1 },
+    [{ id: 'camp_low', sponsor: 'Low', cpm: 2 }], T1);
+  assert.ok(atFloor.earned > 0, 'cpm at the floor pays');
+
+  const CODE = 'astra-1';
+  const claimed = applyReferralClaim(null, CODE, T1);
+  const after = applyReferralAccrual(claimed.record, 30, 0.126, T1 + 3600000);
+  assert.equal(applyReferralClaim(after.binding, 'other-code', T1 + 7200000).claimed, false,
+    'a binding with a first valid impression never re-binds');
+  assert.equal(after.binding.firstValidImpressionAt, T1 + 3600000);
+  const unlocked = applyReferralClaim(null, CODE, T1);
+  assert.equal(applyReferralClaim(unlocked.record, CODE, T1 + 1000, true).record.clickedAt, T1 + 1000,
+    'a click refreshes last-valid-click before any impression');
+
+  pass('launch bonus, CPM floor, referral attribution lock');
 }
 
 /* ------------------------------------------------------------------------
@@ -373,7 +410,7 @@ function pass(name) { n++; console.log('PASS ' + name); }
   assert.equal(body.served, 1, 'served feed size reported');
   assert.equal(body.totals.impressions, 90, '60 + 30 verified minutes');
   assert.equal(body.totals.clicks, 1, 'one reported click');
-  assert.ok(Math.abs(body.totals.spend - 0.635) < 0.011, 'spend ≈ 0.39 + 0.05 + 0.195');
+  assert.equal(body.totals.spend, 0.68, 'spend = 0.42 + 0.05 + 0.21');
   assert.equal(body.totals.earners, 2, 'two devices earned');
   assert.equal(body.campaigns.length, 1, 'one campaign row');
   assert.equal(body.campaigns[0].sponsor, 'S1', 'sponsor joined from the served feed');
@@ -407,7 +444,7 @@ function pass(name) { n++; console.log('PASS ' + name); }
    ------------------------------------------------------------------------ */
 {
   const CODE = 'astra-1';
-  const BASE30 = 0.117;            // 30 min @ $6 CPM × 65% = 0.117
+  const BASE30 = 0.126;
 
   assert.equal(normalizeRefCode(' Astra-1 '), 'astra-1', 'codes normalize + lowercase');
   assert.equal(normalizeRefCode('!!'), '', 'garbage code rejected');
@@ -427,34 +464,39 @@ function pass(name) { n++; console.log('PASS ' + name); }
   assert.equal(claim.claimed, true, 'referee binds to the code');
   assert.equal(claim.record.gated, false);
   const rebound = applyReferralClaim(claim.record, 'someone-else', T1 + 9);
-  assert.equal(rebound.claimed, false, 'first claim wins — never re-bound');
-  assert.match(String(rebound.note), /already bound to astra-1/);
+  assert.equal(rebound.claimed, true);
+  assert.equal(rebound.record.code, 'someone-else');
+  assert.equal(rebound.record.clickedAt, T1 + 9);
+  assert.equal(applyReferralClaim(claim.record, CODE, T1 + 9).claimed, false);
+  assert.equal(applyReferralClaim(claim.record, CODE, T1 + 9, true).record.clickedAt, T1 + 9);
 
   const h1 = applyReferralAccrual(claim.record, 30, BASE30, T1 + 3600000);
-  assert.equal(h1.credit, 0, 'nothing is paid before the gate');
-  assert.ok(Math.abs(h1.binding.pending - 0.0117) < 1e-9, '10% of base is held');
-  assert.equal(h1.binding.gated, false);
-  assert.match(String(h1.note), /gate pending/);
+  assert.equal(h1.credit, 0.0063);
+  assert.equal(h1.refereeCredit, 0.0063);
+  assert.equal(h1.binding.pending, 0);
+  assert.equal(h1.binding.firstValidImpressionAt, T1 + 3600000);
+  assert.equal(applyReferralClaim(h1.binding, 'someone-else', T1 + 7200000).claimed, false);
 
   const h2 = applyReferralAccrual(h1.binding, 30, BASE30, T1 + 7200000);
-  assert.equal(h2.binding.gated, true, '60 verified minutes passes the gate');
-  assert.ok(Math.abs(h2.credit - 0.0234) < 1e-9, 'held 0.0117 + new 0.0117 released at once');
-  assert.equal(h2.binding.pending, 0, 'nothing left held');
-  assert.equal(h2.note, 'gate passed — held credit released');
+  assert.equal(h2.binding.gated, true);
+  assert.equal(h2.credit, 0.0063);
+  assert.equal(h2.binding.paid, 0.0126);
+  assert.equal(h2.binding.refereePaid, 0.0126);
 
-  const h3 = applyReferralAccrual(h2.binding, 10, 0.078, T1 + DAY_MS);
-  assert.ok(Math.abs(h3.credit - 0.0078) < 1e-9, 'in-term credit is immediate');
-
-  const dead = applyReferralAccrual(h3.binding, 60, BASE30, T1 + 366 * DAY_MS);
-  assert.equal(dead.credit, 0, 'no credit past the 12-month term');
+  const end = h1.binding.firstValidImpressionAt + 30 * DAY_MS;
+  assert.equal(applyReferralAccrual(h2.binding, 30, BASE30, end - 1).credit, 0.0063);
+  const dead = applyReferralAccrual(h2.binding, 30, BASE30, end);
+  assert.equal(dead.credit, 0);
+  assert.equal(dead.refereeCredit, 0);
   assert.equal(dead.binding.void, true);
-  assert.match(String(dead.note), /term ended/);
 
-  const late = applyReferralAccrual(applyReferralClaim(null, CODE, T1).record, 40, BASE30, T1 + 31 * DAY_MS);
-  assert.equal(late.credit, 0, 'late activation pays nothing');
+  const late = applyReferralAccrual(claim.record, 30, BASE30, T1 + 14 * DAY_MS);
+  assert.equal(late.credit, 0);
   assert.equal(late.binding.void, true);
-  assert.equal(late.binding.pending, 0, 'held credit is burned, never released');
-  assert.match(String(late.note), /gate missed/);
+  assert.match(late.note, /attribution expired/);
+  assert.equal(applyReferralAccrual(claim.record, 30, BASE30, T1 + 14 * DAY_MS - 1).credit, 0.0063);
+  assert.equal(applyReferralAccrual(claim.record, 0, 0, T1).binding.firstValidImpressionAt, null);
+  assert.equal(applyReferralAccrual(claim.record, 1, 0, T1).credit, 0);
 
   const snapshot = JSON.stringify(claim.record);
   applyReferralAccrual(claim.record, 60, BASE30, T1);
@@ -464,7 +506,7 @@ function pass(name) { n++; console.log('PASS ' + name); }
   const rv = refereeView(h2.binding, T1 + 3600000);
   assert.equal(rv.refereeOf, 'astra-1');
   assert.equal(rv.gate, 'passed');
-  assert.equal(rv.gateMinutes, 60);
+  assert.equal(rv.gateMinutes, 0);
   assert.equal(refereeView(claim.record, T1 + 3600000).gate, 'pending');
 
   pass('referral: gate holds 10%, releases retroactively, voids late/expired');
@@ -608,14 +650,15 @@ function pass(name) { n++; console.log('PASS ' + name); }
   assert.equal(tr.status, 200);
   const trBody = await tr.json();
   assert.equal(trBody.platform, 'mac', 'the report says which platform it came from');
-  assert.equal(trBody.earned, 0.23, 'referee keeps the full 65% share');
+  assert.equal(trBody.earned, 0.26, '70% base plus 5% of base referee bonus');
+  assert.deepEqual(trBody.breakdown, { base: 0.252, launch: 0, referee: 0.0126 });
   assert.equal(trBody.referral.referrer, 'astra-1');
-  assert.equal(trBody.referral.credited, true, 'referrer paid at the gate');
-  assert.equal(trBody.referral.released, 0.02, '0.0234 served at 2 decimals');
+  assert.equal(trBody.referral.credited, true);
+  assert.equal(trBody.referral.released, 0.01);
 
   const own = await (await get('/earnings/' + OWNER_DEV)).json();
-  assert.equal(own.total, 0.02, 'referral credit lands in the referrer ledger');
-  assert.equal(own.referral.total, 0.02);
+  assert.equal(own.total, 0.01, 'referral credit lands in the referrer ledger');
+  assert.equal(own.referral.total, 0.01);
   assert.equal(own.rows[0].type, 'referral');
   assert.deepEqual(own.platforms, [], 'a referrer without placements has no platform mix');
 
@@ -631,7 +674,7 @@ function pass(name) { n++; console.log('PASS ' + name); }
   assert.equal(view.registered, true);
   assert.equal(view.totals.referees, 1);
   assert.equal(view.totals.gated, 1);
-  assert.equal(view.totals.accrued, 0.02);
+  assert.equal(view.totals.accrued, 0.01);
   assert.equal(view.referees[0].label, 'referee 1');
   const viewText = JSON.stringify(view);
   assert.ok(viewText.indexOf(REF_DEV) === -1, 'no referee device id leaks');
@@ -641,9 +684,9 @@ function pass(name) { n++; console.log('PASS ' + name); }
   // /stats publishes the flywheel mix — and keeps referral cost out of spend.
   const stats = await (await get('/stats')).json();
   assert.equal(stats.totals.impressions, 60, 'referee delivery only — a referral is not delivery');
-  assert.equal(stats.totals.spend, 0.23, 'campaign spend is the referee share alone');
+  assert.equal(stats.totals.spend, 0.25, 'campaign spend excludes platform-funded bonuses');
   assert.equal(stats.totals.earners, 2, 'referee + referrer both have ledgers');
-  assert.equal(stats.referralSpend, 0.02, 'referral cost published separately');
+  assert.equal(stats.referralSpend, 0.01, 'referrer cost published separately');
   assert.deepEqual(stats.platforms, [{ platform: 'mac', minutes: 60, clicks: 0 }]);
 
   pass('loop end-to-end: claim → gate → referrer paid → public mix, no ids leaked');
@@ -715,12 +758,15 @@ function pass(name) { n++; console.log('PASS ' + name); }
   assert.equal((await post('/admin/feed', full, authed)).status, 200, 'feed filled to 20');
   await post('/submit', good('toofull'), authed);
   assert.equal((await post('/admin/review', { id: 'toofull', approve: true }, authed)).status, 409, 'approve into a full feed refused');
+  const afterFull = await (await workerFetch(new Request('https://x.test/admin/queue', { headers: authed }), env, {})).json();
+  assert.ok(afterFull.campaigns.some((c) => c.id === 'toofull'), 'queue entry survives a full-feed refusal');
 
   // Queue full (50) → submit refused with 429.
   const fifty = [];
   for (let i = 0; i < 50; i++) fifty.push(good('qfill' + i));
   await kv.put('queue:campaigns', JSON.stringify(fifty));
-  assert.equal((await post('/submit', good('one-more'), authed)).status, 429, 'submit into a full queue refused');
+  const subFull = await post('/submit', good('one-more'), authed);
+  assert.equal(subFull.status, 429, 'submit into a full queue refused');
 
   pass('open submission: validate → queue → approve/reject, floors, caps, auth');
 }
@@ -978,9 +1024,9 @@ function pass(name) { n++; console.log('PASS ' + name); }
     })
   }), env, {});
 
-  // 60 min at $8 CPM × 65% = $0.312 → served at 2 decimals.
+  // 60 min at $8 CPM × 65% = $0.342 → served at 2 decimals.
   const win = await (await track('win1', 60)).json();
-  assert.equal(win.earned, 0.31, 'the slot winner is paid at its own CPM');
+  assert.equal(win.earned, 0.34, 'the slot winner is paid at its own CPM');
 
   // The suppressed campaign earns NOTHING while the slot runs.
   const sup = await (await track('open1', 60)).json();

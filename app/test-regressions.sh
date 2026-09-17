@@ -31,16 +31,39 @@ assert 'chipTitle(' not in source, \
 methods = '\n'.join(block(marker) for marker in [
     '@objc private func togglePause(',
     'func disableToggled()',
+    'func startSnooze(',
+    'func snoozeOff()',
+    'private func resetEligibility()',
+    'private func observeSleepWake()',
     'private func saveCampaignCache(',
     'private func loadCampaignCache()',
 ]).replace('@objc private func', 'func').replace('private func', 'func')
-program = '''import Foundation
-final class NSMenuItem {}
+methods = methods.replace('NSWorkspace.shared.notificationCenter', 'workspaceCenter')
+methods = methods.replace('DistributedNotificationCenter.default()', 'lockCenter')
+methods = methods.replace('NotificationCenter.default.addObserver', 'appCenter.addObserver')
+program = '''import AppKit
+private typealias AppDelegate = Harness
 '''
+program += block('private struct DemoEligibility') + '\n'
+program += block('private struct DemoAccrual: Codable') + '\n'
+program += block('private struct FreeCoffeeState: Codable') + '\n'
+program += block('private func dayKey(') + '\n'
+program += block('private func restOfDayDeadline(') + '\n'
 program += block('private struct LiveCampaign: Codable') + '\n'
 program += block('private struct CampaignCache: Codable') + '\n'
 program += '''
 private final class Harness {
+    var eligibility = DemoEligibility()
+    var demoEligible = false
+    var isAwake = true
+    var displaysAwake = true
+    var sessionActive = true
+    var screenLocked = false
+    var eligibilityObservers: [NSObjectProtocol] = []
+    let workspaceCenter = NotificationCenter()
+    let lockCenter = NotificationCenter()
+    let appCenter = NotificationCenter()
+    var demoAccrual = DemoAccrual()
     var disabled = false
     var paused = false
     var snoozeUntil: Date?
@@ -55,6 +78,46 @@ program += methods + '\n}\n'
 program += '''
 private let h = Harness()
 private let item = NSMenuItem()
+private let eligible = DemoEligibility.Conditions()
+private func prime() {
+    h.eligibility.reset()
+    for t in 0..<60 { precondition(!h.eligibility.sample(at: Double(t), conditions: eligible)) }
+    h.demoEligible = true
+}
+private func assertReset() {
+    precondition(h.eligibility.startedAt == nil && !h.demoEligible)
+    for t in 60..<120 { precondition(!h.eligibility.sample(at: Double(t), conditions: eligible)) }
+    precondition(h.eligibility.sample(at: 120, conditions: eligible))
+}
+h.observeSleepWake()
+_ = h.demoAccrual.credit(on: Date())
+private let earnedCredit = h.demoAccrual.balanceRemainder
+precondition(earnedCredit == 1600)
+for name in [NSWorkspace.willSleepNotification, NSWorkspace.didWakeNotification] {
+    prime()
+    h.workspaceCenter.post(name: name, object: nil)
+    precondition(h.isAwake == (name == NSWorkspace.didWakeNotification))
+    precondition(h.demoAccrual.balanceRemainder == earnedCredit,
+                 "Sleep/wake must preserve credit from completed intervals")
+    assertReset()
+}
+print("PASS: production observeSleepWake resets unfinished interval and preserves earned credit")
+prime()
+h.togglePause(item)
+assertReset()
+prime()
+h.disableToggled()
+assertReset()
+prime()
+h.startSnooze(minutes: 30)
+precondition(h.snoozeUntil != nil)
+assertReset()
+prime()
+h.snoozeOff()
+precondition(h.snoozeUntil == nil && h.paused)
+assertReset()
+h.disabled = false
+h.paused = false
 // Every combination of disabled/paused must match the menu's displayed action.
 for paused in [false, true] {
     h.disabled = true

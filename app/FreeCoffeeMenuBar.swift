@@ -111,12 +111,81 @@
 import AppKit
 import Foundation
 import ServiceManagement
+import IOKit
 
 /// The persisted shape: ~/Library/Application Support/FreeCoffee/ledger.json
 /// `history` maps yyyy-MM-dd → cents earned that day (drives the 7-day chart).
 /// Decoding is lenient (every key defaults) so older files stay readable —
 /// only a missing file seeds the demo, and only truly malformed JSON is
 /// quarantined (see loadState).
+private struct DemoEligibility {
+    struct Conditions {
+        var paused = false
+        var disabled = false
+        var snoozed = false
+        var awake = true
+        var unlocked = true
+        var idleSeconds: TimeInterval? = 0
+        var placementVisible = true
+        var demo = true
+        var creative: String? = "demo"
+
+        var eligible: Bool {
+            guard let idleSeconds, idleSeconds.isFinite, idleSeconds >= 0,
+                  let creative, !creative.isEmpty else { return false }
+            return !paused && !disabled && !snoozed && awake && unlocked &&
+                idleSeconds <= 300 && placementVisible && demo
+        }
+    }
+
+    private(set) var startedAt: TimeInterval?
+    private var lastSample: TimeInterval?
+    private var creative: String?
+
+    mutating func reset() {
+        startedAt = nil
+        lastSample = nil
+        creative = nil
+    }
+
+    mutating func sample(at now: TimeInterval, conditions: Conditions) -> Bool {
+        guard now.isFinite, conditions.eligible else { reset(); return false }
+        if let lastSample, now < lastSample || now - lastSample > 2.5 { reset() }
+        if creative != conditions.creative { reset() }
+        creative = conditions.creative
+        lastSample = now
+        guard let startedAt else { self.startedAt = now; return false }
+        guard now - startedAt >= 60 else { return false }
+        self.startedAt = now
+        return true
+    }
+}
+
+private struct DemoAccrual: Codable {
+    static let cpm = 2
+    static let baseShare = 70
+    static let launchShare = 10
+    static let microsPerInterval = cpm * 1_000 * (baseShare + launchShare) / 100
+    var balanceRemainder = 0
+    var dayRemainder = 0
+    var day = ""
+
+    mutating func credit(on date: Date) -> (balance: Int, today: Int) {
+        let key = dayKey(date)
+        if day != key { day = key; dayRemainder = 0 }
+        balanceRemainder += Self.microsPerInterval
+        dayRemainder += Self.microsPerInterval
+        let result = (balanceRemainder / 10_000, dayRemainder / 10_000)
+        balanceRemainder %= 10_000
+        dayRemainder %= 10_000
+        return result
+    }
+}
+
+private func restOfDayDeadline(from date: Date, calendar: Calendar = .current) -> Date? {
+    calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: date))
+}
+
 private struct FreeCoffeeState: Codable {
     var balance: Double
     var today: Double
@@ -127,10 +196,11 @@ private struct FreeCoffeeState: Codable {
     var lastTick: Date?
     var updateSkipped: String?
     var updateSeen: String?
+    var demoAccrual: DemoAccrual
 
     init(balance: Double, today: Double, paused: Bool, disabled: Bool,
          snoozeUntil: Date?, history: [String: Int], lastTick: Date?,
-         updateSkipped: String?, updateSeen: String?) {
+          updateSkipped: String?, updateSeen: String?, demoAccrual: DemoAccrual = DemoAccrual()) {
         self.balance = balance
         self.today = today
         self.paused = paused
@@ -140,6 +210,7 @@ private struct FreeCoffeeState: Codable {
         self.lastTick = lastTick
         self.updateSkipped = updateSkipped
         self.updateSeen = updateSeen
+        self.demoAccrual = demoAccrual
     }
 
     init(from decoder: Decoder) throws {
@@ -153,6 +224,7 @@ private struct FreeCoffeeState: Codable {
         lastTick = try c.decodeIfPresent(Date.self, forKey: .lastTick)
         updateSkipped = try c.decodeIfPresent(String.self, forKey: .updateSkipped)
         updateSeen = try c.decodeIfPresent(String.self, forKey: .updateSeen)
+        demoAccrual = try c.decodeIfPresent(DemoAccrual.self, forKey: .demoAccrual) ?? DemoAccrual()
     }
 }
 
@@ -1113,7 +1185,7 @@ final class UpdateEngine: NSObject {
 import CommonCrypto
 #endif
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     // MARK: State (main thread only — timers and notifications are main-bound)
 
@@ -1123,6 +1195,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var disabled = false
     private(set) var snoozeUntil: Date?
     private(set) var isAwake = true
+    private var sessionActive = true
+    private var screenLocked = false
+    private var displaysAwake = true
+    private var eligibility = DemoEligibility()
+    private var demoAccrual = DemoAccrual()
+    private var eligibilityObservers: [NSObjectProtocol] = []
+    private var clock: () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
+    private(set) var demoEligible = false
+    private var lastIdleSeconds: TimeInterval? = 0
     private var history: [String: Int] = [:]   // yyyy-MM-dd → cents earned
     private var lastTick: Date?
     private var updateSeen: String?             // release version already auto-staged once
@@ -1206,6 +1287,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popoverVC.app = self
         popover.contentViewController = popoverVC
         popover.behavior = .transient
+        popover.delegate = self
         popover.appearance = NSAppearance(named: .darkAqua)
 
         // LEFT-click → popover; RIGHT-click → menu (see statusItemClicked).
@@ -1596,6 +1678,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                   action: #selector(snooze6h(_:)), keyEquivalent: "")
         snooze6hItem.target = self
         snoozeSub.addItem(snooze6hItem)
+        let restDay = NSMenuItem(title: "Snooze rest of day",
+                                 action: #selector(snoozeRestOfDay(_:)), keyEquivalent: "")
+        restDay.target = self
+        snoozeSub.addItem(restDay)
         snoozeOffItem = NSMenuItem(title: "Turn off snooze",
                                    action: #selector(snoozeOff(_:)), keyEquivalent: "")
         snoozeOffItem.target = self
@@ -1878,58 +1964,81 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: Timers
 
     private func scheduleTimers() {
-        // Earning: +$0.01 every 90 s while awake and not paused/disabled.
-        let earn = Timer.scheduledTimer(timeInterval: 90, target: self,
-                                        selector: #selector(earnTick),
-                                        userInfo: nil, repeats: true)
-        RunLoop.main.add(earn, forMode: .common)
-
-        // Countdown: 1 s heartbeat while snoozed, so the popover button and
-        // status line tick down and the pause lifts on time.
-        let countdown = Timer.scheduledTimer(timeInterval: 1, target: self,
+        let heartbeat = Timer.scheduledTimer(timeInterval: 1, target: self,
                                              selector: #selector(countdownTick),
                                              userInfo: nil, repeats: true)
-        RunLoop.main.add(countdown, forMode: .common)
-
-        // Sponsor rotation every 60 s (chip + popover header) — live
-        // campaigns with a feed, fictional demo sponsors without one.
-        let rotate = Timer.scheduledTimer(timeInterval: 60,
-                                          target: self,
-                                          selector: #selector(campaignRotateTick),
-                                          userInfo: nil, repeats: true)
-        RunLoop.main.add(rotate, forMode: .common)
-        campaignRotateTimer = rotate
+        RunLoop.main.add(heartbeat, forMode: .common)
     }
 
     private var snoozed: Bool {
         snoozeUntil != nil && snoozeUntil! > Date()
     }
 
+    private func resetEligibility() {
+        eligibility.reset()
+        demoEligible = false
+    }
+
+    private func idleSeconds() -> TimeInterval? {
+        let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("IOHIDSystem"))
+        guard service != 0 else { return nil }
+        defer { IOObjectRelease(service) }
+        guard let value = IORegistryEntryCreateCFProperty(service, "HIDIdleTime" as CFString,
+                                                         kCFAllocatorDefault, 0)?.takeRetainedValue() as? NSNumber else {
+            return nil
+        }
+        return value.doubleValue / 1_000_000_000
+    }
+
+    private var placementVisible: Bool {
+        guard popover.isShown, NSApp.isActive,
+              let window = popoverVC?.view.window, window.isVisible, window.isKeyWindow,
+              window.alphaValue == 1, window.occlusionState.contains(.visible),
+              let screen = window.screen, screen.visibleFrame.contains(window.frame),
+              !popoverVC.view.isHiddenOrHasHiddenAncestor else { return false }
+        return true
+    }
+
     @objc private func earnTick() {
-        // Snooze counts as paused — no earning ticks while snoozed.
-        guard !disabled, !paused, !snoozed, isAwake else { return }
-        balanceCents += 1             // $0.01
-        todayCents += 1
-        history[dayKey(Date()), default: 0] += 1
-        lastTick = Date()
-        refreshUI()
+        let session = CGSessionCopyCurrentDictionary() as? [String: Any]
+        let onConsole = session?[kCGSessionOnConsoleKey as String] as? Bool == true
+        let locked = session?["CGSSessionScreenIsLocked"] as? Bool ?? true
+        var conditions = DemoEligibility.Conditions()
+        conditions.paused = paused
+        conditions.disabled = disabled
+        conditions.snoozed = snoozed
+        conditions.awake = isAwake && displaysAwake
+        conditions.unlocked = sessionActive && onConsole && !screenLocked && !locked
+        conditions.idleSeconds = idleSeconds()
+        if conditions.idleSeconds == nil && lastIdleSeconds == nil { conditions.idleSeconds = lastIdleSeconds }
+        conditions.placementVisible = placementVisible
+        conditions.demo = adFeedURL == nil
+        conditions.creative = demoSponsor
+        demoEligible = conditions.eligible
+        guard eligibility.sample(at: clock(), conditions: conditions) else { return }
+        let now = Date()
+        let credit = demoAccrual.credit(on: now)
+        balanceCents += credit.balance
+        history[dayKey(now), default: 0] += credit.today
+        todayCents = history[dayKey(now), default: 0]
+        lastTick = now
         persist()
+        campaignRotateTick()
     }
 
     @objc private func countdownTick() {
-        if snoozeUntil != nil {
-            if let until = snoozeUntil, until <= Date() {
-                // Snooze window elapsed — resume earning.
-                snoozeUntil = nil
-                paused = false
-                persist()
-            }
-            refreshUI()
-            return
+        if let until = snoozeUntil, until <= Date() {
+            snoozeUntil = nil
+            resetEligibility()
+            persist()
         }
-        // Open popover only: keep it live (balance, chart, sponsor, CTA)
-        // without the full menu/login-item refresh the snoozed path needs.
-        if popover.isShown { popoverVC?.refresh() }
+        todayCents = history[dayKey(Date()), default: 0]
+        earnTick()
+        refreshUI()
+    }
+
+    func popoverWillClose(_ notification: Notification) {
+        resetEligibility()
     }
 
     // MARK: Real-advertiser bridge (config.json → feed → cache → UI)
@@ -1954,20 +2063,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func campaignRotateTick() {
-        // Snooze auto-resume — Date-based check on the 60 s sponsor timer,
-        // so the deadline lifts even if the 1 s countdown ever missed.
-        if let until = snoozeUntil, until <= Date() {
-            snoozeUntil = nil
-            paused = false
-            persist()
-        }
-        // No ad rotation while snoozed — the chip is in snooze mode.
-        guard !snoozed else { refreshUI(); return }
+        guard !snoozed, !paused, !disabled, isAwake, displaysAwake, sessionActive, !screenLocked else { return }
+        resetEligibility()
         if liveCampaigns.count > 1 {
             liveCampaignIndex = (liveCampaignIndex + 1) % liveCampaigns.count
         } else if adFeedURL == nil {
-            // Demo mode still rotates the fictional sponsors, so the bar
-            // always shows an ad even with no feed configured.
             demoSponsorIndex = (demoSponsorIndex + 1) % Self.demoSponsors.count
         }
         refreshUI()
@@ -1982,6 +2082,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         feedClient = client
         client.fetchCampaigns(from: feedURL) { [weak self] campaigns, error in
             guard let self = self else { return }
+            self.resetEligibility()
             if let campaigns = campaigns, !campaigns.isEmpty {
                 // Auction order: highest CPM first, floor applied (pickAd
                 // mirrors assets/js/demo.js). Below-floor campaigns are
@@ -2101,6 +2202,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: Actions
 
     @objc private func togglePause(_ sender: NSMenuItem) {
+        resetEligibility()
         if disabled {
             // The menu says "Enable earning": clear every earning blocker.
             disabled = false
@@ -2117,27 +2219,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// The deadline persists to ledger.json (snoozeUntil, ISO date) and
     /// auto-resumes via the Date-based checks in the timers.
     func snoozeToggled() {
-        if snoozed {
-            snoozeOff()
-        } else {
-            startSnooze(minutes: 30)
-        }
+        resetEligibility()
+        guard let submenu = snooze30Item?.menu, let button = statusItem.button else { return }
+        updateMenu()
+        submenu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.minY), in: button)
     }
 
     /// Start a snooze of `minutes` (30 min from the popover; 30 min, 2 h, or
     /// 6 h from the right-click submenu). While snoozed: no earning ticks, no
     /// live-ad rotation, and the chip reads "snoozed until HH:MM".
     func startSnooze(minutes: TimeInterval) {
+        guard minutes.isFinite, minutes > 0 else { return }
+        resetEligibility()
         snoozeUntil = Date().addingTimeInterval(minutes * 60)
-        paused = true
         refreshUI()
         persist()
     }
 
     /// Turn an active snooze off immediately (popover button or submenu).
     func snoozeOff() {
+        resetEligibility()
         snoozeUntil = nil
-        paused = false
         refreshUI()
         persist()
     }
@@ -2156,12 +2258,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         startSnooze(minutes: 6 * 60)
     }
 
+    @objc private func snoozeRestOfDay(_ sender: NSMenuItem) {
+        guard let deadline = restOfDayDeadline(from: Date()) else { return }
+        resetEligibility()
+        snoozeUntil = deadline
+        refreshUI()
+        persist()
+    }
+
     @objc private func snoozeOff(_ sender: NSMenuItem) {
         snoozeOff()
     }
 
     /// Disable = persisted earning kill-switch until re-enabled.
     func disableToggled() {
+        resetEligibility()
         disabled.toggle()
         if !disabled {
             snoozeUntil = nil
@@ -2244,16 +2355,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func observeSleepWake() {
         let center = NSWorkspace.shared.notificationCenter
-        sleepObserver = center.addObserver(forName: NSWorkspace.willSleepNotification,
-                                           object: nil, queue: .main) { [weak self] _ in
-            self?.isAwake = false
-            self?.refreshUI()
-            self?.persist()
+        let signals: [(Notification.Name, (AppDelegate) -> Void)] = [
+            (NSWorkspace.willSleepNotification, { $0.isAwake = false }),
+            (NSWorkspace.didWakeNotification, { $0.isAwake = true }),
+            (NSWorkspace.screensDidSleepNotification, { $0.displaysAwake = false }),
+            (NSWorkspace.screensDidWakeNotification, { $0.displaysAwake = true }),
+            (NSWorkspace.sessionDidResignActiveNotification, { $0.sessionActive = false }),
+            (NSWorkspace.sessionDidBecomeActiveNotification, { $0.sessionActive = true }),
+            (NSWorkspace.activeSpaceDidChangeNotification, { _ in })
+        ]
+        for (name, update) in signals {
+            eligibilityObservers.append(center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                guard let self else { return }
+                update(self)
+                self.resetEligibility()
+                self.refreshUI()
+            })
         }
-        wakeObserver = center.addObserver(forName: NSWorkspace.didWakeNotification,
-                                          object: nil, queue: .main) { [weak self] _ in
-            self?.isAwake = true
-            self?.refreshUI()
+        for (name, locked) in [("com.apple.screenIsLocked", true), ("com.apple.screenIsUnlocked", false)] {
+            eligibilityObservers.append(DistributedNotificationCenter.default().addObserver(
+                forName: Notification.Name(name), object: nil, queue: .main) { [weak self] _ in
+                    self?.screenLocked = locked
+                    self?.resetEligibility()
+                    self?.refreshUI()
+                })
+        }
+        for name in [NSApplication.didResignActiveNotification, NSApplication.didChangeScreenParametersNotification,
+                     NSWindow.didResignKeyNotification, NSWindow.didChangeOcclusionStateNotification,
+                     NSWindow.willMoveNotification, NSWindow.didResizeNotification, NSWindow.didChangeScreenNotification] {
+            eligibilityObservers.append(NotificationCenter.default.addObserver(
+                forName: name, object: nil, queue: .main) { [weak self] _ in
+                    self?.resetEligibility()
+                })
         }
     }
 
@@ -2288,7 +2421,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                         history: history,
                                         lastTick: lastTick,
                                         updateSkipped: updateEngine.skippedVersion,
-                                        updateSeen: updateSeen)
+                                        updateSeen: updateSeen,
+                                        demoAccrual: demoAccrual)
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .iso8601
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -2315,11 +2449,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             history = state.history
             lastTick = state.lastTick
             updateSeen = state.updateSeen
+            demoAccrual = state.demoAccrual
+            demoAccrual.balanceRemainder = min(9_999, max(0, demoAccrual.balanceRemainder))
+            demoAccrual.dayRemainder = min(9_999, max(0, demoAccrual.dayRemainder))
+            todayCents = history[dayKey(Date()), default: 0]
             updateEngine.skippedVersion = state.updateSkipped
             if let until = snoozeUntil, until <= Date() {
                 // Stale snooze from a previous run — start fresh.
                 snoozeUntil = nil
-                paused = false
             }
         } catch {
             if FileManager.default.fileExists(atPath: url.path) {

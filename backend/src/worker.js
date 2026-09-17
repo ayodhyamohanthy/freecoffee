@@ -52,7 +52,11 @@
    ========================================================================== */
 
 /* ------------------------------ constants ------------------------------- */
-var USER_SHARE = 0.65;          // transparent 65% of auction revenue
+var USER_SHARE = 0.70;
+var LAUNCH_SHARE = 0.10;
+var REFEREE_SHARE = 0.05;
+var REFERRAL_CLICK_DAYS = 14;
+var SERVING_MIN_CPM = 2;
 var CLICK_BONUS = 0.05;         // $ per verified click
 var CLICK_MAX_PER_DAY = 5;
 var CLICK_CAP_SHARE = 0.25;     // ≤25% of monthly impressions
@@ -79,10 +83,10 @@ var DEVICE_ID_RE = /^[a-f0-9-]{8,64}$/i;
    Everything money-shaped is here: the referrer's 10% is computed from the
    REFEREE's own base award (platform-side money — the referee's 65% is never
    reduced), gated on activation, and capped at a 12-month term. */
-var REFERRAL_SHARE = 0.10;        // 10% of the referee's BASE earnings
-var REFERRAL_TERM_DAYS = 365;     // 12-month referral term
-var REFERRAL_GATE_MINUTES = 60;   // activation gate: verified minutes…
-var REFERRAL_GATE_DAYS = 30;      // …inside the referee's first 30 days
+var REFERRAL_SHARE = 0.05;
+var REFERRAL_TERM_DAYS = 30;
+var REFERRAL_GATE_MINUTES = 0;
+var REFERRAL_GATE_DAYS = 30;
 var REF_CODE_RE = /^[a-z0-9][a-z0-9-]{2,31}$/;    // lowercase share codes
 var PLATFORM_RE = /^[a-z0-9][a-z0-9_-]{0,19}$/;   // mac | web | pwa | agent …
 var REFERRALS_MAX = 200;          // referees tracked per referrer code
@@ -105,7 +109,7 @@ var REGION_LIST_MAX = 40;         // regions/surfaces reported per campaign
    ------------------------------------------------------------------------- */
 var SLOT_BLOCK_HOURS = 4;                      // 6 blocks/day: 00–04 … 20–24
 var SLOT_BLOCKS_PER_DAY = 24 / SLOT_BLOCK_HOURS;
-var SLOT_MIN_CPM = 1;                          // same floor as /submit
+var SLOT_MIN_CPM = 2;
 var SLOT_MAX_PER_REQUEST = 200;                // slots per bid request
 var SLOT_BIDS_KEPT = 20;                       // top bids retained per slot
 var SLOT_MAX_AHEAD_DAYS = 400;                 // ~13 months of bookable future
@@ -284,15 +288,19 @@ function applyReferralRegister(existing, deviceId, code, now) {
 
 /* Referee side: bind this device to a referrer code. Idempotent — the first
    claim wins and a later one is refused (not silently re-bound). */
-function applyReferralClaim(existing, code, now) {
+function applyReferralClaim(existing, code, now, refresh) {
   var ts = (typeof now === 'number' && isFinite(now)) ? now : Date.now();
   var c = normalizeRefCode(code);
   if (!c) return { record: existing || null, claimed: false, error: 'invalid referral code', note: null };
   if (existing && typeof existing === 'object' && existing.code) {
-    return { record: existing, claimed: false, error: null, note: 'already bound to ' + existing.code };
+    if (Number.isFinite(existing.firstValidImpressionAt) || existing.gated || existing.minutes > 0 ||
+        (existing.code === c && !refresh)) {
+      return { record: existing, claimed: false, error: null, note: 'already bound to ' + existing.code };
+    }
   }
   return {
-    record: { code: c, t0: ts, minutes: 0, windowMinutes: 0, pending: 0, paid: 0, gated: false, void: false },
+    record: { code: c, version: 2, clickedAt: ts, firstValidImpressionAt: null,
+      t0: ts, minutes: 0, windowMinutes: 0, pending: 0, paid: 0, refereePaid: 0, gated: false, void: false },
     claimed: true, error: null, note: null
   };
 }
@@ -308,40 +316,37 @@ function applyReferralAccrual(binding, minutes, baseEarned, now) {
   if (!binding || typeof binding !== 'object' || !binding.code) {
     return { binding: binding || null, credit: 0, note: null };
   }
-  var b = cloneLedger(binding) || binding;
+  var b = cloneLedger(binding);
   var m = Math.floor(Number(minutes));
-  if (!isFinite(m) || m < 0) m = 0;
   var base = Number(baseEarned);
-  if (!isFinite(base) || base <= 0) base = 0;
-
-  b.minutes = (Number(b.minutes) || 0) + m;
-  var ageDays = (ts - (Number(b.t0) || ts)) / 86400000;
-
-  if (ageDays > REFERRAL_TERM_DAYS) {
-    b.void = true; b.pending = 0;
-    return { binding: b, credit: 0, note: 'referral term ended (12 months)' };
+  if (!b || !normalizeRefCode(b.code) || !isFinite(m) || m <= 0 || !isFinite(base) || base <= 0) {
+    return { binding: b, credit: 0, refereeCredit: 0, note: null };
   }
-
+  if (!Number.isFinite(b.firstValidImpressionAt)) {
+    if (b.version !== 2 && (b.minutes > 0 || b.gated)) {
+      b.firstValidImpressionAt = Number.isFinite(b.t0) ? b.t0 : 0;
+    } else {
+      var clickedAt = Number.isFinite(b.clickedAt) ? b.clickedAt : b.t0;
+      if (!Number.isFinite(clickedAt) || ts < clickedAt || ts - clickedAt >= REFERRAL_CLICK_DAYS * 86400000) {
+        b.void = true;
+        return { binding: b, credit: 0, refereeCredit: 0, note: 'referral attribution expired' };
+      }
+      b.firstValidImpressionAt = ts;
+    }
+  }
+  var age = ts - b.firstValidImpressionAt;
+  if (b.void || age < 0 || age >= REFERRAL_TERM_DAYS * 86400000) {
+    b.void = true;
+    return { binding: b, credit: 0, refereeCredit: 0, note: 'referral term ended (30 days)' };
+  }
   var share = round4(base * REFERRAL_SHARE);
-
-  if (!b.gated) {
-    if (ageDays <= REFERRAL_GATE_DAYS) b.windowMinutes = (Number(b.windowMinutes) || 0) + m;
-    b.pending = round4((Number(b.pending) || 0) + share);
-    if ((Number(b.windowMinutes) || 0) >= REFERRAL_GATE_MINUTES) {
-      var release = round4(Number(b.pending) || 0);
-      b.gated = true; b.pending = 0; b.void = false;
-      b.paid = round4((Number(b.paid) || 0) + release);
-      return { binding: b, credit: release, note: 'gate passed — held credit released' };
-    }
-    if (ageDays > REFERRAL_GATE_DAYS) {
-      b.void = true; b.pending = 0;
-      return { binding: b, credit: 0, note: 'gate missed (≥60 verified minutes required in the first 30 days)' };
-    }
-    return { binding: b, credit: 0, note: 'gate pending (≥60 verified minutes in the first 30 days)' };
-  }
-
+  var refereeCredit = round4(base * REFEREE_SHARE);
+  b.minutes = (Number(b.minutes) || 0) + m;
+  b.windowMinutes = (Number(b.windowMinutes) || 0) + m;
+  b.gated = true;
   b.paid = round4((Number(b.paid) || 0) + share);
-  return { binding: b, credit: share, note: null };
+  b.refereePaid = round4((Number(b.refereePaid) || 0) + refereeCredit);
+  return { binding: b, credit: share, refereeCredit: refereeCredit, note: null };
 }
 
 /* Referrer side: add a released credit to the referrer's own ledger — PURE.
@@ -374,8 +379,13 @@ function refereeView(binding, now) {
   var b = (binding && typeof binding === 'object') ? binding : null;
   if (!b || !normalizeRefCode(b.code)) return null;
   var ts = (typeof now === 'number' && isFinite(now)) ? now : Date.now();
-  var ageDays = (ts - (Number(b.t0) || ts)) / 86400000;
-  var gate = b.gated ? 'passed' : ((b.void || ageDays > REFERRAL_GATE_DAYS) ? 'void' : 'pending');
+  var started = Number.isFinite(b.firstValidImpressionAt) ? b.firstValidImpressionAt :
+    (b.version !== 2 && (b.minutes > 0 || b.gated) ? b.t0 : null);
+  var ageDays = Number.isFinite(started) ? (ts - started) / 86400000 : 0;
+  var clickedAt = Number.isFinite(b.clickedAt) ? b.clickedAt : b.t0;
+  var expired = b.void || ageDays >= REFERRAL_TERM_DAYS ||
+    (!Number.isFinite(started) && (!Number.isFinite(clickedAt) || ts - clickedAt >= REFERRAL_CLICK_DAYS * 86400000));
+  var gate = expired ? 'void' : (Number.isFinite(started) ? 'passed' : 'pending');
   return {
     refereeOf: normalizeRefCode(b.code),
     gate: gate,
@@ -383,7 +393,11 @@ function refereeView(binding, now) {
     windowMinutes: Math.round(Number(b.windowMinutes) || 0),
     gateMinutes: REFERRAL_GATE_MINUTES,
     gateDaysLeft: gate === 'pending' ? Math.max(0, Math.ceil(REFERRAL_GATE_DAYS - ageDays)) : 0,
-    termDaysLeft: Math.max(0, Math.ceil(REFERRAL_TERM_DAYS - ageDays))
+    termDaysLeft: expired ? 0 : Math.max(0, Math.ceil(REFERRAL_TERM_DAYS - ageDays)),
+    firstValidImpressionAt: started,
+    attributionDays: REFERRAL_CLICK_DAYS,
+    referrerShare: REFERRAL_SHARE,
+    refereeShare: REFEREE_SHARE
   };
 }
 
@@ -496,7 +510,7 @@ function cloneLedger(l) {
                      gate is unmet — the amount is held in the binding)
      platform        the normalized platform key the placement was counted in
    ------------------------------------------------------------------------ */
-function applyEarnings(ledger, report, campaigns, now, referral) {
+function applyEarnings(ledger, report, campaigns, now, referral, launchEnabled) {
   var ts = (typeof now === 'number' && isFinite(now)) ? now : Date.now();
   var type = report && report.type;
   if (type !== 'impression' && type !== 'click') {
@@ -543,6 +557,7 @@ function applyEarnings(ledger, report, campaigns, now, referral) {
   var monthClicks = l.monthly.paidClicks;
   var monthImpressions = Number(l.monthly.impressions) || 0;
   var earned = 0;
+  var baseEarned = 0, launchBonus = 0, refereeBonus = 0;
   var note = null;
 
   if (type === 'impression') {
@@ -557,8 +572,14 @@ function applyEarnings(ledger, report, campaigns, now, referral) {
     }
     if (minutes > MAX_MINUTES_PER_REPORT) minutes = MAX_MINUTES_PER_REPORT;
 
-    earned = round4(minutes * cpm / 1000 * USER_SHARE);
-    if (!campaign) note = 'unknown campaign — cpm 0';
+    if (!campaign || cpm < SERVING_MIN_CPM) {
+      minutes = 0;
+      note = campaign ? 'campaign below CPM floor' : 'unknown campaign — cpm 0';
+    }
+    baseEarned = round4(minutes * cpm / 1000 * USER_SHARE);
+    earned = baseEarned;
+    if (minutes > 0 && !Number.isFinite(l.firstValidImpressionAt)) l.firstValidImpressionAt = ts;
+    launchBonus = launchEnabled === true ? round4(baseEarned * LAUNCH_SHARE) : 0;
 
     l.total = round4((Number(l.total) || 0) + earned);
     l.today.total = round4((Number(l.today.total) || 0) + earned);
@@ -576,7 +597,7 @@ function applyEarnings(ledger, report, campaigns, now, referral) {
   } else {
     /* Click: flat $0.05 when the campaign allows AND both caps allow.
        The daily cap counts ATTEMPTS (paid or not). */
-    var clickAllowed = !!(campaign && campaign.allowClicks !== false);
+    var clickAllowed = !!(campaign && cpm >= SERVING_MIN_CPM && campaign.allowClicks !== false);
     var capShare = CLICK_CAP_SHARE * monthImpressions;   // exact ≤25% rule
 
     if (attemptsToday + 1 > CLICK_MAX_PER_DAY) {
@@ -609,14 +630,32 @@ function applyEarnings(ledger, report, campaigns, now, referral) {
      can only ever yield credit 0 — it can never grow the referee's own pay. */
   var referrerCredit = 0, referrerBinding = null, referralNote = null;
   if (type === 'impression' && referral) {
-    var acc = applyReferralAccrual(referral, minutes, earned, ts);
+    var eligibleBinding = cloneLedger(referral);
+    if (!Number.isFinite(eligibleBinding.firstValidImpressionAt) &&
+        Number.isFinite(l.firstValidImpressionAt)) {
+      if (l.firstValidImpressionAt < ts) eligibleBinding.void = true;
+    }
+    var acc = applyReferralAccrual(eligibleBinding, minutes, baseEarned, ts);
     referrerBinding = acc.binding || null;
     referrerCredit = Number(acc.credit) || 0;
+    refereeBonus = Number(acc.refereeCredit) || 0;
     referralNote = acc.note || null;
   }
+  if (!l.bonuses || typeof l.bonuses !== 'object') l.bonuses = { launch: 0, referee: 0 };
+  for (var bonus of [{ type: 'launch', amount: launchBonus }, { type: 'referee', amount: refereeBonus }]) {
+    if (bonus.amount <= 0) continue;
+    l.total = round4((Number(l.total) || 0) + bonus.amount);
+    l.today.total = round4((Number(l.today.total) || 0) + bonus.amount);
+    l.monthly.total = round4((Number(l.monthly.total) || 0) + bonus.amount);
+    l.bonuses[bonus.type] = round4((Number(l.bonuses[bonus.type]) || 0) + bonus.amount);
+    l.rows.push({ t: ts, type: bonus.type, campaignId: '', amount: bonus.amount, minutes: 0 });
+  }
+  earned = round4(earned + launchBonus + refereeBonus);
+  if (l.rows.length > ROWS_KEPT) l.rows = l.rows.slice(-ROWS_KEPT);
 
   return {
-    ledger: l, earned: earned, note: note, error: null,
+    ledger: l, earned: earned, baseEarned: baseEarned, launchBonus: launchBonus,
+    refereeBonus: refereeBonus, note: note, error: null,
     referrerCredit: referrerCredit,
     referrerBinding: referrerBinding,
     referralNote: referralNote,
@@ -642,6 +681,9 @@ function ledgerView(ledger, opts) {
     today: { date: today.date || '', total: round2(Number(today.total) || 0) },
     monthly: { month: monthly.month || '', total: round2(Number(monthly.total) || 0) },
     referral: { total: round2(Number(ref.total) || 0) },
+    bonuses: { launch: round2(Number(l.bonuses && l.bonuses.launch) || 0),
+      referee: round2(Number(l.bonuses && l.bonuses.referee) || 0) },
+    firstValidImpressionAt: Number.isFinite(l.firstValidImpressionAt) ? l.firstValidImpressionAt : null,
     platforms: platformsOf(counters),
     referee: refereeView(o.referral, o.now),
     rows: (Array.isArray(l.rows) ? l.rows.slice(-ROWS_SERVED) : []),
@@ -996,7 +1038,13 @@ async function handleTrack(req, env) {
   } catch (e6) { binding = null; }
   if (binding && !normalizeRefCode(binding.code)) binding = null;
 
-  var result = applyEarnings(ledger, body, served.campaigns, Date.now(), binding);
+  if (binding) {
+    try {
+      var referralOwner = JSON.parse(await env.SITE_KV.get('refcode:' + binding.code));
+      if (!referralOwner || !DEVICE_ID_RE.test(String(referralOwner.deviceId || '')) || referralOwner.deviceId === deviceId) binding = null;
+    } catch (e8) { return json({ ok: false, error: 'referral unavailable' }, 503); }
+  }
+  var result = applyEarnings(ledger, body, served.campaigns, Date.now(), binding, env.LAUNCH_BONUS_ENABLED === 'true');
   if (result.error) return json({ ok: false, error: result.error }, 400);
 
   try {
@@ -1005,7 +1053,8 @@ async function handleTrack(req, env) {
     return json({ ok: false, error: 'ledger unavailable' }, 503);
   }
 
-  var resp = { ok: true, earned: round2(result.earned), total: round2(result.ledger.total) };
+  var resp = { ok: true, earned: round2(result.earned), total: round2(result.ledger.total),
+    breakdown: { base: result.baseEarned, launch: result.launchBonus, referee: result.refereeBonus } };
   if (result.note) resp.note = result.note;
   resp.platform = result.platform;
 
@@ -1154,7 +1203,15 @@ async function handleReferral(req, env) {
     if (mraw) { try { mine = JSON.parse(mraw); } catch (e6) { mine = null; } }
   } catch (e7) { mine = null; }
 
-  var claim = applyReferralClaim(mine, code, now);
+  try {
+    var earningsRaw = await env.SITE_KV.get('earn:' + deviceId);
+    var earnings = earningsRaw ? JSON.parse(earningsRaw) : null;
+    if (earnings && (Number.isFinite(earnings.firstValidImpressionAt) ||
+        Number(earnings.counters && earnings.counters.impressions) > 0)) {
+      return json({ ok: true, action: 'claim', claimed: false, code: code, note: 'attribution locked after first impression' }, 200);
+    }
+  } catch (e10) { return json({ ok: false, error: 'ledger unavailable' }, 503); }
+  var claim = applyReferralClaim(mine, code, now, body.action === 'click');
   if (claim.error) return json({ ok: false, error: claim.error }, 400);
   if (!claim.claimed) {
     return json({ ok: true, action: 'claim', claimed: false, code: code, note: claim.note || null }, 200);
@@ -1256,7 +1313,7 @@ async function handleAdminFeed(req, env) {
    queue, 5 submissions/day per IP, queue capped at 50. Highest CPM still
    wins the minute (pickAd sorts desc); with no bids the clients show
    their fictional/demo fallback, as always. */
-var SUBMIT_MIN_CPM = 1;
+var SUBMIT_MIN_CPM = 2;
 var SUBMIT_MAX_PER_DAY = 5;
 var QUEUE_MAX = 50;
 
@@ -1370,27 +1427,34 @@ async function handleAdminReview(req, env) {
   }
   if (at === -1) return json({ ok: false, error: 'id not in the review queue' }, 404);
   var camp = queue[at];
-  queue.splice(at, 1);
   if (approved) {
-    var feedRaw = null;
-    try { feedRaw = await kv.get('feed:current'); } catch (e0) { feedRaw = null; }
+    var feedRaw;
+    try { feedRaw = await kv.get('feed:current'); }
+    catch (e0) { return json({ ok: false, error: 'feed unavailable' }, 503); }
     var feed = feedFromKVText(feedRaw);
+    if (feedRaw && !feed) return json({ ok: false, error: 'feed unavailable' }, 503);
     feed = feed || [];
-    if (feed.length >= MAX_CAMPAIGNS) {
-      await writeQueue(kv, queue).catch(function () {});
+    var alreadyLive = feed.some(function (entry) { return entry.id === id; });
+    if (!alreadyLive && feed.length >= MAX_CAMPAIGNS) {
       return json({ ok: false, error: 'live feed is full (20) — remove one via POST /admin/feed first' }, 409);
     }
-    delete camp.submittedAt;
-    feed.push(camp);
+    var approvedCampaign = validateCampaigns([camp])[0];
+    if (!approvedCampaign || approvedCampaign.cpm < SUBMIT_MIN_CPM) {
+      return json({ ok: false, error: 'campaign below CPM floor or invalid' }, 400);
+    }
+    if (!alreadyLive) feed.push(approvedCampaign);
     try {
       await kv.put('feed:current', JSON.stringify(feed));
+      queue.splice(at, 1);
       await writeQueue(kv, queue);
     } catch (e2) {
       return json({ ok: false, error: 'ledger unavailable' }, 503);
     }
     return json({ ok: true, status: 'live', id: id }, 200);
   }
-  try { await writeQueue(kv, queue); } catch (e3) { /* best-effort */ }
+  queue.splice(at, 1);
+  try { await writeQueue(kv, queue); }
+  catch (e3) { return json({ ok: false, error: 'queue unavailable' }, 503); }
   return json({ ok: true, status: 'rejected', id: id }, 200);
 }
 
@@ -1609,7 +1673,7 @@ async function currentSlot(env, now) {
 async function servingList(env, feedCampaigns) {
   var slot = await currentSlot(env, Date.now());
   if (slot && slot.winner) return { campaigns: [slot.winner], slot: slot };
-  return { campaigns: feedCampaigns, slot: slot };
+  return { campaigns: feedCampaigns.filter(function (campaign) { return campaign.cpm >= SERVING_MIN_CPM; }), slot: slot };
 }
 
 /* ------------------------------ slot handlers --------------------------- */

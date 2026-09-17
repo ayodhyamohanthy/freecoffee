@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Flywheel — FreeCoffee</title>
-<meta name="description" content="FreeCoffee's growth loop: every platform you are already on carries an attributed link, the backend pays your 10% for 12 months after a 60-minute activation gate, and the same verification feeds the public advertiser proof. Demo — simulated data.">
+<meta name="description" content="FreeCoffee's growth loop: every platform you are already on carries an attributed link, 5% of base earnings goes to each person for the referred user's first 30 days with 14-day last-click attribution, and the same verification feeds the public advertiser proof. Demo — simulated data.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="FreeCoffee">
 <meta property="og:title" content="Flywheel — FreeCoffee">
@@ -138,13 +138,13 @@
           </div>
           <div class="loop-step">
             <h3>Activate</h3>
-            <p>60 verified minutes inside the first 30 days. Under the gate, credit is
-              <em>held</em> — never paid, never shown as yours.</p>
+            <p>The last eligible referral click within 14 days receives attribution. Bonuses apply
+              to base earnings in the referred user's first 30 days.</p>
           </div>
           <div class="loop-step">
             <h3>Earn</h3>
-            <p>The referee keeps the full 65% base share. Your 10% is platform-side money — it
-              never comes out of their balance.</p>
+            <p>The user keeps 70% base plus a platform-funded 10% launch boost. Referrals add 5% of base
+              to each person for the first 30 days, also platform-funded.</p>
           </div>
           <div class="loop-step">
             <h3>Share</h3>
@@ -196,11 +196,11 @@
         </div>
         <div class="card stat-card">
           <p class="stat-num" id="refGated">—</p>
-          <p class="stat-label">past the 60-minute gate</p>
+          <p class="stat-label">eligible users reported by backend</p>
         </div>
         <div class="card stat-card">
           <p class="stat-num" id="refHeld">—</p>
-          <p class="stat-label">earned but still gated</p>
+          <p class="stat-label">pending referral credit</p>
         </div>
       </section>
       <p class="footnote" id="refStatsNote" style="margin-top:10px">No backend URL configured, so
@@ -404,17 +404,17 @@
               <tr>
                 <th scope="row">Register a code / claim a code</th>
                 <td><span class="pill pill-ok">Live</span> when a backend URL is set</td>
-                <td><code>POST /referral</code> — first writer wins, never re-pointed</td>
+                <td><code>POST /referral</code> — 14-day last-click attribution</td>
               </tr>
               <tr>
-                <th scope="row">60 verified minutes / 30-day activation gate</th>
+                <th scope="row">First 30 days of referred-user earnings</th>
                 <td><span class="pill pill-ok">Live</span> server-side</td>
                 <td><code>applyReferralAccrual()</code> — credit is held, not paid</td>
               </tr>
               <tr>
-                <th scope="row">10% of base, 12-month term, platform-side</th>
+                <th scope="row">5% of base to each person, 30 days, platform-funded</th>
                 <td><span class="pill pill-ok">Live</span> server-side</td>
-                <td><code>applyReferralCredit()</code> — never out of the referee's 65%</td>
+                <td><code>applyReferralCredit()</code> — never out of the referred user's 70% base</td>
               </tr>
               <tr>
                 <th scope="row">Per-platform attribution (mac, pwa, agent…)</th>
@@ -453,9 +453,8 @@
               second user.</p>
           </div>
           <div class="tier-line">
-            <p class="tier-label"><strong>The gate makes sharing honest.</strong> Credit is held until
-              60 verified minutes land, so spam referrals pay nothing and the referral line item
-              stays fundable.</p>
+            <p class="tier-label"><strong>Rewards follow earnings.</strong> Both 5% bonuses apply only to the referred user's
+              base earnings in their first 30 days. No base earnings means no referral bonus.</p>
           </div>
           <div class="tier-line">
             <p class="tier-label"><strong>Verification is the same asset twice.</strong> The minutes
@@ -564,7 +563,7 @@
       $('refStatsNote').textContent = 'Released into your ledger: ' + money(d.totals.accrued) +
         ' · verified minutes across your referees: ' + d.totals.minutes +
         (d.totals.referees
-          ? '. Held credit is released only when a referee passes the gate.'
+          ? '. Pending credit follows backend review; no payout provider is connected by this preview.'
           : '. No one has claimed your code yet — the link has to travel first.');
     });
   }
@@ -607,8 +606,8 @@
         'locally, an inbound ?ref is remembered on this device, and nothing is sent anywhere. ' +
         'Claims start counting the moment you set one (Profile → BACKEND API URL).';
     } else {
-      $('refBackend').textContent = 'Backend connected — your code is registered, inbound links ' +
-        'are claimed server-side, and the tiles below read GET /referrals/{code}.';
+      $('refBackend').textContent = 'Backend URL configured — requesting code registration and referral records. ' +
+        'This does not connect Stripe or Whop or confirm payout availability.';
       var reg = D.registerReferralCode();
       if (reg && typeof reg.then === 'function') reg.then(function () { loadStats(kit.code); });
       loadStats(kit.code);
@@ -621,7 +620,7 @@
       line.textContent = 'This device arrived through code "' + inbound.code + '"' +
         (inbound.platform ? ' (' + inbound.platform + ')' : '') +
         (inbound.claimed
-          ? ' — claimed server-side, so the 60-minute gate is already counting for this device.'
+          ? ' — claim acknowledged by the configured backend.'
           : ' — remembered locally and claimed as soon as a backend URL is set.');
     }
   }
