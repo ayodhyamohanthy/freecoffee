@@ -1126,7 +1126,9 @@ function pass(name) { n++; console.log('PASS ' + name); }
   assert.deepEqual(made.record.allocationEvents, []);
   let r = transitionPilot(made.record, 'submitted', {}, {}, 2); assert.equal(r.record.state, 'submitted');
   r = transitionPilot(r.record, 'in_review', {}, {}, 3); assert.equal(r.record.state, 'in_review');
-  r = transitionPilot(r.record, 'approved_not_funded', {}, {}, 4); assert.equal(r.record.state, 'approved_not_funded');
+  assert.equal(transitionPilot(r.record, 'approved_not_funded', {}, {}, 4).error, 'founding pilot sponsor signature required');
+  r = transitionPilot(r.record, 'approved_not_funded', {}, { foundingPilotSigned:true }, 4); assert.equal(r.record.state, 'approved_not_funded');
+  assert.equal(r.record.foundingPilotSignedAt, 4);
   assert.equal(transitionPilot(r.record, 'pilot_enabled', {}, {}, 5).error, 'pilot enablement is disabled');
   assert.equal(transitionPilot(r.record, 'pilot_enabled', { PILOT_ENABLEMENT_ENABLED:'true' }, {}, 5).record.state,
     'pilot_enabled');
@@ -1208,7 +1210,8 @@ function pass(name) { n++; console.log('PASS ' + name); }
   const real = sponsorSlot([{ id:'real-one', sponsor:'Reviewed' }], null);
   assert.equal(real.mode, 'real'); assert.equal(real.campaign.id, 'real-one');
   assert.equal(publicLaunchGate([{ state:'in_review' }]).enabled, false);
-  assert.equal(publicLaunchGate([{ state:'approved_not_funded' }]).enabled, true);
+  assert.equal(publicLaunchGate([{ state:'approved_not_funded' }]).enabled, false);
+  assert.equal(publicLaunchGate([{ state:'approved_not_funded', foundingPilotSignedAt:9 }]).enabled, true);
   pass('sponsor slot always falls back to demo/no-ad and launch requires a signed founding pilot');
 }
 

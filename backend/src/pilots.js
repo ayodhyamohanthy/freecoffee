@@ -59,6 +59,7 @@ function newPilot(input, now = Date.now()) {
     allocationEvents: [],
     createdAt: now,
     updatedAt: now,
+    foundingPilotSignedAt: null,
     history: [{ from: null, to: 'draft', at: now, note: 'admin intake' }]
   }};
 }
@@ -79,9 +80,11 @@ function transitionPilot(record, target, env, input = {}, now = Date.now()) {
   const to = cleanText(target, 40);
   const gateError = transitionGate(record.state, to, env);
   if (gateError) return { error: gateError };
+  if (to === 'approved_not_funded' && input.foundingPilotSigned !== true) return { error: 'founding pilot sponsor signature required' };
   const next = JSON.parse(JSON.stringify(record));
   const from = next.state;
   next.state = to;
+  if (to === 'approved_not_funded') next.foundingPilotSignedAt = now;
   next.updatedAt = now;
   next.history = Array.isArray(next.history) ? next.history.slice(-99) : [];
   next.history.push({ from, to, at: now, note: cleanText(input.note, 240) });
@@ -130,7 +133,7 @@ function sponsorSlot(realEligible, demoCampaign) {
 
 function publicLaunchGate(records) {
   const list = Array.isArray(records) ? records : [];
-  return { enabled: list.some((r) => r && ['approved_not_funded','pilot_enabled','scheduled','eligible','delivering','paused','completed'].includes(r.state)),
+  return { enabled: list.some((r) => r && Number.isFinite(r.foundingPilotSignedAt) && r.foundingPilotSignedAt > 0),
     requirement: 'at least one founding pilot sponsor signed' };
 }
 
