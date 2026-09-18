@@ -16,7 +16,8 @@ The coordinator records assignments before writers begin. This table is an advis
 
 | Session ID | Task | Owned paths | Base commit | Status / last UTC update |
 | --- | --- | --- | --- | --- |
-| cont-20260918-01 | Adopt uncommitted v1002011 + dashboard/CSS/test changes; reconcile economics contracts; bounded competitor parity | advertisers.html, agents.html, assets/css/styles.css, assets/js/dashboard.js, backend/src/worker.js, campaigns.html, dashboard.html, flywheel.html, index.html, model.html, payouts.html, profile.html, referrals.html, sw.js, test.sh, tests/browser-regressions.cjs, tests/public-regressions.cjs | 911481d | completed / 2026-09-18 — handoff pending; ownership retained until commit decision |
+| cont-20260918-01 | Adopt uncommitted v1002011 + dashboard/CSS/test changes; reconcile economics contracts; bounded competitor parity | advertisers.html, agents.html, assets/css/styles.css, assets/js/dashboard.js, backend/src/worker.js, campaigns.html, dashboard.html, flywheel.html, index.html, model.html, payouts.html, profile.html, referrals.html, sw.js, test.sh, tests/browser-regressions.cjs, tests/public-regressions.cjs | 911481d | released / 2026-09-18 — committed as 2ac93e0; paths free |
+| cont-20260918-02 | Cross-platform collaboration hardening (this file only) + verify committed tree | AGENTS.md | 2ac93e0 | released / 2026-09-18 — tree verified 10/10; AGENTS.md edit uncommitted, free to commit |
 
 ## Before and during edits
 
@@ -58,3 +59,12 @@ Send the coordinator or user:
 - Ownership released, or explicitly retained while blocked.
 
 On interruption, leave a partial handoff where possible. A replacement must inspect actual files and rerun relevant checks rather than trusting a completion message. The coordinator removes released assignments only after accepting the handoff.
+
+## Across models, platforms, and tools
+
+No file can force compliance from a tool that never reads it. The user is the cross-platform coordinator: every new session in every tool starts by attaching this file plus the active-work table above.
+
+- One writer per file across ALL tools, not just within one conversation. Before editing in any tool, check the table; if another session owns the path, work read-only or ask the user for a handoff.
+- After any commit made outside your session, re-baseline before editing: `git status --short`, `git diff --stat`, `git log -5 --oneline`, and rerun the affected checks. Never assume the tree still matches your baseline.
+- Release ownership rows promptly once your work is committed or abandoned, so other platforms are not blocked by stale claims.
+- Keep this file the single source of truth. Do not create parallel instruction files per tool; point every tool at this file instead.
