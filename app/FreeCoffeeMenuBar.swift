@@ -164,8 +164,7 @@ private struct DemoEligibility {
 private struct DemoAccrual: Codable {
     static let cpm = 2
     static let baseShare = 70
-    static let launchShare = 10
-    static let microsPerInterval = cpm * 1_000 * (baseShare + launchShare) / 100
+    static let microsPerInterval = cpm * 1_000 * baseShare / 100
     var balanceRemainder = 0
     var dayRemainder = 0
     var day = ""
@@ -246,8 +245,8 @@ private enum Coffee {
     static let waiting = NSColor(srgbRed: 0xE2 / 255.0, green: 0xB4 / 255.0, blue: 0x5A / 255.0, alpha: 1) // amber
 }
 
-private func money(_ cents: Int) -> String {
-    String(format: "$%.2f", Double(cents) / 100.0)
+private func demoUnits(_ cents: Int) -> String {
+    String(format: "%.2f", Double(cents) / 100.0)
 }
 
 // MARK: - Real-advertiser bridge (AD FEED CONTRACT)
@@ -494,7 +493,7 @@ final class EarningsChartView: NSView {
                 .draw(in: bar, angle: -90)
 
             // Value label just above the bar.
-            let val = NSAttributedString(string: money(values[i]), attributes: valueAttrs)
+            let val = NSAttributedString(string: demoUnits(values[i]), attributes: valueAttrs)
             let valSize = val.size()
             val.draw(at: NSPoint(x: x + (slot - valSize.width) / 2,
                                  y: min(bottom + h + 2.5, bounds.height - valSize.height)))
@@ -516,7 +515,7 @@ final class PopoverViewController: NSViewController {
     private let statusDot = NSView()
     private let statusLabel = NSTextField(labelWithString: "Waiting")
     private let sponsorLine = NSTextField(labelWithString: "")
-    private let balanceField = NSTextField(labelWithString: "$0.00")
+    private let balanceField = NSTextField(labelWithString: "0.00 demo units")
     private let splitLabel = NSTextField(labelWithString: "")
     private let cupsLabel = NSTextField(labelWithString: "")
     private let snoozeButton = NSButton(title: "Snooze", target: nil, action: nil)
@@ -620,7 +619,7 @@ final class PopoverViewController: NSViewController {
         cupsLabel.textColor = Coffee.textFaint
 
         // ---- Boost line (caramel gradient tint).
-        let boost = NSTextField(wrappingLabelWithString: "70% base + 10% launch share\nLaunch bonus funded by the platform")
+        let boost = NSTextField(wrappingLabelWithString: "70% viewer share\nDemo units · illustrative only")
         boost.font = NSFont.systemFont(ofSize: 10.5, weight: .semibold)
         boost.textColor = Coffee.goldBright
         let boostBox = NSView()
@@ -772,9 +771,9 @@ final class PopoverViewController: NSViewController {
             advertiseButton.isHidden = true
         }
 
-        balanceField.stringValue = money(state.balanceCents)
+        balanceField.stringValue = "\(demoUnits(state.balanceCents)) demo units"
         splitLabel.stringValue = "Simulated only · not withdrawable"
-        cupsLabel.stringValue = "$2 CPM · $0.0016 per eligible 60 seconds"
+        cupsLabel.stringValue = "Illustrative rate · eligible 60-second intervals"
 
         chartView.values = state.weekValues
         chartView.labels = state.weekLetters
@@ -1266,7 +1265,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private static let advertiseURL = URL(string: "https://freecoffee.tech/advertisers.html")
 
     // First run is seeded to match the web demo's deterministic ledger
-    // (seed 42 lifetime, $28.55), so both layers tell the same story.
+    // (seed 42 lifetime, 28.55 demo units), so both layers tell the same story.
     // The seven seeded day buckets sum to exactly 2855 cents.
     private static let demoSeedBalanceCents = 2855
     private static let demoSeedWeek: [Int] = [180, 420, 390, 510, 460, 495, 400]
@@ -2321,7 +2320,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         URL (nothing is sent back) and shows those campaigns marked LIVE; their earnings settle \
         once the platform backend is live. The app checks GitHub Releases for updates (anonymous, \
         one-way) and installs checksum-verified updates with your click. Balances also read as \
-        "≈ N cups" (1 cup = $5).
+        values are labeled as non-withdrawable demo units.
         """
         alert.alertStyle = .informational
         alert.addButton(withTitle: "OK")
