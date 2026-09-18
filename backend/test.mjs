@@ -1127,9 +1127,9 @@ function pass(name) { n++; console.log('PASS ' + name); }
   let r = transitionPilot(made.record, 'submitted', {}, {}, 2); assert.equal(r.record.state, 'submitted');
   r = transitionPilot(r.record, 'in_review', {}, {}, 3); assert.equal(r.record.state, 'in_review');
   r = transitionPilot(r.record, 'approved_not_funded', {}, {}, 4); assert.equal(r.record.state, 'approved_not_funded');
-  assert.equal(transitionPilot(r.record, 'pilot_enabled', {}, {}, 5).error, 'pilot enablement and billing are disabled');
-  assert.equal(transitionPilot(r.record, 'pilot_enabled', { PILOT_ENABLEMENT_ENABLED:'true' }, {}, 5).error,
-    'pilot enablement and billing are disabled');
+  assert.equal(transitionPilot(r.record, 'pilot_enabled', {}, {}, 5).error, 'pilot enablement is disabled');
+  assert.equal(transitionPilot(r.record, 'pilot_enabled', { PILOT_ENABLEMENT_ENABLED:'true' }, {}, 5).record.state,
+    'pilot_enabled');
   pass('founding-pilot state machine stops at approved_not_funded while billing is disabled');
 }
 

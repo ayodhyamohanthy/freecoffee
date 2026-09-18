@@ -66,8 +66,8 @@ function newPilot(input, now = Date.now()) {
 function transitionGate(from, to, env) {
   if (!(PILOT_STATES.includes(from) && PILOT_STATES.includes(to))) return 'unknown state';
   if (!(PILOT_TRANSITIONS[from] || []).includes(to)) return 'invalid transition';
-  if (to === 'pilot_enabled' && !(flagOn(env, 'PILOT_ENABLEMENT_ENABLED') && flagOn(env, 'BILLING_ENABLED'))) {
-    return 'pilot enablement and billing are disabled';
+  if (to === 'pilot_enabled' && !flagOn(env, 'PILOT_ENABLEMENT_ENABLED')) {
+    return 'pilot enablement is disabled';
   }
   if (to === 'scheduled' && !flagOn(env, 'PILOT_SCHEDULING_ENABLED')) return 'pilot scheduling is disabled';
   if (['eligible', 'delivering'].includes(to) && !flagOn(env, 'PILOT_DELIVERY_ENABLED')) return 'pilot delivery is disabled';
