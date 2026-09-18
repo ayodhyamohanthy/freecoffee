@@ -18,7 +18,7 @@ The coordinator records assignments before writers begin. This table is an advis
 | --- | --- | --- | --- | --- |
 | cont-20260918-01 | Adopt uncommitted v1002011 + dashboard/CSS/test changes; reconcile economics contracts; bounded competitor parity | advertisers.html, agents.html, assets/css/styles.css, assets/js/dashboard.js, backend/src/worker.js, campaigns.html, dashboard.html, flywheel.html, index.html, model.html, payouts.html, profile.html, referrals.html, sw.js, test.sh, tests/browser-regressions.cjs, tests/public-regressions.cjs | 911481d | released / 2026-09-18 — committed as 2ac93e0; paths free |
 | cont-20260918-02 | Cross-platform collaboration hardening (this file only) + verify committed tree | AGENTS.md | 2ac93e0 | released / 2026-09-18 — tree verified 10/10; AGENTS.md edit uncommitted, free to commit |
-| auditfix-20260918 | Full-stack audit: stale economics/test-label alignment to shipped 70/10/5/5/30/14 contract | README.md, backend/README.md, backend/test.mjs, backend/ACCOUNT-CHECKLIST.md | f3fef5f | active / 2026-09-18 — claimed, verification pending |
+| auditfix-20260918 | Full-stack audit: stale economics/test-label alignment to shipped 70/10/5/5/30/14 contract | README.md, backend/README.md, backend/test.mjs, backend/ACCOUNT-CHECKLIST.md | f3fef5f | active / 2026-09-18 — 4 files fixed; backend 26/26 + test.sh 10/10 green; commit awaits user authorization |
 
 ## Before and during edits
 

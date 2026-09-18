@@ -86,7 +86,7 @@ Pick **one** to start; you can add more later.
 
 **Unlocks:** real campaigns with real payout rates flowing into
 `/feed.json` → LIVE-marked placements → **actual money** accruing against
-your deviceId via `/track` (65% user share, click caps enforced
+your deviceId via `/track` (70% user base share, click caps enforced
 server-side). Until this exists the site keeps serving the fictional demo
 sponsors and $0.00 — by design.
 

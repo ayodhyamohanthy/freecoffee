@@ -127,7 +127,7 @@ function pass(name) { n++; console.log('PASS ' + name); }
 }
 
 /* ------------------------------------------------------------------------
-   3. applyEarnings — impression award = 0.65 × cpm × minutes ÷ 1000
+   3. applyEarnings — impression award = 0.70 × cpm × minutes ÷ 1000
    ------------------------------------------------------------------------ */
 {
   const r1 = applyEarnings(null, { type: 'impression', campaignId: 'camp_1', minutes: 1 }, FEED, T1);
@@ -157,7 +157,7 @@ function pass(name) { n++; console.log('PASS ' + name); }
   assert.equal(rg.earned, 0, 'unknown campaign pays 0');
   assert.ok(/unknown/.test(rg.note), 'note explains the zero');
   assert.equal(rg.ledger.counters.impressions, 0, 'unknown campaigns are not valid impressions');
-  pass('applyEarnings awards 0.65×cpm×minutes/1000, clamps 0–60, defaults 1');
+  pass('applyEarnings awards 0.70×cpm×minutes/1000, clamps 0–60, defaults 1');
 }
 
 /* ------------------------------------------------------------------------
@@ -438,9 +438,10 @@ function pass(name) { n++; console.log('PASS ' + name); }
 }
 
 /* ------------------------------------------------------------------------
-   10. referral lifecycle — the gate HOLDS 10%, releases it retroactively the
-       moment 60 verified minutes land inside the first 30 days, and voids a
-       late or term-expired referral. Pure: bindings are never mutated.
+   10. referral lifecycle — the 5% + 5% platform-funded bonuses release
+       retroactively once the gate passes (first valid impression inside the
+       30-day term), and a late or term-expired referral is voided. Pure:
+       bindings are never mutated.
    ------------------------------------------------------------------------ */
 {
   const CODE = 'astra-1';
@@ -509,7 +510,7 @@ function pass(name) { n++; console.log('PASS ' + name); }
   assert.equal(rv.gateMinutes, 0);
   assert.equal(refereeView(claim.record, T1 + 3600000).gate, 'pending');
 
-  pass('referral: gate holds 10%, releases retroactively, voids late/expired');
+  pass('referral: 5% referrer + 5% referee release retroactively; late/expired voids');
 }
 
 /* ------------------------------------------------------------------------
@@ -596,7 +597,7 @@ function pass(name) { n++; console.log('PASS ' + name); }
 }
 
 /* ------------------------------------------------------------------------
-   13. the loop end-to-end over HTTP: register → claim → 60 verified minutes
+   13. the loop end-to-end over HTTP: register → claim → verified impressions
        (attributed to a platform) → the referrer is paid → the public views
        show the mix without leaking a single device id.
    ------------------------------------------------------------------------ */
@@ -642,8 +643,9 @@ function pass(name) { n++; console.log('PASS ' + name); }
   assert.equal((await post('/referral', { deviceId: 'x', code: 'astra-1' })).status, 400, 'bad deviceId → 400');
   assert.equal((await post('/referral', { deviceId: OWNER_DEV, code: '!!' })).status, 400, 'bad code → 400');
 
-  // One 60-minute placement batch: the referee earns the full 65%, the gate
-  // passes, and the referrer's held 10% is released in the same call.
+  // One 60-minute placement batch: the referee earns the 70% base plus the
+  // 5% referee bonus, the gate passes, and the referrer's 5% is released
+  // in the same call.
   const tr = await post('/track', {
     deviceId: REF_DEV, type: 'impression', campaignId: 'camp_1', minutes: 60, platform: 'mac'
   });
@@ -1024,7 +1026,7 @@ function pass(name) { n++; console.log('PASS ' + name); }
     })
   }), env, {});
 
-  // 60 min at $8 CPM × 65% = $0.342 → served at 2 decimals.
+  // 60 min at $8 CPM × 70% = $0.336 → served at 2 decimals.
   const win = await (await track('win1', 60)).json();
   assert.equal(win.earned, 0.34, 'the slot winner is paid at its own CPM');
 

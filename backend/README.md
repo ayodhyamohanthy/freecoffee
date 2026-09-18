@@ -37,7 +37,7 @@ backend/
 | `/feed.json` | GET | — | Campaign feed (same JSON contract as the web `AD FEED URL`), CORS `*` |
 | `/track` | POST | — | `{deviceId, type:'impression'\|'click', campaignId, minutes?}` → `{ok, earned, total}` |
 | `/earnings/{deviceId}` | GET | — | `{total, today, monthly, rows (last 50), counters}` |
-| `/submit` | POST | — | Submit ONE campaign object → pending-review queue (id+sponsor required, https destination, $1 CPM floor, no duplicate ids, 5/day per IP, queue cap 50). Nothing serves without admin approval |
+| `/submit` | POST | — | Submit ONE campaign object → pending-review queue (id+sponsor required, https destination, $2 CPM floor, no duplicate ids, 5/day per IP, queue cap 50). Nothing serves without admin approval |
 | `/admin/queue` | GET | `Authorization: Bearer $ADMIN_TOKEN` | List campaigns awaiting human review |
 | `/admin/review` | POST | `Authorization: Bearer $ADMIN_TOKEN` | `{id, approve}` → approved goes live (feed cap 20), rejected leaves the queue |
 | `/stats` | GET | — | Public aggregate delivery report: per-campaign verified minutes, reported clicks, user-share spend + network totals. No device ids, no rows — safe for the advertiser page, no token needed |
@@ -45,7 +45,7 @@ backend/
 
 - **Money math is server-side.** The client sends `minutes` + `type` only;
   amounts are computed from the campaign `cpm` looked up in the **served
-  feed**. Impression: `minutes × cpm ÷ 1000 × 0.65`. Click: $0.05, capped
+  feed**. Impression: `minutes × cpm ÷ 1000 × 0.70`. Click: $0.05, capped
   server-side at 5/day per device and ≤25% of that device's monthly
   impressions (caps read from the stored ledger, not the request).
 - Feed validation mirrors the web client exactly (https-only URLs, string

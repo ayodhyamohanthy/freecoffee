@@ -28,14 +28,14 @@ That's it — any static file server works.
 | Page | What it is |
 |---|---|
 | `index.html` | Landing page: hero with a **live CSS/DOM mock of the macOS status area** (rotating sponsor chip, ticking clock, growing balance) **plus a mock of the Mac status area popover** (TOTAL BALANCE block with cups hint, caramel boost line, 7-day bar chart, footer buttons), how-it-works, the privacy data boundary, FAQ. |
-| `dashboard.html` | App-shell page (**Earn › Overview**, light theme). Sidebar + breadcrumb shell, balance stat card (Total **$28.55** "≈ 5 cups", Available, Pending, This week, payout-progress toward the $2 minimum), a 14-day SVG area chart (slate-teal line `#4C7A8A` on fill `#DFE9ED`, y-grid, dotted markers), the full ledger with winning bids and exact cuts, an "Action required" panel, a "Recent sponsors" list, and the live payout simulator. Dismissible Setup-guide ("1 of 4 complete") and dark promo cards in the sidebar. `localStorage` key: `freecoffee:v1`. |
+| `dashboard.html` | App-shell page (**Earn › Overview**, light theme). Sidebar + breadcrumb shell, balance stat card (Total **$28.55** "≈ 5 cups", Available, Pending, This week, payout-progress toward the $10 minimum), a 14-day SVG area chart (slate-teal line `#4C7A8A` on fill `#DFE9ED`, y-grid, dotted markers), the full ledger with winning bids and exact cuts, an "Action required" panel, a "Recent sponsors" list, and the live payout simulator. Dismissible Setup-guide ("1 of 4 complete") and dark promo cards in the sidebar. `localStorage` key: `freecoffee:v1`. |
 | `payouts.html` | App-shell page (**Earn › Payouts**, light theme). Choose how you get paid: Stripe (gold gradient CTA) and Whop (orange gradient CTA) rails split by a divider — clicking marks `freecoffee:v1 → profile.payoutRail` connected (demo-only until the backend payout integration), a Balance 3-stat strip (Total/Available/Pending from the seeded ledger), and the Withdrawal history table fed by simulated `paidOut` records (empty state until the first simulated payout). |
 | `model.html` | App-shell page (**Account › Payout model**, light theme). The payout model in plain numbers: lever table, honesty policy, sustainability math (worked example), anti-fraud controls, payout rails. |
 | `campaigns.html` | App-shell page (**Advertise › Campaigns**, light theme). Advertiser-side management view with honest zeros (Active 0 / In review 0 / Total spend $0.00 / Impressions 0), working filter tabs (All/Running/In review/Paused/Archived + "N shown"), and the "No campaigns yet" empty state with a gold CTA to the advertiser pitch. |
 | `profile.html` | App-shell page (**Account › Profile**). Wide Account form (display name, email, coffee preference, email prefs → saved with a toast to `freecoffee:v1`) plus Payout account (Not set up + Set up), Connected Mac (green Connected pill, "This Mac · macOS 26", Unlink with confirm), and AI agents (Copy setup prompt → clipboard). |
 | `referrals.html` | App-shell page (**Earn › Referrals**). Referral link card (URL + Copy → clipboard), rewards cards, a 3-stat row (referred users **2** / referral earnings **$2.82** / next tier), and the referee table from the seeded ledger. The link itself is real and attributed (`?ref=<your code>`); a `REAL (backend)` line appears above the seeded numbers once a backend URL is configured. |
 | `flywheel.html` | App-shell page (**Earn › Flywheel**). The growth loop as code: the five stages (capture → activate → earn → share → advertise) with the back-edge that makes it compound, your own share kit (code + attributed link + Web Share), **ten platform artifacts** (Mac .dmg · Homebrew · PWA · GitHub · AI agent/MCP · X · LinkedIn · Reddit · Hacker News · email) each labelled *attributed* or *no referrer*, three live tile counts (`—` until a backend is configured, never a fake zero), the full "what is live today / what is not" audit table, and the compounding argument. `localStorage`: `freecoffee:refcode`, `freecoffee:refcapture`. |
-| `advertisers.html` | App-shell page (**Advertise › Campaigns**). The advertiser pitch + self-serve onboarding: hero, how-it-works (submit feed → review → live), the copyable feed contract JSON, the honesty box (what the client reports today vs what needs the platform backend), pricing (auction CPM with tier floors, $15 minimum, 65% to the user), and the contact card (`advertisers@freecoffee.tech`). |
+| `advertisers.html` | App-shell page (**Advertise › Campaigns**). The advertiser pitch + self-serve onboarding: hero, how-it-works (submit feed → review → live), the copyable feed contract JSON, the honesty box (what the client reports today vs what needs the platform backend), pricing (auction CPM with tier floors, $15 minimum, 70% + 10% launch boost to the user), and the contact card (`advertisers@freecoffee.tech`). |
 | `assets/js/demo.js` | Seeded PRNG (mulberry32, seed 42), history generator, projection math, cups helper, Mac status area demo + popover mock cycler, and the live-feed bridge (`fetchLiveCampaigns` — the AD FEED CONTRACT client). Also CommonJS-exported — `node` can `require` it. |
 | `assets/js/dashboard.js` | Dashboard rendering + interactions, plus the live-campaign surfaces (banner under the balance card, LIVE rows in Recent sponsors, disconnect). All dynamic strings go through `textContent`/`createElement` — no `innerHTML` with dynamic data. |
 | `assets/css/styles.css` | The whole design system: espresso darks, coffee-gold `#E0A93E` family, the app-shell (sidebar / breadcrumb / cards), popover panel, forms, tables, chips, toggles, sliders, toasts, the Mac status area mock, responsive stacking, `:focus-visible`, `prefers-reduced-motion`. |
@@ -60,7 +60,7 @@ cd freecoffee/app
   - header row (cup icon, name + subtitle, status dot **Earning** / **Waiting**),
   - divider → **TOTAL BALANCE** label + oversized mono figure + right-aligned
     available/pending + muted "≈ N cups" hint (1 cup = $5),
-  - caramel boost line **"☕ 65% base share — always on"**,
+  - caramel boost line **"70% base + 10% launch share"** (launch bonus funded by the platform),
   - **Earnings · 7 days** inset bar chart (M T W T F S S with value labels, drawn from the
     persisted per-day history by a custom `NSView`),
   - the gray **"Tip: Hold ⌘ and drag Mac status area items to rearrange them."** line,
@@ -127,24 +127,25 @@ The site is also a full PWA (works entirely offline after first visit — no bac
 
 ## The payout model (summary)
 
-- **Base share:** 65% of auction revenue, always on — publicly committed to 70% once platform
-  revenue passes $50k/month.
-- **Click bonus:** $0.05 per verified click (≥10s after the impression, ≥2s dwell). Caps:
-  max 5/day and ≤25% of verified monthly impressions.
+- **Base share:** 70% of auction revenue, always on. During launch the platform additionally funds
+  a 10% launch boost — promotional, never a reduction of the base share.
+- **Click bonus:** $0.05 per verified click. Caps: max 5/day and ≤25% of verified monthly impressions.
 - **Tiered earnings floor on user earnings:** $4.00 CPM-equivalent Tier 1 (US, CA, UK, CH, EEA),
   $2.50 Tier 2 (AU, NZ, JP, KR, SG, AE), $1.25 Tier 3 (rest of world).
-- **Referrals:** 10% of referee base earnings for 12 months, gated on ≥60 verified minutes in the
-  referee's first 30 days.
-- **Streak:** +1% per 5 consecutive active days (≥30 verified min/day), cap +10%.
-- **Payouts:** $2 minimum, 24-hour rail, instant stablecoin option, no fees — rails subject to
-  provider availability.
+- **Referrals:** 5% to the referrer and a 5% bonus to the referred user, both platform-funded on the
+  referee's base earnings for the first 30 days; 14-day last-click attribution. Referral money is
+  platform-side — the referee's 70% is never reduced.
+- **Payouts:** $10 minimum withdrawal after a five-day pending period; payout setup unlocks at $5 in
+  earnings (not a fee) — rails subject to provider availability.
 - **Transparency:** every ledger row shows the winning bid and your exact cut.
-- **Sustainability (displayed as-is):** margin ≈27% at $6 CPM, ≈20% at $2 CPM, break-even ≈$0.70 CPM.
-  Worked example: 1,000 impressions @ $6 CPM = $6.00 → user base $3.90 → bounded bonuses ≤$0.55 →
-  platform keeps ≥ ~$1.55.
+- **Sustainability (displayed as-is):** with launch bonuses active at $6 CPM, the platform retains
+  $0.78 per 1,000 impressions before operating costs. Worked example: 1,000 impressions @ $6 CPM =
+  $6.00 → user base $4.20 (70%) → launch boost +$0.60 → referral bonuses +$0.42 (5% + 5%, platform-funded) →
+  platform keeps $0.78 before costs.
 
 No competitor comparisons appear anywhere on the site or in copy — the product stands on its own
-published economics: the 65%→70% ratchet, the $2 payout floor, and the tier floors.
+published economics: the 70% base share with the platform-funded 10% launch boost, the $10 payout
+floor, and the tier floors.
 
 ## Connecting real advertisers
 
@@ -204,7 +205,7 @@ the fictional demo sponsors without touching earnings math.
 
 The **Advertise › Campaigns** page (`advertisers.html`) is the pitch + onboarding in one: the hero,
 how review works, the copyable feed spec, the honesty box, and the pricing card (auction CPM with
-the published tier floors, $15 minimum campaign spend, 65% to the user). The flow: host the JSON
+the published tier floors, $15 minimum campaign spend, 70% + 10% launch boost to the user). The flow: host the JSON
 anywhere HTTPS (GitHub raw, your CDN, your server) → paste the URL into **Profile › Ad feed URL**
 (Test button verifies it) → campaigns appear in the Mac status area and dashboard. Email
 `advertisers@freecoffee.tech` for the review step — every campaign is human-reviewed before it can
@@ -277,8 +278,9 @@ make that day come faster — each item is a channel, not a guess.
    (index `#netCount`, advertisers `#liveCount`) flip from 0 to 1 — that's the "auction is filling"
    signal every subsequent prospect and user sees on the live site. Say exactly "the first campaign
    went live", never "N users joined".
-5. **User-side cold start is by design:** $2 minimum, 24-hour rail, 65%→70% ratchet, and referral
-   terms are all published *before* the auction fills. The install pitch is "lock in the rules;
+5. **User-side cold start is by design:** $10 withdrawal minimum after a five-day pending period,
+   the 70% base share plus the 10% launch boost, and referral terms are all published *before* the
+   auction fills. The install pitch is "lock in the rules;
    earnings start the day campaign #1 clears review." No fake day-one income.
 
 Anti-patterns this repo actively refuses: seeding fake campaign rows, freezing the demo ledger as
