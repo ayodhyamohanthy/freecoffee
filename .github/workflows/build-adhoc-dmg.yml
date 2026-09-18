@@ -1,0 +1,123 @@
+name: Build ad-hoc DMG
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/build-adhoc-dmg.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: freecoffee-adhoc-dmg
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout current HEAD
+        uses: actions/checkout@v4
+
+      - name: Run full repository tests
+        run: |
+          chmod +x test.sh app/build.sh
+          ./test.sh 2>&1 | tee "$RUNNER_TEMP/test.log"
+
+      - name: Build free ad-hoc DMG
+        env:
+          FC_DEVELOPER_ID: ''
+          FC_APPLE_ID: ''
+          FC_APP_PASSWORD: ''
+          FC_TEAM_ID: ''
+        run: |
+          cd app
+          ./build.sh 2>&1 | tee "$RUNNER_TEMP/build.log"
+
+      - name: Verify artifact, ad-hoc signature, architectures and version
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP='app/dist/FreeCoffee.app'
+          DMG='app/dist/FreeCoffee.dmg'
+          hdiutil verify "$DMG"
+          codesign --verify --strict "$APP"
+          details="$(codesign -dv --verbose=4 "$APP" 2>&1)"
+          printf '%s\n' "$details"
+          grep -q '^Signature=adhoc$' <<<"$details"
+          ! grep -q '^Authority=' <<<"$details"
+          archs="$(lipo -archs "$APP/Contents/MacOS/FreeCoffeeMenuBar")"
+          printf 'Architectures: %s\n' "$archs"
+          grep -qw arm64 <<<"$archs"
+          grep -qw x86_64 <<<"$archs"
+          expected="$(sed -nE 's/^APP_VERSION="([^"]+)"/\1/p' app/build.sh | head -1)"
+          actual="$(plutil -extract CFBundleShortVersionString raw "$APP/Contents/Info.plist")"
+          test -n "$expected" && test "$actual" = "$expected"
+          sha="$(shasum -a 256 "$DMG" | awk '{print $1}')"
+          size="$(stat -f '%z' "$DMG")"
+          {
+            printf 'source_commit=%s\n' "$GITHUB_SHA"
+            printf 'version=%s\n' "$actual"
+            printf 'size_bytes=%s\n' "$size"
+            printf 'sha256=%s\n' "$sha"
+            printf 'signature=adhoc\n'
+            printf 'architectures=%s\n' "$archs"
+          } | tee app/dist/build-metadata.txt
+          printf 'sha256=%s\n' "$sha" >> "$GITHUB_OUTPUT"
+          printf 'version=%s\n' "$actual" >> "$GITHUB_OUTPUT"
+
+      - name: Attempt real runner screenshot
+        id: screenshot
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p app/dist/screenshots
+          open app/dist/FreeCoffee.app
+          sleep 4
+          osascript <<'APPLESCRIPT'
+          tell application "System Events"
+            tell process "FreeCoffee"
+              set frontmost to true
+              try
+                click first menu bar item of menu bar 2
+              on error
+                click first menu bar item of menu bar 1
+              end try
+            end tell
+          end tell
+          APPLESCRIPT
+          sleep 2
+          screencapture -x app/dist/screenshots/freecoffee-runner-popover.png
+          test -s app/dist/screenshots/freecoffee-runner-popover.png
+
+      - name: Record screenshot limitation
+        if: steps.screenshot.outcome != 'success'
+        run: |
+          mkdir -p app/dist/screenshots
+          printf '%s\n' 'The hosted macOS runner could not open/click the status item or capture its pixels. Real-Mac visual verification remains required.' > app/dist/screenshots/README.txt
+
+      - name: Collect logs
+        if: always()
+        run: |
+          cp "$RUNNER_TEMP/test.log" app/dist/test.log 2>/dev/null || true
+          cp "$RUNNER_TEMP/build.log" app/dist/build.log 2>/dev/null || true
+
+      - name: Upload checked DMG and evidence
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: FreeCoffee-adhoc-${{ steps.verify.outputs.version }}-${{ github.sha }}
+          path: |
+            app/dist/FreeCoffee.dmg
+            app/dist/build-metadata.txt
+            app/dist/release-notes.md
+            app/dist/test.log
+            app/dist/build.log
+            app/dist/screenshots/
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
