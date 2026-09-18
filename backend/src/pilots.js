@@ -43,9 +43,10 @@ function newPilot(input, now = Date.now()) {
   if (!PILOT_ID_RE.test(id)) return { error: 'id must be 3-40 lowercase letters, numbers, _ or -' };
   const sponsor = cleanText(body.sponsor, 80);
   if (!sponsor) return { error: 'sponsor required' };
-  const commercialMode = body.commercialMode === 'free' ? 'free' : 'manual';
+  const commercialMode = ['manual','free','house','affiliate','meta'].includes(body.commercialMode) ? body.commercialMode : 'manual';
   return { record: {
     id, sponsor,
+    campaignType: commercialMode === 'house' ? 'house' : commercialMode === 'affiliate' ? 'affiliate' : commercialMode === 'meta' ? 'meta' : 'founding_pilot',
     creative: {
       tagline: cleanText(body.tagline, 120),
       clickUrl: /^https:\/\//i.test(cleanText(body.clickUrl, 500)) ? cleanText(body.clickUrl, 500) : '',
@@ -124,8 +125,10 @@ function eligiblePilotView(records, env) {
 }
 
 function sponsorSlot(realEligible, demoCampaign) {
-  const real = Array.isArray(realEligible) ? realEligible.filter((r) => r && r.id && r.sponsor) : [];
-  if (real.length) return { mode: 'real', campaign: real[0] };
+  const campaigns = Array.isArray(realEligible) ? realEligible.filter((r) => r && r.id && r.sponsor) : [];
+  const rank = { founding_pilot: 0, affiliate: 1, house: 2, meta: 3 };
+  campaigns.sort((a,b) => (rank[a.campaignType] ?? 9) - (rank[b.campaignType] ?? 9));
+  if (campaigns.length) return { mode: campaigns[0].campaignType || 'real', campaign: campaigns[0] };
   const demo = demoCampaign && demoCampaign.id && demoCampaign.sponsor ? demoCampaign :
     { id: 'demo-no-ad', sponsor: 'FreeCoffee', creative: { tagline: 'Demo only · no paid campaign', marker: 'fictional_sample' } };
   return { mode: 'demo_no_ad', campaign: demo };

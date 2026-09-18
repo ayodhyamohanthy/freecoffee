@@ -1207,8 +1207,14 @@ function pass(name) { n++; console.log('PASS ' + name); }
   assert.equal(fallback.mode, 'demo_no_ad');
   assert.equal(fallback.campaign.creative.marker, 'fictional_sample');
   assert.ok(fallback.campaign.sponsor);
-  const real = sponsorSlot([{ id:'real-one', sponsor:'Reviewed' }], null);
-  assert.equal(real.mode, 'real'); assert.equal(real.campaign.id, 'real-one');
+  const real = sponsorSlot([{ id:'real-one', sponsor:'Reviewed', campaignType:'founding_pilot' },
+    { id:'house-one', sponsor:'House', campaignType:'house' }], null);
+  assert.equal(real.mode, 'founding_pilot'); assert.equal(real.campaign.id, 'real-one');
+  const house = newPilot({ id:'house_one', sponsor:'SkipWait', commercialMode:'house' }, 1).record;
+  assert.equal(house.campaignType, 'house'); assert.equal(house.grossMediaRevenueCents, 0);
+  assert.equal(house.viewerPoolAllocationCents, 0);
+  assert.equal(newPilot({ id:'aff_one', sponsor:'Affiliate', commercialMode:'affiliate' }, 1).record.campaignType, 'affiliate');
+  assert.equal(newPilot({ id:'meta_one', sponsor:'FreeCoffee', commercialMode:'meta' }, 1).record.campaignType, 'meta');
   assert.equal(publicLaunchGate([{ state:'in_review' }]).enabled, false);
   assert.equal(publicLaunchGate([{ state:'approved_not_funded' }]).enabled, false);
   assert.equal(publicLaunchGate([{ state:'approved_not_funded', foundingPilotSignedAt:9 }]).enabled, true);
