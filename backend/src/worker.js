@@ -32,7 +32,7 @@
      is public because the owner shares the code themselves, but it is
      aggregate-only: anonymous "referee N" rows, no device ids, no ledger
      rows. A referee's credit is held until it passes the 60-minute / 30-day
-     activation gate and is voided after the 12-month term; a referee can
+     activation gate and is voided after the 30-day term; a referee can
      never be its own referrer, and a code can never be re-pointed at a
      different device.
    • `platform` on a report is advisory attribution only (mac | web | pwa |
@@ -1305,7 +1305,7 @@ async function handleAdminFeed(req, env) {
    Anyone can submit ONE campaign per request (no token). Submissions land
    in a human-review queue — nothing reaches the live feed without an
    explicit admin approval, which is what the advertisers page promises.
-   Spam controls: minimum $1 CPM bid, https-only destination required
+   Spam controls: minimum $2 CPM bid, https-only destination required
    (linkless ads are pointless), duplicate ids rejected across feed AND
    queue, 5 submissions/day per IP, queue capped at 50. Highest CPM still
    wins the minute (pickAd sorts desc); with no bids the clients show

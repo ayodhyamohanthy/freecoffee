@@ -9,7 +9,7 @@ Replace current index hero with this block. Sells an auction slot, not an app in
 - Secondary (ghost): Watch the demo ledger update live → index.html#ledger
 
 Incumbents stays in `<feature:strip>` after this block:
-- 65% → 70% cut after $50k revenue
+- 70% user share, always on — plus a 10% platform-funded launch boost
 - OS (13+) treated as verified attention by both platforms
 - Menus and ledger open where numbers are needed
 

@@ -5,7 +5,7 @@
 **Body:**
 UnhaiMy observation while building Mac menu bar software for the past two weeks: advertising today polarization happens at the P convention while the brain sits active with the Mac.
 
-So I started two months building FreeCoffee — a place where Mac users sell 4-hour attention windows. Sponsors bid, users keep 65% of ad revenue, and this is how the app pays users daily (68% update wk 1).
+So I started two months building FreeCoffee — a place where Mac users sell 4-hour attention windows. Sponsors bid, users keep 70% of ad revenue (plus a 10% launch boost), and this is how the app pays users daily.
 
 The numbers people will ask about: 25 Mac devices on the dev pipe so far, and our sponsor standards are clear — no delivery to real, verified users. First slot posts this Tuesday.
 

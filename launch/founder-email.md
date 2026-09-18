@@ -12,7 +12,7 @@ Back in action: my workshop traps demo ad slots with a 3-second shift in user at
 
 $6 CPM, 4-hour slot window, first 5 sponsor spots only.
 
-I documented the economics on freecoffee.tech/model.html — audience honesty (25 verified devices day one) plus a full delivery report with demo loops; users join a real ledger where total minutes equal earnings. (Rev share: 65% user / 35% platform +the platform is one-time billed at $100 payout floor, which goes live only after campaign number one.)
+I documented the economics on freecoffee.tech/model.html — audience honesty (25 verified devices day one) plus a full delivery report with demo loops; users join a real ledger where total minutes equal earnings. (Rev share: 70% user base share, always on — the platform adds a 10% launch boost on top. $10 minimum payout, released after a 5-day pending window.)
 
 If you're in, I open the booking (booking flow lists your brand in a queue; delivery in UTC starts your purchase day — no need to send changes to the code, that part will only land post-payment).
 

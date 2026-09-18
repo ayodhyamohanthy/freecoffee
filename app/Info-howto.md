@@ -44,7 +44,7 @@ The Mac status area chip itself is always an ad slot, never a dead end:
      status dot **Earning** / **Waiting** / **Disabled**;
    - **TOTAL BALANCE** (oversized mono figure) with right-aligned available/pending and the
      muted **"≈ N cups of coffee"** hint (1 cup = $5);
-   - the caramel **"☕ 65% base share — always on"** boost line;
+   - the caramel **"70% base + 10% launch share"** boost line (launch bonus funded by the platform);
    - **Earnings · 7 days** inset bar chart — weekday letters M T W T F S S with value labels,
      drawn from the app's persisted per-day history;
    - the gray **"Tip: Hold ⌘ and drag Mac status area items to rearrange them."** line;

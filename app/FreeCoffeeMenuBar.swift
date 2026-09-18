@@ -17,8 +17,8 @@
   *       Advertise-here button when the feed is empty; status dot
   *       "Earning"/"Waiting"),
  *       divider, TOTAL BALANCE block (oversized mono figure + cups hint +
- *       right-aligned available/pending), the caramel "65% base share —
- *       always on" boost line, an "Earnings · 7 days" inset bar chart
+ *       right-aligned available/pending), the caramel "70% base + 10% launch share" boost line (launch bonus
+ *       funded by the platform), an "Earnings · 7 days" inset bar chart
  *       (custom NSView, weekday letters M T W T F S S + value labels, drawn
  *       from the persisted day-by-day ledger history), the gray rearrange
  *       tip line, a divider, and a footer with four buttons:
