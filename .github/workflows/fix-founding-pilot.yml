@@ -28,4 +28,4 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add backend/src/pilots.js backend/test.mjs
           git commit -m "Fix free pilot enablement boundary"
-          git push origin HEAD:mainubun
+          git push origin HEAD:main
