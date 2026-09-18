@@ -120,6 +120,20 @@ function eligiblePilotView(records, env) {
     .map((r) => ({ id: r.id, sponsor: r.sponsor, creative: r.creative })) };
 }
 
+function sponsorSlot(realEligible, demoCampaign) {
+  const real = Array.isArray(realEligible) ? realEligible.filter((r) => r && r.id && r.sponsor) : [];
+  if (real.length) return { mode: 'real', campaign: real[0] };
+  const demo = demoCampaign && demoCampaign.id && demoCampaign.sponsor ? demoCampaign :
+    { id: 'demo-no-ad', sponsor: 'FreeCoffee', creative: { tagline: 'Demo only · no paid campaign', marker: 'fictional_sample' } };
+  return { mode: 'demo_no_ad', campaign: demo };
+}
+
+function publicLaunchGate(records) {
+  const list = Array.isArray(records) ? records : [];
+  return { enabled: list.some((r) => r && ['approved_not_funded','pilot_enabled','scheduled','eligible','delivering','paused','completed'].includes(r.state)),
+    requirement: 'at least one founding pilot sponsor signed' };
+}
+
 function proofGate(env) {
   return flagOn(env, 'PILOT_DELIVERY_ENABLED') && flagOn(env, 'PILOT_PROOF_ENABLED');
 }
@@ -129,4 +143,4 @@ function settlementGate(env) {
 
 export { PILOT_STATES, PILOT_TRANSITIONS, PILOT_LIST_KEY, PILOT_KEY_PREFIX, flagOn,
   newPilot, transitionPilot, confirmPilotRevenue, fundPromotionalPool, eligiblePilotView,
-  proofGate, settlementGate };
+  sponsorSlot, publicLaunchGate, proofGate, settlementGate };

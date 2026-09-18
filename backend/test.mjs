@@ -7,7 +7,7 @@
    ========================================================================== */
 import assert from 'node:assert/strict';
 import { PILOT_STATES, newPilot, transitionPilot, confirmPilotRevenue,
-  fundPromotionalPool, eligiblePilotView, proofGate, settlementGate } from './src/pilots.js';
+  fundPromotionalPool, eligiblePilotView, sponsorSlot, publicLaunchGate, proofGate, settlementGate } from './src/pilots.js';
 import {
   validateCampaigns,
   applyEarnings,
@@ -1195,6 +1195,21 @@ function pass(name) { n++; console.log('PASS ' + name); }
   res = await workerFetch(new Request('https://x.test/campaigns/eligible'), env, {});
   const view = await res.json(); assert.equal(view.enabled,false); assert.deepEqual(view.campaigns,[]);
   pass('worker founding-pilot intake is admin-authenticated and cannot leak into Mac eligibility');
+}
+
+
+
+/* 30. Sponsor slot is never empty; public launch requires a signed founding pilot. */
+{
+  const fallback = sponsorSlot([], null);
+  assert.equal(fallback.mode, 'demo_no_ad');
+  assert.equal(fallback.campaign.creative.marker, 'fictional_sample');
+  assert.ok(fallback.campaign.sponsor);
+  const real = sponsorSlot([{ id:'real-one', sponsor:'Reviewed' }], null);
+  assert.equal(real.mode, 'real'); assert.equal(real.campaign.id, 'real-one');
+  assert.equal(publicLaunchGate([{ state:'in_review' }]).enabled, false);
+  assert.equal(publicLaunchGate([{ state:'approved_not_funded' }]).enabled, true);
+  pass('sponsor slot always falls back to demo/no-ad and launch requires a signed founding pilot');
 }
 
 console.log('ALL TESTS PASSED (' + n + ' groups)');
