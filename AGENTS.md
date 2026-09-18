@@ -16,6 +16,7 @@ The coordinator records assignments before writers begin. This table is an advis
 
 | Session ID | Task | Owned paths | Base commit | Status / last UTC update |
 | --- | --- | --- | --- | --- |
+| cont-20260918-01 | Adopt uncommitted v1002011 + dashboard/CSS/test changes; reconcile economics contracts; bounded competitor parity | advertisers.html, agents.html, assets/css/styles.css, assets/js/dashboard.js, backend/src/worker.js, campaigns.html, dashboard.html, flywheel.html, index.html, model.html, payouts.html, profile.html, referrals.html, sw.js, test.sh, tests/browser-regressions.cjs, tests/public-regressions.cjs | 911481d | completed / 2026-09-18 — handoff pending; ownership retained until commit decision |
 
 ## Before and during edits
 

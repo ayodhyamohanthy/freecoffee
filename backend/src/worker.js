@@ -44,7 +44,7 @@
 
    EARNINGS MODEL (mirrors the demo ledger's public model)
    -------------------------------------------------------
-   • Impression: minutes × cpm ÷ 1000 × 0.65 (user base share). `minutes`
+    • Impression: minutes × cpm ÷ 1000 × 0.70 (user base share). `minutes`
      is the reported length of the placement batch (0–60 per report,
      clamped server-side; defaults to 1 when absent).
    • Click: flat $0.05 when the caps allow.
@@ -74,15 +74,15 @@ var DEVICE_ID_RE = /^[a-f0-9-]{8,64}$/i;
 /* --------------------------- flywheel constants -------------------------
    The loop this file closes, server-side:
 
-     capture (any platform)  →  activate (60 verified minutes)  →
-     earn (65% base share)   →  share (attributed link)         →  capture…
+      capture (any platform)  →  activate (first valid impression)  →
+      earn (70% base share)   →  share (attributed link)         →  capture…
 
-   with the second, reinforcing half: more verified minutes → advertiser
-   value → higher winning bids → bigger user earnings → more sharing.
+    with the second, reinforcing half: more verified minutes → advertiser
+    value → higher winning bids → bigger user earnings → more sharing.
 
-   Everything money-shaped is here: the referrer's 10% is computed from the
-   REFEREE's own base award (platform-side money — the referee's 65% is never
-   reduced), gated on activation, and capped at a 12-month term. */
+    Everything money-shaped is here: the referrer's 5% is computed from the
+    REFEREE's own base award (platform-side money — the referee's 70% is never
+    reduced), with a 5% referee bonus, 14-day last-click attribution, and a 30-day term. */
 var REFERRAL_SHARE = 0.05;
 var REFERRAL_TERM_DAYS = 30;
 var REFERRAL_GATE_MINUTES = 0;
@@ -306,10 +306,9 @@ function applyReferralClaim(existing, code, now, refresh) {
 }
 
 /* Referee accrual — called on every verified impression. Returns the updated
-   binding plus the credit the REFERRER earns for it:
-     • gate unmet  → credit 0, the amount is HELD in `pending`
-     • gate passed → held credit is released retroactively (one payment)
-     • gate missed (30 days under 60 minutes) or term ended → void, 0
+   binding plus the platform-side credits for it:
+     • valid attribution within the 30-day term → 5% referrer + 5% referee of base
+     • attribution expired or term ended → void, 0
    Pure: the input binding is never mutated. */
 function applyReferralAccrual(binding, minutes, baseEarned, now) {
   var ts = (typeof now === 'number' && isFinite(now)) ? now : Date.now();
@@ -624,10 +623,9 @@ function applyEarnings(ledger, report, campaigns, now, referral, launchEnabled) 
 
   if (l.rows.length > ROWS_KEPT) l.rows = l.rows.slice(-ROWS_KEPT);
 
-  /* Referral accrual (impressions only): the referrer's 10% is derived from
-     THIS referee's base award, held until the activation gate passes, and
-     voided after the 30-day window or the 12-month term. A malformed binding
-     can only ever yield credit 0 — it can never grow the referee's own pay. */
+  /* Referral accrual (impressions only): 5% referrer + 5% referee derived from
+     THIS referee's base award, within the 30-day term from the first valid
+     impression. A malformed binding can only ever yield credit 0. */
   var referrerCredit = 0, referrerBinding = null, referralNote = null;
   if (type === 'impression' && referral) {
     var eligibleBinding = cloneLedger(referral);
@@ -1058,10 +1056,9 @@ async function handleTrack(req, env) {
   if (result.note) resp.note = result.note;
   resp.platform = result.platform;
 
-  /* The loop closes HERE. If this report pushed the referee through (or past)
-     the activation gate, the referrer's 10% is credited to the referrer's own
-     ledger — platform-side money, separate from the referee's 65%. Both
-     writes are best-effort: a failure never fails the referee's report. */
+   /* The loop closes HERE. The referrer's 5% is credited to the referrer's own
+      ledger — platform-side money, separate from the referee's 70%. Both
+      writes are best-effort: a failure never fails the referee's report. */
   if (binding && result.referrerBinding) {
     try {
       await env.SITE_KV.put('ref:' + deviceId, JSON.stringify(result.referrerBinding));

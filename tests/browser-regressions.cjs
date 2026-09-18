@@ -152,7 +152,7 @@ async function main() {
         assert.equal(state.pressed, String(paused));
         assert.equal(state.chip, String(paused));
         assert.equal(state.label, paused ? 'Resume ads' : 'Pause ads');
-        assert.match(state.status, paused ? /Ads paused/ : /Ads running/);
+        assert.match(state.status, paused ? /Demo (paused|snoozed)/ : /Demo (running|earning paused)/);
         assert.match(state.hint, paused ? /chip is frozen/ : /rotates every few seconds/);
         assert(state.name.trim(), 'sponsor name remains visible');
         assert(state.page <= width, 'pause/resume must not introduce overflow');

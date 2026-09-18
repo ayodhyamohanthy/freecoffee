@@ -701,7 +701,8 @@ a.crumb:hover { color: var(--gold-bright); text-decoration: none; }
   margin: 0; font-size: 0.9rem; font-weight: 600;
   color: var(--success); background: var(--success-dim);
   border: 1px solid rgba(111, 191, 139, 0.3);
-  padding: 8px 14px; border-radius: 999px; white-space: nowrap;
+  padding: 8px 14px; border-radius: 999px;
+  max-width: 100%; overflow-wrap: anywhere;
 }
 .storage-note {
   background: rgba(226, 180, 90, 0.08); border: 1px solid rgba(226, 180, 90, 0.35);

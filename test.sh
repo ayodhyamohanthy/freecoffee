@@ -169,7 +169,7 @@ const b = JSON.stringify(D.generateHistory(42));
 if (a !== b) { console.error("NON-DETERMINISTIC output"); process.exit(1); }
 const t = D.generateHistory(42).totals;
 if (Math.abs((t.available + t.pending) - t.lifetime) > 0.011) { console.error("available+pending != lifetime"); process.exit(1); }
-if (t.lifetime < 28.5 || t.lifetime > 28.6) { console.error("unexpected lifetime " + t.lifetime); process.exit(1); }
+if (t.lifetime < 33.9 || t.lifetime > 34.0) { console.error("unexpected lifetime " + t.lifetime); process.exit(1); }
 console.log("    ok   seed 42 reproducible; available + pending = lifetime ($" + t.lifetime + ")");
 '
 [ $? -eq 0 ] && ok "demo engine" || bad "demo engine"

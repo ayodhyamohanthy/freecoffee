@@ -9,10 +9,10 @@ const read = name => fs.readFileSync(path.join(root, name), 'utf8');
 const html = read('advertisers.html');
 const home = read('index.html');
 const share = require('../assets/js/demo.js').MODEL.BASE_SHARE;
-assert.equal(share, 0.65);
-assert.match(home, /shares 65%/);
-assert.match(home, /70% once platform revenue passes \$50k\/month/);
-assert.doesNotMatch(home, /(?:shares|keep) 70%/);
+assert.equal(share, 0.70);
+assert.match(home, /shares 70%/);
+assert.match(home, /platform-funded 10% launch boost/);
+assert.doesNotMatch(home, /50k\/month/);
 for (const page of ['index.html', 'agents.html', 'advertisers.html']) {
   assert.match(read(page), /rel="manifest"/);
   assert.match(read(page), /serviceWorker\.register\('sw.js'\)/);
