@@ -449,6 +449,7 @@ function pickRoute(method, pathname) {
   if (method === 'GET' && pathname === '/feed.json') return { handled: true, route: 'feed' };
   if (method === 'GET' && pathname === '/stats') return { handled: true, route: 'stats' };
   if (method === 'POST' && pathname === '/submit') return { handled: true, route: 'submit' };
+  if (method === 'POST' && pathname === '/pilot-interest') return { handled: true, route: 'pilotInterest' };
   if (method === 'GET' && pathname === '/admin/queue') return { handled: true, route: 'adminQueue' };
   if (method === 'POST' && pathname === '/admin/review') return { handled: true, route: 'adminReview' };
   if (method === 'GET' && pathname === '/admin/pilots') return { handled: true, route: 'adminPilots' };
@@ -1406,6 +1407,49 @@ async function handleSubmit(req, env) {
     note: 'A human reviews every submission before it can serve. Watch /feed.json.' }, 200);
 }
 
+/* Public sponsor-interest intake. Deliberately separate from campaigns,
+   pilots, eligibility and feed state. This handler cannot approve, enable,
+   schedule, fund, or serve a campaign. */
+var PILOT_INTEREST_LIST_KEY = 'pilot-interest:index';
+var PILOT_INTEREST_MAX = 200;
+var PILOT_INTEREST_RATE_PER_DAY = 5;
+function interestField(v, max) { return capStr(v, max); }
+function interestEmail(v) {
+  var x = interestField(v, 160).toLowerCase();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x) ? x : '';
+}
+async function handlePilotInterest(req, env) {
+  if (!env || !env.SITE_KV) return json({ ok:false, error:'intake unavailable' }, 503);
+  var body;
+  try { body = await req.json(); } catch (e) { return json({ ok:false, error:'invalid JSON body' }, 400); }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return json({ ok:false, error:'submit one interest record' }, 400);
+  var company = interestField(body.company, 100);
+  var name = interestField(body.name, 100);
+  var email = interestEmail(body.email);
+  var destination = interestField(body.destination, 500);
+  var note = interestField(body.note, 1200);
+  if (!company || !name || !email) return json({ ok:false, error:'company, name, and valid email are required' }, 400);
+  if (destination && !isValidHttpsUrl(destination)) return json({ ok:false, error:'destination must begin with https://' }, 400);
+  var kv = env.SITE_KV, now = Date.now(), day = todayKey(now), ip = clientIP(req);
+  var rateKey = 'pilot-interest-rate:' + ip + ':' + day, used = 0;
+  try { used = Number(await kv.get(rateKey)) || 0; } catch (e0) { used = 0; }
+  if (used >= PILOT_INTEREST_RATE_PER_DAY) return json({ ok:false, error:'daily submission limit reached' }, 429);
+  var ids = [];
+  try { var raw = await kv.get(PILOT_INTEREST_LIST_KEY); ids = raw ? JSON.parse(raw) : []; } catch (e1) { ids = []; }
+  if (!Array.isArray(ids)) ids = [];
+  if (ids.length >= PILOT_INTEREST_MAX) return json({ ok:false, error:'review queue is full' }, 429);
+  var id = 'pi-' + now.toString(36) + '-' + Math.random().toString(36).slice(2,10);
+  var record = { id:id, state:'submitted', submittedAt:now, company:company, name:name, email:email,
+    destination:destination, note:note, source:'public-advertiser-form' };
+  try {
+    await kv.put('pilot-interest:' + id, JSON.stringify(record));
+    ids.push(id);
+    await kv.put(PILOT_INTEREST_LIST_KEY, JSON.stringify(ids));
+    await kv.put(rateKey, String(used + 1), { expirationTtl:86400 });
+  } catch (e2) { return json({ ok:false, error:'intake unavailable' }, 503); }
+  return json({ ok:true, id:id, state:'submitted', note:'Received for human review. Nothing goes live automatically.' }, 201);
+}
+
 function requireAdmin(env, req) {
   var auth = '';
   try { auth = req.headers.get('authorization') || ''; } catch (e) { auth = ''; }
@@ -1922,6 +1966,8 @@ async function handleFetch(request, env, ctx) {
         return await handleAdminFeed(request, env);
       case 'submit':
         return await handleSubmit(request, env);
+      case 'pilotInterest':
+        return await handlePilotInterest(request, env);
       case 'adminQueue':
         return await handleAdminQueue(request, env);
       case 'adminReview':
@@ -2017,4 +2063,3 @@ export {
   SLOT_BIDS_KEPT,
   SLOT_MAX_PER_REQUEST
 };
-
