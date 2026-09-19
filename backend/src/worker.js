@@ -1,3 +1,7 @@
+import { PILOT_LIST_KEY, PILOT_KEY_PREFIX, newPilot, transitionPilot,
+  confirmPilotRevenue, fundPromotionalPool, eligiblePilotView, proofGate,
+  settlementGate } from './pilots.js';
+
 /* ==========================================================================
    FreeCoffee backend — Cloudflare Worker (free tier, KV), plain ES module.
 
@@ -445,8 +449,17 @@ function pickRoute(method, pathname) {
   if (method === 'GET' && pathname === '/feed.json') return { handled: true, route: 'feed' };
   if (method === 'GET' && pathname === '/stats') return { handled: true, route: 'stats' };
   if (method === 'POST' && pathname === '/submit') return { handled: true, route: 'submit' };
+  if (method === 'POST' && pathname === '/pilot-interest') return { handled: true, route: 'pilotInterest' };
   if (method === 'GET' && pathname === '/admin/queue') return { handled: true, route: 'adminQueue' };
   if (method === 'POST' && pathname === '/admin/review') return { handled: true, route: 'adminReview' };
+  if (method === 'GET' && pathname === '/admin/pilots') return { handled: true, route: 'adminPilots' };
+  if (method === 'POST' && pathname === '/admin/pilots') return { handled: true, route: 'adminPilotCreate' };
+  if (method === 'POST' && pathname === '/admin/pilots/transition') return { handled: true, route: 'adminPilotTransition' };
+  if (method === 'POST' && pathname === '/admin/pilots/revenue') return { handled: true, route: 'adminPilotRevenue' };
+  if (method === 'POST' && pathname === '/admin/pilots/promotional-pool') return { handled: true, route: 'adminPilotPromoPool' };
+  if (method === 'GET' && pathname === '/admin/pilots/proof') return { handled: true, route: 'adminPilotProof' };
+  if (method === 'POST' && pathname === '/admin/pilots/settlement') return { handled: true, route: 'adminPilotSettlement' };
+  if (method === 'GET' && pathname === '/campaigns/eligible') return { handled: true, route: 'pilotEligibility' };
   if (method === 'GET' && pathname === '/health') return { handled: true, route: 'health' };
   if (method === 'POST' && pathname === '/track') return { handled: true, route: 'track' };
   if (method === 'POST' && pathname === '/admin/feed') return { handled: true, route: 'adminFeed' };
@@ -1394,6 +1407,49 @@ async function handleSubmit(req, env) {
     note: 'A human reviews every submission before it can serve. Watch /feed.json.' }, 200);
 }
 
+/* Public sponsor-interest intake. Deliberately separate from campaigns,
+   pilots, eligibility and feed state. This handler cannot approve, enable,
+   schedule, fund, or serve a campaign. */
+var PILOT_INTEREST_LIST_KEY = 'pilot-interest:index';
+var PILOT_INTEREST_MAX = 200;
+var PILOT_INTEREST_RATE_PER_DAY = 5;
+function interestField(v, max) { return capStr(v, max); }
+function interestEmail(v) {
+  var x = interestField(v, 160).toLowerCase();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x) ? x : '';
+}
+async function handlePilotInterest(req, env) {
+  if (!env || !env.SITE_KV) return json({ ok:false, error:'intake unavailable' }, 503);
+  var body;
+  try { body = await req.json(); } catch (e) { return json({ ok:false, error:'invalid JSON body' }, 400); }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return json({ ok:false, error:'submit one interest record' }, 400);
+  var company = interestField(body.company, 100);
+  var name = interestField(body.name, 100);
+  var email = interestEmail(body.email);
+  var destination = interestField(body.destination, 500);
+  var note = interestField(body.note, 1200);
+  if (!company || !name || !email) return json({ ok:false, error:'company, name, and valid email are required' }, 400);
+  if (destination && !isValidHttpsUrl(destination)) return json({ ok:false, error:'destination must begin with https://' }, 400);
+  var kv = env.SITE_KV, now = Date.now(), day = todayKey(now), ip = clientIP(req);
+  var rateKey = 'pilot-interest-rate:' + ip + ':' + day, used = 0;
+  try { used = Number(await kv.get(rateKey)) || 0; } catch (e0) { used = 0; }
+  if (used >= PILOT_INTEREST_RATE_PER_DAY) return json({ ok:false, error:'daily submission limit reached' }, 429);
+  var ids = [];
+  try { var raw = await kv.get(PILOT_INTEREST_LIST_KEY); ids = raw ? JSON.parse(raw) : []; } catch (e1) { ids = []; }
+  if (!Array.isArray(ids)) ids = [];
+  if (ids.length >= PILOT_INTEREST_MAX) return json({ ok:false, error:'review queue is full' }, 429);
+  var id = 'pi-' + now.toString(36) + '-' + Math.random().toString(36).slice(2,10);
+  var record = { id:id, state:'submitted', submittedAt:now, company:company, name:name, email:email,
+    destination:destination, note:note, source:'public-advertiser-form' };
+  try {
+    await kv.put('pilot-interest:' + id, JSON.stringify(record));
+    ids.push(id);
+    await kv.put(PILOT_INTEREST_LIST_KEY, JSON.stringify(ids));
+    await kv.put(rateKey, String(used + 1), { expirationTtl:86400 });
+  } catch (e2) { return json({ ok:false, error:'intake unavailable' }, 503); }
+  return json({ ok:true, id:id, state:'submitted', note:'Received for human review. Nothing goes live automatically.' }, 201);
+}
+
 function requireAdmin(env, req) {
   var auth = '';
   try { auth = req.headers.get('authorization') || ''; } catch (e) { auth = ''; }
@@ -1453,6 +1509,77 @@ async function handleAdminReview(req, env) {
   try { await writeQueue(kv, queue); }
   catch (e3) { return json({ ok: false, error: 'queue unavailable' }, 503); }
   return json({ ok: true, status: 'rejected', id: id }, 200);
+}
+
+
+
+/* ------------------------ founding-pilot lane ------------------------- */
+async function readPilotIds(kv) {
+  try { var raw = await kv.get(PILOT_LIST_KEY); var ids = raw ? JSON.parse(raw) : []; return Array.isArray(ids) ? ids : []; }
+  catch (e) { return []; }
+}
+async function readPilot(kv, id) {
+  try { var raw = await kv.get(PILOT_KEY_PREFIX + id); return raw ? JSON.parse(raw) : null; }
+  catch (e) { return null; }
+}
+async function writePilot(kv, record) {
+  await kv.put(PILOT_KEY_PREFIX + record.id, JSON.stringify(record));
+  var ids = await readPilotIds(kv);
+  if (ids.indexOf(record.id) === -1) { ids.push(record.id); await kv.put(PILOT_LIST_KEY, JSON.stringify(ids.slice(-200))); }
+}
+async function allPilots(kv) {
+  var ids = await readPilotIds(kv), out = [];
+  for (var i = 0; i < ids.length; i++) { var rec = await readPilot(kv, ids[i]); if (rec) out.push(rec); }
+  return out;
+}
+function pilotAdminGuard(req, env) {
+  if (!requireAdmin(env, req)) return json({ ok: false, error: 'unauthorized' }, 401);
+  if (!env.SITE_KV) return json({ ok: false, error: 'KV not configured (SITE_KV binding missing)' }, 503);
+  return null;
+}
+async function pilotBody(req) { try { return await req.json(); } catch (e) { return null; } }
+async function handleAdminPilots(req, env) {
+  var blocked = pilotAdminGuard(req, env); if (blocked) return blocked;
+  return json({ campaigns: await allPilots(env.SITE_KV) }, 200);
+}
+async function handleAdminPilotCreate(req, env) {
+  var blocked = pilotAdminGuard(req, env); if (blocked) return blocked;
+  if (env.PILOT_ADMIN_INTAKE_ENABLED !== 'true') return json({ ok: false, error: 'pilot admin intake is disabled' }, 403);
+  var body = await pilotBody(req); if (!body) return json({ ok: false, error: 'invalid JSON body' }, 400);
+  var built = newPilot(body); if (built.error) return json({ ok: false, error: built.error }, 400);
+  if (await readPilot(env.SITE_KV, built.record.id)) return json({ ok: false, error: 'pilot id already exists' }, 409);
+  await writePilot(env.SITE_KV, built.record); return json({ ok: true, campaign: built.record }, 201);
+}
+async function mutatePilot(req, env, mutator) {
+  var blocked = pilotAdminGuard(req, env); if (blocked) return blocked;
+  var body = await pilotBody(req); if (!body || typeof body.id !== 'string') return json({ ok: false, error: 'id required' }, 400);
+  var rec = await readPilot(env.SITE_KV, body.id); if (!rec) return json({ ok: false, error: 'pilot not found' }, 404);
+  var result = mutator(rec, body, env); if (result.error) return json({ ok: false, error: result.error }, 409);
+  await writePilot(env.SITE_KV, result.record); return json({ ok: true, campaign: result.record }, 200);
+}
+async function handleAdminPilotTransition(req, env) {
+  return mutatePilot(req, env, function (rec, body, e) { return transitionPilot(rec, body.to, e, body); });
+}
+async function handleAdminPilotRevenue(req, env) {
+  return mutatePilot(req, env, function (rec, body, e) { return confirmPilotRevenue(rec, body, e); });
+}
+async function handleAdminPilotPromoPool(req, env) {
+  return mutatePilot(req, env, function (rec, body, e) { return fundPromotionalPool(rec, body, e); });
+}
+async function handlePilotEligibility(env) {
+  if (!env || !env.SITE_KV) return json({ enabled: false, campaigns: [] }, 200);
+  return json(eligiblePilotView(await allPilots(env.SITE_KV), env), 200,
+    { 'cache-control': 'no-store' });
+}
+async function handleAdminPilotProof(req, env) {
+  var blocked = pilotAdminGuard(req, env); if (blocked) return blocked;
+  if (!proofGate(env)) return json({ ok: false, error: 'pilot proof is disabled' }, 403);
+  return json({ ok: true, note: 'proof adapter not configured' }, 501);
+}
+async function handleAdminPilotSettlement(req, env) {
+  var blocked = pilotAdminGuard(req, env); if (blocked) return blocked;
+  if (!settlementGate(env)) return json({ ok: false, error: 'pilot settlement is disabled' }, 403);
+  return json({ ok: true, note: 'settlement adapter not configured' }, 501);
 }
 
 /* ============================== slot auction ==============================
@@ -1839,10 +1966,20 @@ async function handleFetch(request, env, ctx) {
         return await handleAdminFeed(request, env);
       case 'submit':
         return await handleSubmit(request, env);
+      case 'pilotInterest':
+        return await handlePilotInterest(request, env);
       case 'adminQueue':
         return await handleAdminQueue(request, env);
       case 'adminReview':
         return await handleAdminReview(request, env);
+      case 'adminPilots': return await handleAdminPilots(request, env);
+      case 'adminPilotCreate': return await handleAdminPilotCreate(request, env);
+      case 'adminPilotTransition': return await handleAdminPilotTransition(request, env);
+      case 'adminPilotRevenue': return await handleAdminPilotRevenue(request, env);
+      case 'adminPilotPromoPool': return await handleAdminPilotPromoPool(request, env);
+      case 'pilotEligibility': return await handlePilotEligibility(env);
+      case 'adminPilotProof': return await handleAdminPilotProof(request, env);
+      case 'adminPilotSettlement': return await handleAdminPilotSettlement(request, env);
       case 'slots':
         return await handleSlots(env, url.searchParams.get('month'));
       case 'slotBid':

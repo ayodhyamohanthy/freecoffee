@@ -1,0 +1,61 @@
+name: Fix native demo economics and rebuild
+
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-native-demo.yml'
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply exact reviewed native-copy patch
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          p = Path('app/FreeCoffeeMenuBar.swift')
+          s = p.read_text()
+          changes = {
+            '    static let launchShare = 10\n    static let microsPerInterval = cpm * 1_000 * (baseShare + launchShare) / 100': '    static let microsPerInterval = cpm * 1_000 * baseShare / 100',
+            'private func money(_ cents: Int) -> String {\n    String(format: "$%.2f", Double(cents) / 100.0)\n}': 'private func demoUnits(_ cents: Int) -> String {\n    String(format: "%.2f", Double(cents) / 100.0)\n}',
+            'money(values[i])': 'demoUnits(values[i])',
+            'NSTextField(labelWithString: "$0.00")': 'NSTextField(labelWithString: "0.00 demo units")',
+            '"70% base + 10% launch share\\nLaunch bonus funded by the platform"': '"70% viewer share\\nDemo units · illustrative only"',
+            'balanceField.stringValue = money(state.balanceCents)': 'balanceField.stringValue = "\\(demoUnits(state.balanceCents)) demo units"',
+            'cupsLabel.stringValue = "$2 CPM · $0.0016 per eligible 60 seconds"': 'cupsLabel.stringValue = "Illustrative rate · eligible 60-second intervals"',
+            '(seed 42 lifetime, $28.55)': '(seed 42 lifetime, 28.55 demo units)',
+            '"≈ N cups" (1 cup = $5).': 'values are labeled as non-withdrawable demo units.'
+          }
+          for old, new in changes.items():
+              if old not in s:
+                  raise SystemExit('Expected source text missing: ' + repr(old))
+              s = s.replace(old, new)
+          if 'launchShare' in s or 'Launch bonus' in s or '$0.00' in s or '$2 CPM' in s:
+              raise SystemExit('Forbidden native demo economics remained')
+          p.write_text(s)
+          PY
+          bash test.sh
+
+      - name: Commit reviewed fix
+        id: commit
+        run: |
+          git config user.name 'freecoffee-ci'
+          git config user.email 'ci@freecoffee.tech'
+          git add app/FreeCoffeeMenuBar.swift
+          git commit -m 'fix: make native demo economics honest'
+          git push origin HEAD:main
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch one checked macOS build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run build-adhoc-dmg.yml --ref "${{ steps.commit.outputs.sha }}"

@@ -6,6 +6,8 @@
    Run:  node freecoffee/backend/test.mjs   → exit 0 + PASS lines
    ========================================================================== */
 import assert from 'node:assert/strict';
+import { PILOT_STATES, newPilot, transitionPilot, confirmPilotRevenue,
+  fundPromotionalPool, eligiblePilotView, sponsorSlot, publicLaunchGate, proofGate, settlementGate } from './src/pilots.js';
 import {
   validateCampaigns,
   applyEarnings,
@@ -1110,4 +1112,116 @@ function pass(name) { n++; console.log('PASS ' + name); }
   pass('delivery report: time, distinct devices, surfaces, regions — counts only, no ids');
 }
 
+
+
+/* ------------------------------------------------------------------------
+   25. Founding-pilot lane: exact states and fail-closed progression
+   ------------------------------------------------------------------------ */
+{
+  assert.deepEqual(PILOT_STATES, ['draft','submitted','in_review','changes_requested','rejected',
+    'approved_not_funded','pilot_enabled','scheduled','eligible','delivering','paused','completed','stopped']);
+  let made = newPilot({ id: 'pilot_one', sponsor: 'Sample sponsor', commercialMode: 'free' }, 1);
+  assert.equal(made.record.state, 'draft');
+  assert.equal(made.record.commercialMode, 'free');
+  assert.equal(made.record.grossMediaRevenueCents, 0);
+  assert.equal(made.record.viewerPoolAllocationCents, 0);
+  assert.deepEqual(made.record.allocationEvents, []);
+  let r = transitionPilot(made.record, 'submitted', {}, {}, 2); assert.equal(r.record.state, 'submitted');
+  r = transitionPilot(r.record, 'in_review', {}, {}, 3); assert.equal(r.record.state, 'in_review');
+  assert.equal(transitionPilot(r.record, 'approved_not_funded', {}, {}, 4).error, 'founding pilot sponsor signature required');
+  r = transitionPilot(r.record, 'approved_not_funded', {}, { foundingPilotSigned:true }, 4); assert.equal(r.record.state, 'approved_not_funded');
+  assert.equal(r.record.foundingPilotSignedAt, 4);
+  assert.equal(transitionPilot(r.record, 'pilot_enabled', {}, {}, 5).error, 'pilot enablement is disabled');
+  assert.equal(transitionPilot(r.record, 'pilot_enabled', { PILOT_ENABLEMENT_ENABLED:'true' }, {}, 5).record.state,
+    'pilot_enabled');
+  pass('founding-pilot state machine stops at approved_not_funded while billing is disabled');
+}
+
+/* ------------------------------------------------------------------------
+   26. Free/manual metadata never fakes funding or an allocation event
+   ------------------------------------------------------------------------ */
+{
+  const free = newPilot({ id:'free_one', sponsor:'Fictional', commercialMode:'free' }, 1).record;
+  assert.equal(confirmPilotRevenue({ ...free, state:'approved_not_funded' }, { grossMediaRevenueCents:1000 }, {}).error,
+    'billing is disabled');
+  assert.equal(free.grossMediaRevenueCents, 0);
+  assert.equal(free.viewerPoolAllocationCents, 0);
+  assert.deepEqual(free.allocationEvents, []);
+  assert.equal(fundPromotionalPool(free, { promotionalPoolCents:500 }, {}).error, 'promotional pool funding is disabled');
+  pass('commercial mode is metadata; free pilots create no revenue or viewer-pool allocation');
+}
+
+/* ------------------------------------------------------------------------
+   27. Explicit funding flags preserve revenue and promotional-pool boundaries
+   ------------------------------------------------------------------------ */
+{
+  const base = { ...newPilot({ id:'paid_one', sponsor:'Reviewed' }, 1).record, state:'approved_not_funded' };
+  const paid = confirmPilotRevenue(base, { grossMediaRevenueCents:1001 }, { BILLING_ENABLED:'true' }, 2).record;
+  assert.equal(paid.viewerPoolAllocationCents, 700);
+  assert.equal(paid.allocationEvents.length, 1);
+  const promo = fundPromotionalPool(base, { promotionalPoolCents:777 }, { PROMOTIONAL_POOL_ENABLED:'true' }, 2).record;
+  assert.equal(promo.promotionalPoolCents, 777);
+  assert.equal(promo.grossMediaRevenueCents, 0);
+  assert.equal(promo.viewerPoolAllocationCents, 0);
+  assert.deepEqual(promo.allocationEvents, []);
+  pass('confirmed gross revenue and separately funded promotional pools remain distinct');
+}
+
+/* ------------------------------------------------------------------------
+   28. Eligibility, proof, settlement, and intake routes fail closed
+   ------------------------------------------------------------------------ */
+{
+  const eligible = { ...newPilot({ id:'eligible_one', sponsor:'Reviewed', creativeKind:'reviewed_real' }, 1).record,
+    state:'eligible' };
+  assert.deepEqual(eligiblePilotView([eligible], {}).campaigns, []);
+  assert.equal(eligiblePilotView([eligible], {}).enabled, false);
+  assert.equal(eligiblePilotView([eligible], { PILOT_DELIVERY_ENABLED:'true' }).campaigns.length, 1);
+  assert.equal(proofGate({}), false); assert.equal(settlementGate({}), false);
+  assert.deepEqual(pickRoute('POST','/admin/pilots').route, 'adminPilotCreate');
+  assert.deepEqual(pickRoute('GET','/campaigns/eligible').route, 'pilotEligibility');
+  pass('pilot intake is admin-only and eligibility/proof/settlement flags default off');
+}
+
+/* ------------------------------------------------------------------------
+   29. Worker integration: admin auth, intake flag, and eligibility boundary
+   ------------------------------------------------------------------------ */
+{
+  const store = {};
+  const kv = { async get(k){ return Object.prototype.hasOwnProperty.call(store,k) ? store[k] : null; },
+    async put(k,v){ store[k]=String(v); }, async list(){ return { keys:[], list_complete:true }; } };
+  const env = { SITE_KV:kv, ADMIN_TOKEN:'secret', PILOT_ADMIN_INTAKE_ENABLED:'true' };
+  let res = await workerFetch(new Request('https://x.test/admin/pilots', { method:'POST',
+    headers:{'content-type':'application/json'}, body:JSON.stringify({ id:'lane_one', sponsor:'Sample', commercialMode:'free' }) }), env, {});
+  assert.equal(res.status, 401);
+  res = await workerFetch(new Request('https://x.test/admin/pilots', { method:'POST',
+    headers:{'content-type':'application/json',authorization:'Bearer secret'}, body:JSON.stringify({ id:'lane_one', sponsor:'Sample', commercialMode:'free' }) }), env, {});
+  assert.equal(res.status, 201); assert.equal((await res.json()).campaign.state, 'draft');
+  res = await workerFetch(new Request('https://x.test/campaigns/eligible'), env, {});
+  const view = await res.json(); assert.equal(view.enabled,false); assert.deepEqual(view.campaigns,[]);
+  pass('worker founding-pilot intake is admin-authenticated and cannot leak into Mac eligibility');
+}
+
+
+
+/* 30. Sponsor slot is never empty; public launch requires a signed founding pilot. */
+{
+  const fallback = sponsorSlot([], null);
+  assert.equal(fallback.mode, 'demo_no_ad');
+  assert.equal(fallback.campaign.creative.marker, 'fictional_sample');
+  assert.ok(fallback.campaign.sponsor);
+  const real = sponsorSlot([{ id:'real-one', sponsor:'Reviewed', campaignType:'founding_pilot' },
+    { id:'house-one', sponsor:'House', campaignType:'house' }], null);
+  assert.equal(real.mode, 'founding_pilot'); assert.equal(real.campaign.id, 'real-one');
+  const house = newPilot({ id:'house_one', sponsor:'SkipWait', commercialMode:'house' }, 1).record;
+  assert.equal(house.campaignType, 'house'); assert.equal(house.grossMediaRevenueCents, 0);
+  assert.equal(house.viewerPoolAllocationCents, 0);
+  assert.equal(newPilot({ id:'aff_one', sponsor:'Affiliate', commercialMode:'affiliate' }, 1).record.campaignType, 'affiliate');
+  assert.equal(newPilot({ id:'meta_one', sponsor:'FreeCoffee', commercialMode:'meta' }, 1).record.campaignType, 'meta');
+  assert.equal(publicLaunchGate([{ state:'in_review' }]).enabled, false);
+  assert.equal(publicLaunchGate([{ state:'approved_not_funded' }]).enabled, false);
+  assert.equal(publicLaunchGate([{ state:'approved_not_funded', foundingPilotSignedAt:9 }]).enabled, true);
+  pass('sponsor slot always falls back to demo/no-ad and launch requires a signed founding pilot');
+}
+
 console.log('ALL TESTS PASSED (' + n + ' groups)');
+
