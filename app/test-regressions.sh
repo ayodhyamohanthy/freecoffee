@@ -124,14 +124,14 @@ private var accrual = DemoAccrual()
 private let date = Date(timeIntervalSince1970: 1_700_000_000)
 private var cents = 0
 for _ in 0..<1000 { cents += accrual.credit(on: date).balance }
-precondition(cents == 160 && accrual.balanceRemainder == 0)
+precondition(cents == 140 && accrual.balanceRemainder == 0)
 private var fractional = DemoAccrual()
-for _ in 0..<6 { precondition(fractional.credit(on: date).balance == 0) }
+for _ in 0..<7 { precondition(fractional.credit(on: date).balance == 0) }
 private let encoded = try JSONEncoder().encode(fractional)
 fractional = try JSONDecoder().decode(DemoAccrual.self, from: encoded)
 precondition(fractional.credit(on: date).balance == 1)
 private let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: date)!
-precondition(fractional.credit(on: tomorrow).today == 0 && fractional.dayRemainder == 1600)
+precondition(fractional.credit(on: tomorrow).today == 0 && fractional.dayRemainder == 1400)
 private let legacy = try JSONDecoder().decode(FreeCoffeeState.self, from: Data("{}".utf8))
 precondition(legacy.demoAccrual.balanceRemainder == 0)
 private var cal = Calendar(identifier: .gregorian)
@@ -156,7 +156,7 @@ private func assertReset() {
 h.observeSleepWake()
 _ = h.demoAccrual.credit(on: Date())
 private let earnedCredit = h.demoAccrual.balanceRemainder
-precondition(earnedCredit == 1600)
+precondition(earnedCredit == 1400)
 for name in [NSWorkspace.willSleepNotification, NSWorkspace.didWakeNotification] {
     prime()
     h.workspaceCenter.post(name: name, object: nil)
