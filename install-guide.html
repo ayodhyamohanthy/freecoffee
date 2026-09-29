@@ -19,6 +19,12 @@
 <meta name="theme-color" content="#F7F6F3">
 <style>
   :root { color-scheme: light; }
+  .skip-link { position: absolute; left: -9999px; top: 0; background: #1C1B1A; color: #fff;
+    padding: 8px 14px; border-radius: 0 0 8px 0; z-index: 100; font-weight: 600; text-decoration: none; }
+  .skip-link:focus { left: 0; }
+  .skip-link { position: absolute; left: -9999px; top: 0; background: #1C1B1A; color: #fff;
+    padding: 8px 14px; border-radius: 0 0 8px 0; z-index: 100; font-weight: 600; text-decoration: none; }
+  .skip-link:focus { left: 0; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #fff; color: #1C1B1A; line-height: 1.65; padding: 0 1rem 4rem; max-width: 760px; margin: 0 auto; }
   header { padding: 2rem 0 1rem; border-bottom: 1px solid #E7E5E4; margin-bottom: 2rem; }
@@ -60,13 +66,14 @@
 </style>
 </head>
 <body>
+<a class="skip-link" href="#main">Skip to content</a>
 <header>
   <div class="crumb"><a href="./index.html">FreeCoffee</a> › <a href="./dashboard.html">Dashboard</a> › Install guide</div>
   <h1>Installing FreeCoffee when Apple blocks it</h1>
   <p class="sub">A plain-English walkthrough for the "Apple could not verify…" message. Works on macOS 13 Ventura and later (including macOS 26). Two minutes, once.</p>
 </header>
 
-<main>
+<main id="main">
 
 <div class="ok-box"><strong>Why this happens:</strong> FreeCoffee is a <strong>demo app that isn't signed with a paid Apple certificate</strong> ($99/yr). macOS shows the same warning for <em>every</em> unsigned app — it does <strong>not</strong> mean the app has a virus. The app never reads your screen, files, or keystrokes, and the Homebrew install below skips these dialogs entirely.</div>
 
