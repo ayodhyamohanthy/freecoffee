@@ -2,28 +2,31 @@
 # ============================================================================
 # FreeCoffee repo-wide smoke test — zero dependencies (node + python3 only).
 #
-# Catches the failure classes this repo has actually hit before:
-#   0. Committed merge-conflict markers. A half-resolved merge shipped once and
-#      silently broke sw.js (a top-level '<<<<<<< HEAD' is a syntax error, so the
-#      service worker died) while every other check still passed.
-#   1. HTML tag-misnesting / unclosed elements (was broken in referrals.html)
-#   2. Inline <script> blocks that no longer parse (node --check)
-#   3. JS element-ID references that don't exist in the page
-#      + duplicate element IDs
-#   4. Demo-engine non-determinism + balance invariant (seed 42)
-#   5. Backend helper regressions (backend/test.mjs)
-#   6. Monitor JSON/log integrity + missing asset references
-#   7. Asset version pairing (?v= in HTML <-> sw.js ASSET_V <-> CACHE) — a
-#      mismatch silently breaks the precache and offline first loads — plus
-#      the PWA lockstep floor (ASSET_V >= padded APP_VERSION from
-#      app/build.sh) so DMG bumps always bust the web cache, plus a
-#      single-declaration rule (a duplicated ASSET_V hides the real version)
-#   + Swift parse gate inside check 1 (macOS only, skipped elsewhere)
-#   8. Real-browser layout + interaction regressions on the dashboard
-#   9. DESIGN.md conformance — black canvas, rejected-palette and paint
-#      invariants (tests/design-conformance.cjs; static, no browser needed)
-#      (headless Chrome + CDP, zero npm deps; skipped cleanly when Chrome or
-#      Node 22+ WebSocket is unavailable — REQUIRE_BROWSER=1 forces a failure)
+# Checks, in execution order (step numbers are printed automatically — see
+# step() below — so adding a check never means renumbering the others):
+#   - Repo hygiene: committed merge-conflict markers. A half-resolved merge
+#     shipped once and silently broke sw.js (a top-level '<<<<<<< HEAD' is a
+#     syntax error, so the service worker died) while every other check passed.
+#   - JS syntax (node --check) over assets/js/*.js and the Worker
+#     + Swift parse gate (macOS only, skipped elsewhere)
+#   - Backend unit tests (backend/test.mjs)
+#   - HTML structure / inline JS / element-ID references / duplicate ids
+#   - Demo-engine determinism + balance invariant (seed 42)
+#   - Public-page regressions (tests/public-regressions.cjs) — the 70% share
+#     claim, the "platform-funded 10% launch boost" wording, and PWA wiring
+#   - Dashboard/payout state regressions (tests/state-regressions.cjs)
+#   - Competitor brand references
+#   - Referenced local files exist + in-page fragments resolve to real ids
+#   - Asset version pairing (?v= in HTML <-> sw.js ASSET_V <-> CACHE) — a
+#     mismatch silently breaks the precache and offline first loads — plus the
+#     PWA lockstep floor (ASSET_V >= padded APP_VERSION from app/build.sh) so
+#     DMG bumps always bust the web cache, plus a single-declaration rule (a
+#     duplicated ASSET_V hides the real version)
+#   - DESIGN.md conformance — black canvas, rejected-palette and paint
+#     invariants (tests/design-conformance.cjs; static, no browser needed)
+#   - Real-browser layout + interaction regressions on the dashboard
+#     (headless Chrome + CDP, zero npm deps; skipped cleanly when Chrome or
+#     Node 22+ WebSocket is unavailable — REQUIRE_BROWSER=1 forces a failure)
 #
 # Run from the repo root:   ./test.sh      (or:  bash test.sh)
 # Exit 0 when everything passes, non-zero otherwise.
@@ -33,7 +36,14 @@ cd "$(dirname "$0")"
 
 PASS=0
 FAIL=0
-step() { printf '\n==> %s\n' "$1"; }
+# Steps number themselves. These labels used to be hardcoded "1/9".."9/9", so
+# adding a check silently mis-numbered every step after it — the same class of
+# quiet lie as a stale "(24 groups)" in the backend label. Now there is one
+# number to maintain, and a stale one is self-evident: the run prints a step
+# count one higher than the total, e.g. "13/12".
+TOTAL_STEPS=12
+STEP_NO=0
+step() { STEP_NO=$((STEP_NO+1)); printf '\n==> %d/%d %s\n' "$STEP_NO" "$TOTAL_STEPS" "$1"; }
 ok()  { PASS=$((PASS+1)); printf '    PASS  %s\n' "$1"; }
 bad() { FAIL=$((FAIL+1)); printf '    FAIL  %s\n' "$1"; }
 
@@ -42,7 +52,7 @@ bad() { FAIL=$((FAIL+1)); printf '    FAIL  %s\n' "$1"; }
 # every other check here (the HTML parser treats it as text, and the ?v= regex
 # happily matches whichever side it finds first) yet it can make a file
 # unparseable. Detect it first, before anything else trusts the tree.
-step "1/9 Repo hygiene (no committed merge-conflict markers)"
+step "Repo hygiene (no committed merge-conflict markers)"
 python3 - <<'PY'
 import os, re, sys
 
@@ -78,7 +88,7 @@ PY
 [ $? -eq 0 ] && ok "repo hygiene: no conflict markers" || bad "repo hygiene: conflict markers committed"
 
 # ------------------------------------------------------------------ 1. JS syntax
-step "2/9 JS syntax (node --check)"
+step "JS syntax (node --check)"
 JS_FAIL=0
 for f in assets/js/*.js backend/src/worker.js; do
   if ! node --check "$f" 2>/dev/null; then
@@ -100,15 +110,22 @@ else
 fi
 
 # ------------------------------------------------------------------ 2. Backend tests
-step "3/9 Backend unit tests"
-if ( cd backend && node test.mjs ); then
-  ok "backend/test.mjs (24 groups)"
+step "Backend unit tests"
+# Read the group count out of the tool's own output rather than hardcoding it.
+# The label used to say "(24 groups)" for a suite that had grown to 32, so the
+# harness quietly under-reported its own coverage.
+BACKEND_OUT="$( cd backend && node test.mjs 2>&1 )"
+BACKEND_RC=$?
+if [ "$BACKEND_RC" -eq 0 ]; then
+  BACKEND_GROUPS="$(printf '%s\n' "$BACKEND_OUT" | grep -oE '\([0-9]+ groups\)' | tail -1)"
+  ok "backend/test.mjs ${BACKEND_GROUPS:-(group count not reported by test.mjs)}"
 else
   bad "backend/test.mjs"
+  printf '%s\n' "$BACKEND_OUT" | tail -25 | sed 's/^/    /'
 fi
 
 # ------------------------------------------------------------------ 3. Static-site checks (python3)
-step "4/9 HTML structure, inline JS, ID references"
+step "HTML structure, inline JS, ID references"
 python3 - <<'PY'
 import glob, html.parser, os, re, subprocess, sys, tempfile
 
@@ -163,7 +180,7 @@ PY
 [ $? -eq 0 ] && ok "static-site checks" || bad "static-site checks"
 
 # ------------------------------------------------------------------ 4. Demo determinism
-step "5/9 Demo engine determinism + balance invariant"
+step "Demo engine determinism + balance invariant"
 node -e '
 const D = require("./assets/js/demo.js");
 const a = JSON.stringify(D.generateHistory(42));
@@ -176,8 +193,25 @@ console.log("    ok   seed 42 reproducible; available + pending = lifetime ($" +
 '
 [ $? -eq 0 ] && ok "demo engine" || bad "demo engine"
 
-# ------------------------------------------------------------------ 5. De-branding guard
-step "6/9 No competitor brand references"
+# ------------------------------------------------------------------ 5. Orphaned suites
+# tests/public-regressions.cjs and tests/state-regressions.cjs both existed and
+# both passed, but nothing invoked them: the suite had quietly grown two orphan
+# files. public-regressions.cjs guards the economics claims on the public pages
+# (70% share, platform-funded 10% launch boost, no stale "$50k/month" ratchet)
+# plus PWA registration — precisely the guard whose absence let the site
+# describe a different product three separate times.
+step "Public-page regressions (economics claims, PWA wiring)"
+node tests/public-regressions.cjs
+[ $? -eq 0 ] && ok "public-page regressions" || bad "public-page regressions"
+
+# state-regressions.cjs drives dashboard.js under a stub DOM: payout accounting
+# and persistence, empty/stale feed responses, blocked storage.
+step "Dashboard/payout state regressions"
+node tests/state-regressions.cjs
+[ $? -eq 0 ] && ok "dashboard/payout state regressions" || bad "dashboard/payout state regressions"
+
+# ------------------------------------------------------------------ 6. De-branding guard
+step "No competitor brand references"
 HITS=$(grep -riIl --exclude-dir=.git --exclude-dir=.workbuddy-ai --exclude=test.sh -E 'sponsorbar|kickbot' . 2>/dev/null)
 if [ -z "$HITS" ]; then
   ok "no competitor brand references in any tracked text file"
@@ -187,7 +221,7 @@ else
 fi
 
 # ------------------------------------------------------------------ 6. Asset presence
-step "7/9 Referenced local files exist + in-page fragments resolve"
+step "Referenced local files exist + in-page fragments resolve"
 python3 - <<'PY'
 import re, glob, os, sys
 missing = []
@@ -233,7 +267,7 @@ PY
 [ $? -eq 0 ] && ok "asset references + fragment anchors" || bad "asset references + fragment anchors"
 
 # ------------------------------------------------------------------ 7. Asset version pairing
-step "8/9 Asset version pairing (?v= <-> sw.js ASSET_V <-> CACHE)"
+step "Asset version pairing (?v= <-> sw.js ASSET_V <-> CACHE)"
 python3 - <<'PY'
 import glob, re, sys
 
@@ -315,7 +349,7 @@ PY
 # DESIGN.md while every check stayed green, three separate times. The scan is
 # static (no browser), so it runs everywhere — see tests/design-conformance.cjs
 # for its two documented limitations.
-step "9/9 DESIGN.md conformance (canvas, palette, paint invariants)"
+step "DESIGN.md conformance (canvas, palette, paint invariants)"
 node tests/design-conformance.cjs
 [ $? -eq 0 ] && ok "design system conforms to DESIGN.md" || bad "design system drift from DESIGN.md"
 

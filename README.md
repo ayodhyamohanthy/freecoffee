@@ -290,9 +290,10 @@ contains verified placements from campaigns that actually exist.
 
 ## Hosting & domain
 
-- **Live:** https://freecoffee.tech (GitHub Pages, branch `main`, root; repo
-  CNAME = `freecoffee.tech`) — also https://ayodhyamohanthy.github.io/freecoffee/
-  and https://freecoffee-at0.pages.dev/ (Cloudflare Pages mirror)
+- **Live:** https://freecoffee.tech — GitHub Pages, but served from the **public
+  mirror repo `ayodhyamohanthy/freecoffee-dist`** (`main`, root, its `CNAME` =
+  `freecoffee.tech`). **This dev repo is private and has no Pages site of its
+  own**, so committing or pushing here publishes nothing. See *Publishing* below.
 - **Mac app download:** https://github.com/ayodhyamohanthy/freecoffee-dist/releases/latest/download/FreeCoffee.dmg
 - **Custom domain status:** DNS lives at the registrar (orderbox-dns, not
   Cloudflare). Required records at the registrar: apex `A` → `185.199.108.153`,
@@ -304,3 +305,31 @@ contains verified placements from campaigns that actually exist.
   previously served the apex is retired; the app's join-waitlist surface
   replaces it.
 - The PWA uses only relative paths, so it runs at any host/subpath unchanged.
+- Two mirrors this file used to advertise are gone and must not be re-listed:
+  `ayodhyamohanthy.github.io/freecoffee/` (404 — it needs Pages enabled on this
+  repo, which it never was) and `freecoffee-at0.pages.dev` (522, unreachable).
+
+### Publishing — the only path to the live site
+
+```bash
+./sync-dist.sh            # test.sh must pass, then copy + push to freecoffee-dist
+./sync-dist.sh --check    # exit 1 if dist would change; changes nothing
+```
+
+`sync-dist.sh` is the single way anything reaches https://freecoffee.tech. It
+runs `test.sh`, refuses to publish any file outside an explicit allowlist of
+public paths, copies the eleven pages + `assets/` + `sw.js` +
+`manifest.webmanifest` + `feeds/` into a clone of `freecoffee-dist`, strips the
+build-from-source sections out of `app/Info-howto.md`, and pushes. No Swift, no
+Worker, no workflows, no internal docs, and no secrets cross over.
+
+**Nothing runs it automatically.** No workflow calls it, so the public site moves
+only when someone runs the script deliberately. That is why the live site can
+legitimately sit several commits behind `main` — and why "the site is stale" is a
+silent failure rather than a red build. If you change anything public, run
+`./sync-dist.sh --check` before assuming the change is live.
+
+Do not commit to `freecoffee-dist` directly. It is a generated mirror; a direct
+commit there bypasses `test.sh` entirely and can leave the two repos disagreeing
+about what the product says.
+

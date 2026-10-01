@@ -1,12 +1,18 @@
 'use strict';
-// Dependency-free browser-state regressions: node assets/js/test-regressions.cjs
+// Dependency-free browser-state regressions: node tests/state-regressions.cjs
+//
+// This file used to live at assets/js/test-regressions.cjs, which is a
+// PUBLISHED directory (sync-dist.sh copies assets/js wholesale), so it was one
+// sync away from shipping a dev-only test harness to freecoffee.tech. Tests
+// live under tests/ — see the published-surface guard in sync-dist.sh.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const D = require('./demo.js');
-const dashboardSource = fs.readFileSync(path.join(__dirname, 'dashboard.js'), 'utf8');
-const demoSource = fs.readFileSync(path.join(__dirname, 'demo.js'), 'utf8');
+const root = path.resolve(__dirname, '..');
+const D = require('../assets/js/demo.js');
+const dashboardSource = fs.readFileSync(path.join(root, 'assets/js/dashboard.js'), 'utf8');
+const demoSource = fs.readFileSync(path.join(root, 'assets/js/demo.js'), 'utf8');
 
 function dashboard(initial, fetchLiveCampaigns) {
   const store = new Map([['freecoffee:v1', JSON.stringify(initial)]]);

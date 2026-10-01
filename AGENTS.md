@@ -25,7 +25,14 @@ This document governs all AI-driven contributions, refactors, and terminal execu
 - **Mac app:** `app/` — a single-file **Swift / AppKit** menu-bar app (`FreeCoffeeMenuBar.swift`), built by `app/build.sh` via `swiftc`. There is **no Xcode project**.
 - **Runtime:** Node 22 and `python3` are needed by the **test harness only**. The site itself requires neither at runtime.
 - **Validation:** hand-rolled guards in `backend/src/worker.js` (`normalizeRegion`, `normalizePlatform`, the feed-contract filters). **There is no Zod — do not add it.**
-- **Deployment:** GitHub Pages serves the site; `.github/workflows/deploy-backend.yml` deploys the Worker. That workflow **fails loudly when `CLOUDFLARE_API_TOKEN` is absent, on purpose** — a green run there means a real deploy happened.
+- **Deployment — two independent targets; do not confuse them.** The **Worker** is
+  deployed by `.github/workflows/deploy-backend.yml` on push, and that workflow
+  **fails loudly when `CLOUDFLARE_API_TOKEN` is absent, on purpose** — a green run
+  there means a real deploy happened. The **static site** is *not* deployed by CI at
+  all: `freecoffee.tech` is GitHub Pages on the separate **public** mirror repo
+  `ayodhyamohanthy/freecoffee-dist`, and the only thing that updates it is
+  `./sync-dist.sh`, run by hand. **Pushing this repo publishes nothing.** See
+  `README.md` → *Publishing*.
 
 ### The economics contract — `70/10/5/5/30/14`
 
@@ -50,9 +57,11 @@ Follow the real boundaries below; do not create arbitrary top-level folders:
 
 ```text
 ├── *.html                  # 11 hand-written pages — no build step
-├── assets/css/styles.css   # the entire design system, one file
-├── assets/js/demo.js       # seeded PRNG demo engine; also CommonJS-exported for node
-├── assets/js/dashboard.js  # dashboard rendering + interactions
+├── assets/                 # PUBLISHED WHOLESALE — see the allowlist note in §4
+│   ├── css/styles.css      # the entire design system, one file
+│   ├── js/demo.js          # seeded PRNG demo engine; also CommonJS-exported for node
+│   ├── js/dashboard.js     # dashboard rendering + interactions
+│   └── icons/              # PWA icons (icon-192/512, maskable-512)
 ├── sw.js                   # service worker — ASSET_V and CACHE move in lockstep
 ├── manifest.webmanifest
 ├── backend/                # Cloudflare Worker + KV (plain JS)
@@ -64,12 +73,14 @@ Follow the real boundaries below; do not create arbitrary top-level folders:
 ├── tests/                  # dependency-free regression suites (.cjs)
 ├── feeds/                  # demo feed JSON
 ├── launch/                 # launch + marketing copy
+├── sync-dist.sh            # the ONLY thing that publishes to freecoffee.tech
+├── dist-assets/            # README template for the public dist mirror
 └── DESIGN.md               # design authority
 ```
 
 ### Three invariants that are easy to break
 
-1. **Asset versions move together.** `?v=N` in every HTML asset URL ↔ `sw.js` `ASSET_V` ↔ `CACHE`. A mismatch silently breaks the precache and offline first loads. `test.sh` check 8 enforces the pairing and the `APP_VERSION` floor.
+1. **Asset versions move together.** `?v=N` in every HTML asset URL ↔ `sw.js` `ASSET_V` ↔ `CACHE`. A mismatch silently breaks the precache and offline first loads. The *Asset version pairing* check in `test.sh` enforces the pairing and the `APP_VERSION` floor. (Named, not numbered, on purpose — step numbers shift as checks are added.)
 2. **Money math is server-side only.** The client reports `{deviceId, type, campaignId, minutes, platform, region}` and nothing else. Never compute, trust, or accept a client-supplied amount.
 3. **The two ledgers never mix.** The seeded demo ledger (`localStorage` key `freecoffee:v1`) and the real backend ledger are separate. The REAL EARNINGS panel appears only when a backend URL is configured.
 
@@ -78,13 +89,34 @@ Follow the real boundaries below; do not create arbitrary top-level folders:
 ## 4. Verify before you claim
 
 ```bash
-./test.sh                                                   # 8 checks
+./test.sh                                                   # 12 checks
 cd backend && node --check src/worker.js && node test.mjs    # backend groups
 REQUIRE_BROWSER=1 bash test.sh                              # force the browser check to fail instead of skip
+./sync-dist.sh --check                                      # would the live site change?
 ```
+
+`./test.sh` runs **twelve numbered checks**; the twelfth is the optional
+real-browser step, which SKIPs wherever Chrome cannot be driven. The step numbers
+print themselves, so a run showing one more step than the total (`13/12`) means
+`TOTAL_STEPS` in `test.sh` has gone stale. Two of those checks
+(`tests/public-regressions.cjs`, `tests/state-regressions.cjs`) sat unwired for a
+while and never ran — **if you add a suite under `tests/`, wire it into `test.sh`,
+or it does not exist.**
 
 Environment notes learned the hard way:
 
-- **`test.sh` check 8 has no timeout and has been observed to hang** rather than skip cleanly when Chrome cannot be driven (sandboxed shells, CI without a display). Run it under an external timeout and treat a hang as **inconclusive, not a pass**.
-- The git credential store may be locked by a stale `~/.git-credentials.lock`, making `git fetch`/`push` report `unable to get credential storage lock` even for read-only operations. Override the helper for that command; **do not delete files in `$HOME`** to work around it. Note `git ls-remote` can still print the correct ref *after* that error — read stdout, not the exit code.
-- `app/TemporaryDirectory.*` directories are build residue that a blanket `git add -A` swept into the repo. **Do not commit more of them**; add them to `.gitignore` rather than tracking them.
+- **The browser step no longer hangs forever, but a sandbox still cannot verify anything.**
+  It is capped by `BROWSER_TIMEOUT` (default 120s) and a timeout counts as a **SKIP**,
+  not a pass. `REQUIRE_BROWSER=1` turns that timeout into a failure. Read a skip as
+  **inconclusive — never as verification.**
+- The git credential store may be locked by a stale `~/.git-credentials.lock`, making
+  `git fetch`/`push` report `unable to get credential storage lock` even for read-only
+  operations. Override the helper for that command; **do not delete files in `$HOME`**
+  to work around it. Note `git ls-remote` can still print the correct ref *after* that
+  error — read stdout, not the exit code.
+- `app/TemporaryDirectory.*` directories are build residue that a blanket `git add -A`
+  swept into the repo. **Do not commit more of them**; they are in `.gitignore` now.
+- **`assets/` is a published directory.** `sync-dist.sh` copies it wholesale, so a test
+  harness, scratch file, or source map dropped there would ship to freecoffee.tech by
+  default. An allowlist in `sync-dist.sh` now refuses to publish anything not listed —
+  if it stops you, that is the guard working, not a bug.
