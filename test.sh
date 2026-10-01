@@ -20,6 +20,8 @@
 #      single-declaration rule (a duplicated ASSET_V hides the real version)
 #   + Swift parse gate inside check 1 (macOS only, skipped elsewhere)
 #   8. Real-browser layout + interaction regressions on the dashboard
+#   9. DESIGN.md conformance — black canvas, rejected-palette and paint
+#      invariants (tests/design-conformance.cjs; static, no browser needed)
 #      (headless Chrome + CDP, zero npm deps; skipped cleanly when Chrome or
 #      Node 22+ WebSocket is unavailable — REQUIRE_BROWSER=1 forces a failure)
 #
@@ -40,7 +42,7 @@ bad() { FAIL=$((FAIL+1)); printf '    FAIL  %s\n' "$1"; }
 # every other check here (the HTML parser treats it as text, and the ?v= regex
 # happily matches whichever side it finds first) yet it can make a file
 # unparseable. Detect it first, before anything else trusts the tree.
-step "1/8 Repo hygiene (no committed merge-conflict markers)"
+step "1/9 Repo hygiene (no committed merge-conflict markers)"
 python3 - <<'PY'
 import os, re, sys
 
@@ -76,7 +78,7 @@ PY
 [ $? -eq 0 ] && ok "repo hygiene: no conflict markers" || bad "repo hygiene: conflict markers committed"
 
 # ------------------------------------------------------------------ 1. JS syntax
-step "2/8 JS syntax (node --check)"
+step "2/9 JS syntax (node --check)"
 JS_FAIL=0
 for f in assets/js/*.js backend/src/worker.js; do
   if ! node --check "$f" 2>/dev/null; then
@@ -98,7 +100,7 @@ else
 fi
 
 # ------------------------------------------------------------------ 2. Backend tests
-step "3/8 Backend unit tests"
+step "3/9 Backend unit tests"
 if ( cd backend && node test.mjs ); then
   ok "backend/test.mjs (24 groups)"
 else
@@ -106,7 +108,7 @@ else
 fi
 
 # ------------------------------------------------------------------ 3. Static-site checks (python3)
-step "4/8 HTML structure, inline JS, ID references"
+step "4/9 HTML structure, inline JS, ID references"
 python3 - <<'PY'
 import glob, html.parser, os, re, subprocess, sys, tempfile
 
@@ -161,7 +163,7 @@ PY
 [ $? -eq 0 ] && ok "static-site checks" || bad "static-site checks"
 
 # ------------------------------------------------------------------ 4. Demo determinism
-step "5/8 Demo engine determinism + balance invariant"
+step "5/9 Demo engine determinism + balance invariant"
 node -e '
 const D = require("./assets/js/demo.js");
 const a = JSON.stringify(D.generateHistory(42));
@@ -175,7 +177,7 @@ console.log("    ok   seed 42 reproducible; available + pending = lifetime ($" +
 [ $? -eq 0 ] && ok "demo engine" || bad "demo engine"
 
 # ------------------------------------------------------------------ 5. De-branding guard
-step "6/8 No competitor brand references"
+step "6/9 No competitor brand references"
 HITS=$(grep -riIl --exclude-dir=.git --exclude-dir=.workbuddy-ai --exclude=test.sh -E 'sponsorbar|kickbot' . 2>/dev/null)
 if [ -z "$HITS" ]; then
   ok "no competitor brand references in any tracked text file"
@@ -185,7 +187,7 @@ else
 fi
 
 # ------------------------------------------------------------------ 6. Asset presence
-step "7/8 Referenced local files exist + in-page fragments resolve"
+step "7/9 Referenced local files exist + in-page fragments resolve"
 python3 - <<'PY'
 import re, glob, os, sys
 missing = []
@@ -231,7 +233,7 @@ PY
 [ $? -eq 0 ] && ok "asset references + fragment anchors" || bad "asset references + fragment anchors"
 
 # ------------------------------------------------------------------ 7. Asset version pairing
-step "8/8 Asset version pairing (?v= <-> sw.js ASSET_V <-> CACHE)"
+step "8/9 Asset version pairing (?v= <-> sw.js ASSET_V <-> CACHE)"
 python3 - <<'PY'
 import glob, re, sys
 
@@ -307,6 +309,15 @@ if not asset_v.isdigit() or int(asset_v) < floor:
 print('    ok   ASSET_V=%s satisfies the APP_VERSION=%s floor (%d)' % (asset_v, m_app.group(1), floor))
 PY
 [ $? -eq 0 ] && ok "asset version pairing + PWA lockstep floor" || bad "asset version pairing"
+
+# ------------------------------------------------------------------ 9. DESIGN.md
+# This class of drift was previously invisible: the paint drifted from
+# DESIGN.md while every check stayed green, three separate times. The scan is
+# static (no browser), so it runs everywhere — see tests/design-conformance.cjs
+# for its two documented limitations.
+step "9/9 DESIGN.md conformance (canvas, palette, paint invariants)"
+node tests/design-conformance.cjs
+[ $? -eq 0 ] && ok "design system conforms to DESIGN.md" || bad "design system drift from DESIGN.md"
 
 # Optional real-browser check: isolated Chrome profile + local server, no npm.
 # REQUIRE_BROWSER=1 turns missing Chrome/Node 22+ into a failure for CI.
