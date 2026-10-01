@@ -7,42 +7,84 @@ This document governs all AI-driven contributions, refactors, and terminal execu
 ## 1. Prime Directives (Non-Negotiable)
 
 1. **Surgical Diffs Over Rewrites:** Never rewrite whole files when a localized function change suffices. Preserve existing formatting, imports, and non-targeted utilities.
-2. **Deterministic Schemas:** Treat all database models, API payloads, and component props as strictly typed contracts. Never assume optional fields or mutate schemas without explicit instruction.
+2. **Deterministic Schemas:** Treat the ad-feed contract, the KV record shapes, and the `/track` payload as strictly typed contracts. Never assume optional fields or mutate schemas without explicit instruction. The human-readable contract is in `README.md` and `advertisers.html#contract`; the **executable** one is the validator in `backend/src/worker.js` — when they disagree, the validator wins and the docs are the bug.
 3. **Fail Fast & Loud:** Do not swallow errors in empty `catch` blocks or return mock objects silently. Every failure must produce readable logs with error boundaries or structured responses.
-4. **Zero Package Hallucinations:** Before importing a third-party dependency, check `package.json`. If a new dependency is required, justify it explicitly and confirm installation commands before proceeding.
-5. **No Regressions on Working Code:** Run existing tests or check dependent modules before declaring an issue resolved.
+4. **Zero Package Hallucinations:** **There is no root `package.json`, no `tsconfig.json`, no `node_modules`, no bundler, and no npm dependency for the web layer.** Do not add one, and do not import a library that would require one. `backend/package.json` exists solely to declare `wrangler` as a devDependency.
+5. **No Regressions on Working Code:** Run the suites in §4 before declaring an issue resolved.
+6. **Say What Is True.** This repository's most expensive past bugs were not crashes — they were **the product misdescribing itself**: advertising a payout rate the code did not pay, and shipping docs that named a palette no longer present in the stylesheet. Green tests prove internal consistency, **not** truthfulness. If you change a number or a behaviour, grep the copy that describes it — across `README.md`, `model.html`, `advertisers.html`, `index.html`, and the Swift popover — in the same change.
 
 ---
 
 ## 2. Tech Stack & Environment Reference
 
-Fill in your active stack so agents avoid guessing variants:
+> This section was previously left as the generic template default (Next.js / Tailwind / Supabase / Prisma / Zod). **None of that applies to this repository** and must not be reintroduced.
 
-* **Runtime & Framework:** Next.js (App Router) / Node 22 / TypeScript
-* **Styling & Components:** Tailwind CSS / shadcn/ui / Lucide Icons
-* **Database & ORM:** Supabase (PostgreSQL) / Prisma OR Drizzle
-* **State & Data Fetching:** TanStack Query / Server Actions / Zustand
-* **Authentication:** NextAuth / Clerk / Supabase Auth
-* **Validation:** Zod for all server inputs, query params, and API boundaries
+- **Web layer:** hand-written static **HTML + CSS + vanilla JS**. No framework, no bundler, no build step, no CDN, no external fonts, no npm. Eleven pages live at the repo root.
+- **Design authority:** `DESIGN.md` — the Promova midnight-magazine reskin (black `#000000` canvas on every page, white/Smoke `#f5f5f5` cards at 30px radius, one highlighter `#fff050` CTA per page). **If the code drifts from that file, fix the code, not the file.**
+- **Backend:** a single **Cloudflare Worker** — `backend/src/worker.js` (ES module, `export default { fetch: handleFetch }`, routed by `pickRoute()`) plus `backend/src/pilots.js` — on **Cloudflare KV** (binding `SITE_KV`). Plain JavaScript: no TypeScript, no framework, no ORM.
+- **Mac app:** `app/` — a single-file **Swift / AppKit** menu-bar app (`FreeCoffeeMenuBar.swift`), built by `app/build.sh` via `swiftc`. There is **no Xcode project**.
+- **Runtime:** Node 22 and `python3` are needed by the **test harness only**. The site itself requires neither at runtime.
+- **Validation:** hand-rolled guards in `backend/src/worker.js` (`normalizeRegion`, `normalizePlatform`, the feed-contract filters). **There is no Zod — do not add it.**
+- **Deployment:** GitHub Pages serves the site; `.github/workflows/deploy-backend.yml` deploys the Worker. That workflow **fails loudly when `CLOUDFLARE_API_TOKEN` is absent, on purpose** — a green run there means a real deploy happened.
+
+### The economics contract — `70/10/5/5/30/14`
+
+`backend/src/worker.js` is the executable source of truth. Do not change these by accident:
+
+| Value | Constant | Meaning |
+|---|---|---|
+| 70 | `USER_SHARE` | viewer share of impression revenue |
+| 10 | `LAUNCH_SHARE` | platform-funded launch boost (never a cut of the 70) |
+| 5 | `REFERRAL_SHARE` / `REFEREE_SHARE` | referrer / referee bonus, platform-funded |
+| 5 | `CLICK_BONUS` | dollars per verified click |
+| 30 | `REFERRAL_TERM_DAYS` | referral earning term |
+| 14 | `REFERRAL_CLICK_DAYS` | last-click attribution window |
+
+Any change here must be mirrored in `README.md`, `model.html`, `advertisers.html`, and the Mac popover copy. **Grep for the number before you touch it.**
 
 ---
 
 ## 3. Architecture & File Layout Conventions
 
-Follow the repository directory boundaries without creating arbitrary top-level folders:
+Follow the real boundaries below; do not create arbitrary top-level folders:
 
 ```text
-├── app/                  # App Router pages, layouts, and route handlers
-│   ├── api/              # Isolated HTTP endpoints (JSON / Webhooks)
-│   └── (routes)/         # Route groups and views
-├── components/
-│   ├── ui/               # Primitive, headless design tokens (shadcn/Radix)
-│   └── shared/           # Composed application-specific widgets
-├── lib/
-│   ├── utils.ts          # Pure helper utilities (date formatting, cn)
-│   └── validations/      # Canonical Zod schemas
-├── server/
-│   ├── actions/          # Safe Server Actions with input parsing
-│   └── db/               # Client connections, migrations, and queries
-├── types/                # Ambient and global TypeScript interfaces
-└── public/               # Static assets (SVGs, icons, illustrations)
+├── *.html                  # 11 hand-written pages — no build step
+├── assets/css/styles.css   # the entire design system, one file
+├── assets/js/demo.js       # seeded PRNG demo engine; also CommonJS-exported for node
+├── assets/js/dashboard.js  # dashboard rendering + interactions
+├── sw.js                   # service worker — ASSET_V and CACHE move in lockstep
+├── manifest.webmanifest
+├── backend/                # Cloudflare Worker + KV (plain JS)
+│   ├── src/worker.js       # routes, money math, validation — server-side only
+│   ├── src/pilots.js       # founding-pilot state machine
+│   ├── wrangler.toml       # name / main / account_id / KV binding
+│   └── test.mjs            # assertion groups
+├── app/                    # Swift/AppKit menu-bar app (no Xcode project)
+├── tests/                  # dependency-free regression suites (.cjs)
+├── feeds/                  # demo feed JSON
+├── launch/                 # launch + marketing copy
+└── DESIGN.md               # design authority
+```
+
+### Three invariants that are easy to break
+
+1. **Asset versions move together.** `?v=N` in every HTML asset URL ↔ `sw.js` `ASSET_V` ↔ `CACHE`. A mismatch silently breaks the precache and offline first loads. `test.sh` check 8 enforces the pairing and the `APP_VERSION` floor.
+2. **Money math is server-side only.** The client reports `{deviceId, type, campaignId, minutes, platform, region}` and nothing else. Never compute, trust, or accept a client-supplied amount.
+3. **The two ledgers never mix.** The seeded demo ledger (`localStorage` key `freecoffee:v1`) and the real backend ledger are separate. The REAL EARNINGS panel appears only when a backend URL is configured.
+
+---
+
+## 4. Verify before you claim
+
+```bash
+./test.sh                                                   # 8 checks
+cd backend && node --check src/worker.js && node test.mjs    # backend groups
+REQUIRE_BROWSER=1 bash test.sh                              # force the browser check to fail instead of skip
+```
+
+Environment notes learned the hard way:
+
+- **`test.sh` check 8 has no timeout and has been observed to hang** rather than skip cleanly when Chrome cannot be driven (sandboxed shells, CI without a display). Run it under an external timeout and treat a hang as **inconclusive, not a pass**.
+- The git credential store may be locked by a stale `~/.git-credentials.lock`, making `git fetch`/`push` report `unable to get credential storage lock` even for read-only operations. Override the helper for that command; **do not delete files in `$HOME`** to work around it. Note `git ls-remote` can still print the correct ref *after* that error — read stdout, not the exit code.
+- `app/TemporaryDirectory.*` directories are build residue that a blanket `git add -A` swept into the repo. **Do not commit more of them**; add them to `.gitignore` rather than tracking them.

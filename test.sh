@@ -311,11 +311,29 @@ PY
 # Optional real-browser check: isolated Chrome profile + local server, no npm.
 # REQUIRE_BROWSER=1 turns missing Chrome/Node 22+ into a failure for CI.
 step "Browser layout and dashboard interactions (optional Chrome)"
-node tests/browser-regressions.cjs
+# The driver is supposed to exit 77 when Chrome cannot be driven, but it has been
+# observed to block indefinitely instead (sandboxed shells, no display). An
+# unbounded wait is the worst failure mode here: it hides every check behind it
+# and reads as "still running" rather than "not verified". Cap it, and treat a
+# timeout as a SKIP — unless REQUIRE_BROWSER=1, which demands a real verdict.
+BROWSER_TIMEOUT="${BROWSER_TIMEOUT:-120}"
+python3 - "$BROWSER_TIMEOUT" <<'PY'
+import subprocess, sys
+try:
+    sys.exit(subprocess.call(['node', 'tests/browser-regressions.cjs'],
+                             timeout=float(sys.argv[1])))
+except subprocess.TimeoutExpired:
+    sys.exit(124)
+PY
 BROWSER_RESULT=$?
 case "$BROWSER_RESULT" in
   0) ok "dashboard mobile/desktop layout + chip pause/resume" ;;
   77) printf '    SKIP  browser prerequisites unavailable\n' ;;
+  124) if [ "${REQUIRE_BROWSER:-0}" = "1" ]; then
+         bad "browser regressions timed out after ${BROWSER_TIMEOUT}s"
+       else
+         printf '    SKIP  browser check timed out after %ss (raise with BROWSER_TIMEOUT, or REQUIRE_BROWSER=1 to demand a verdict)\n' "$BROWSER_TIMEOUT"
+       fi ;;
   *) bad "browser regressions" ;;
 esac
 

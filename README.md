@@ -28,18 +28,18 @@ That's it — any static file server works.
 | Page | What it is |
 |---|---|
 | `index.html` | Landing page: hero with a **live CSS/DOM mock of the macOS status area** (rotating sponsor chip, ticking clock, growing balance) **plus a mock of the Mac status area popover** (TOTAL BALANCE block with cups hint, caramel boost line, 7-day bar chart, footer buttons), how-it-works, the privacy data boundary, FAQ. |
-| `dashboard.html` | App-shell page (**Earn › Overview**, light theme). Sidebar + breadcrumb shell, balance stat card (Total **$28.55** "≈ 5 cups", Available, Pending, This week, payout-progress toward the $10 minimum), a 14-day SVG area chart (slate-teal line `#4C7A8A` on fill `#DFE9ED`, y-grid, dotted markers), the full ledger with winning bids and exact cuts, an "Action required" panel, a "Recent sponsors" list, and the live payout simulator. Dismissible Setup-guide ("1 of 4 complete") and dark promo cards in the sidebar. `localStorage` key: `freecoffee:v1`. |
-| `payouts.html` | App-shell page (**Earn › Payouts**, light theme). Choose how you get paid: Stripe (gold gradient CTA) and Whop (orange gradient CTA) rails split by a divider — clicking marks `freecoffee:v1 → profile.payoutRail` connected (demo-only until the backend payout integration), a Balance 3-stat strip (Total/Available/Pending from the seeded ledger), and the Withdrawal history table fed by simulated `paidOut` records (empty state until the first simulated payout). |
-| `model.html` | App-shell page (**Account › Payout model**, light theme). The payout model in plain numbers: lever table, honesty policy, sustainability math (worked example), anti-fraud controls, payout rails. |
-| `campaigns.html` | App-shell page (**Advertise › Campaigns**, light theme). Advertiser-side management view with honest zeros (Active 0 / In review 0 / Total spend $0.00 / Impressions 0), working filter tabs (All/Running/In review/Paused/Archived + "N shown"), and the "No campaigns yet" empty state with a gold CTA to the advertiser pitch. |
+| `dashboard.html` | App-shell page (**Earn › Overview**, paper inserts on a black canvas). Sidebar + breadcrumb shell, balance stat card (Total **$33.94** "≈ 6 cups", Available, Pending, This week, payout-progress toward the $10 minimum), a 14-day SVG area chart (monochrome — white line on gray fill, y-grid, dotted markers), the full ledger with winning bids and exact cuts, an "Action required" panel, a "Recent sponsors" list, and the live payout simulator. Dismissible Setup-guide ("1 of 4 complete") and dark promo cards in the sidebar. `localStorage` key: `freecoffee:v1`. |
+| `payouts.html` | App-shell page (**Earn › Payouts**, paper inserts on a black canvas). Choose how you get paid: Stripe (gold gradient CTA) and Whop (orange gradient CTA) rails split by a divider — clicking marks `freecoffee:v1 → profile.payoutRail` connected (demo-only until the backend payout integration), a Balance 3-stat strip (Total/Available/Pending from the seeded ledger), and the Withdrawal history table fed by simulated `paidOut` records (empty state until the first simulated payout). |
+| `model.html` | App-shell page (**Account › Payout model**, paper inserts on a black canvas). The payout model in plain numbers: lever table, honesty policy, sustainability math (worked example), anti-fraud controls, payout rails. |
+| `campaigns.html` | App-shell page (**Advertise › Campaigns**, paper inserts on a black canvas). Advertiser-side management view with honest zeros (Active 0 / In review 0 / Total spend $0.00 / Impressions 0), working filter tabs (All/Running/In review/Paused/Archived + "N shown"), and the "No campaigns yet" empty state with a gold CTA to the advertiser pitch. |
 | `profile.html` | App-shell page (**Account › Profile**). Wide Account form (display name, email, coffee preference, email prefs → saved with a toast to `freecoffee:v1`) plus Payout account (Not set up + Set up), Connected Mac (green Connected pill, "This Mac · macOS 26", Unlink with confirm), and AI agents (Copy setup prompt → clipboard). |
 | `referrals.html` | App-shell page (**Earn › Referrals**). Referral link card (URL + Copy → clipboard), rewards cards, a 3-stat row (referred users **2** / referral earnings **$2.82** / next tier), and the referee table from the seeded ledger. The link itself is real and attributed (`?ref=<your code>`); a `REAL (backend)` line appears above the seeded numbers once a backend URL is configured. |
 | `flywheel.html` | App-shell page (**Earn › Flywheel**). The growth loop as code: the five stages (capture → activate → earn → share → advertise) with the back-edge that makes it compound, your own share kit (code + attributed link + Web Share), **ten platform artifacts** (Mac .dmg · Homebrew · PWA · GitHub · AI agent/MCP · X · LinkedIn · Reddit · Hacker News · email) each labelled *attributed* or *no referrer*, three live tile counts (`—` until a backend is configured, never a fake zero), the full "what is live today / what is not" audit table, and the compounding argument. `localStorage`: `freecoffee:refcode`, `freecoffee:refcapture`. |
 | `advertisers.html` | App-shell page (**Advertise › Campaigns**). The advertiser pitch + self-serve onboarding: hero, how-it-works (submit feed → review → live), the copyable feed contract JSON, the honesty box (what the client reports today vs what needs the platform backend), pricing (auction CPM with tier floors, $15 minimum, 70% + 10% launch boost to the user), and the contact card (`advertisers@freecoffee.tech`). |
 | `assets/js/demo.js` | Seeded PRNG (mulberry32, seed 42), history generator, projection math, cups helper, Mac status area demo + popover mock cycler, and the live-feed bridge (`fetchLiveCampaigns` — the AD FEED CONTRACT client). Also CommonJS-exported — `node` can `require` it. |
 | `assets/js/dashboard.js` | Dashboard rendering + interactions, plus the live-campaign surfaces (banner under the balance card, LIVE rows in Recent sponsors, disconnect). All dynamic strings go through `textContent`/`createElement` — no `innerHTML` with dynamic data. |
-| `assets/css/styles.css` | The whole design system: espresso darks, coffee-gold `#E0A93E` family, the app-shell (sidebar / breadcrumb / cards), popover panel, forms, tables, chips, toggles, sliders, toasts, the Mac status area mock, responsive stacking, `:focus-visible`, `prefers-reduced-motion`. |
-| `manifest.webmanifest` + `sw.js` | The PWA layer: installable manifest (standalone display, `#E0A93E` theme) and the service worker that precaches all eight pages. See **PWA — installable web app** below. |
+| `assets/css/styles.css` | The whole design system: the Promova midnight-magazine palette (`--void #000000` canvas on every page, white/Smoke `#f5f5f5` cards at 30px radius, Fog `#dddddd` hairlines, highlighter `#fff050` reserved for the single primary CTA per page) plus the app-shell (sidebar / breadcrumb / cards), popover panel, forms, tables, chips, toggles, sliders, toasts, the Mac status area mock, responsive stacking, `:focus-visible`, `prefers-reduced-motion`. `DESIGN.md` is the authority for all of it — if the code drifts from that file, fix the code, not the file. |
+| `manifest.webmanifest` + `sw.js` | The PWA layer: installable manifest (standalone display, `#000000` theme and background) and the service worker that precaches all eleven pages. See **PWA — installable web app** below. |
 | `assets/icons/` | Generated PWA icons (192, 512, 512 maskable) — same coffee-cup generator as the Mac app icon. |
 | `app/` | The Mac status area app (see below). |
 
@@ -100,7 +100,7 @@ Items instead. Details: [`app/Info-howto.md`](app/Info-howto.md).
 
 The site is also a full PWA (works entirely offline after first visit — no backend anywhere).
 
-- **What works offline:** all ten pages (`index.html`, `dashboard.html`, `payouts.html`, `model.html`,
+- **What works offline:** all eleven pages (`index.html`, `dashboard.html`, `payouts.html`, `model.html`,
   `campaigns.html`, `profile.html`, `referrals.html`, `flywheel.html`, `advertisers.html`, `agents.html`, `install-guide.html`),
   the stylesheet, both scripts, and the icons
   are precached at install. The seeded demo engine is deterministic, so the dashboard renders
@@ -111,7 +111,7 @@ The site is also a full PWA (works entirely offline after first visit — no bac
   when the browser fires `beforeinstallprompt`) or the browser's own install icon in the address bar.
 - **Install on iOS Safari:** iOS never fires the prompt event — use **Share → Add to Home
   Screen** (the site shows this hint line on iPhones). Requires HTTPS or localhost serving.
-- **Service worker caching behavior** (`sw.js`, cache `freecoffee-v113`): precached app shell is served
+- **Service worker caching behavior** (`sw.js`, cache `freecoffee-v1002012`): precached app shell is served
   cache-first; navigations are network-first with cache fallback (so content updates when you're
   online); versioned assets (`assets/*?v=N`) are stale-while-revalidate — served from cache instantly
   and refreshed in the background, so bumping `?v=` in the HTML always pulls the fresh asset; other
@@ -227,7 +227,7 @@ production platform will bill on.
   is explicitly labeled as a simulation.
 - The seeded ledger is deterministic (mulberry32, seed 42): `require('./assets/js/demo.js').generateHistory()`
   returns identical output every run — timestamps are anchored to a fixed demo epoch. Lifetime is
-  **$28.55** and available + pending = lifetime, always.
+  **$33.94** and available + pending = lifetime, always.
 - No analytics, no network calls, no third-party code anywhere in this folder.
 
 

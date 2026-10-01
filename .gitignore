@@ -1,5 +1,9 @@
 # Build artifacts that shouldn't bloat the repo (DMG/app distributed via GitHub Releases)
 app/dist/
+# Sandbox temp dirs left by the ad-hoc DMG build. A blanket `git add -A` swept 14
+# of these into the tree (commit d82b1ef); nothing references them. Keep ignoring
+# them so the next sweep doesn't re-add more.
+app/TemporaryDirectory.*/
 .DS_Store
 .backups/
 .workbuddy-ai/
