@@ -1,0 +1,9 @@
+# freecoffee.tech
+# The site also answers on ayodhyamohanthy.github.io and a Cloudflare Pages
+# mirror; every page names its freecoffee.tech canonical URL, and this file
+# points crawlers at the sitemap for the same origin.
+
+User-agent: *
+Allow: /
+
+Sitemap: https://freecoffee.tech/sitemap.xml
