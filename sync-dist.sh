@@ -27,7 +27,7 @@ DIST_REPO="ayodhyamohanthy/freecoffee-dist"
 CHECK=0
 [ "${1:-}" = "--check" ] && CHECK=1
 
-SITE_FILES="index.html dashboard.html payouts.html model.html campaigns.html
+SITE_FILES="index.html 404.html dashboard.html payouts.html model.html campaigns.html
   profile.html referrals.html advertisers.html agents.html install-guide.html
   manifest.webmanifest sw.js"
 # CNAME lives in dist permanently (copied on first sync); it is intentionally
