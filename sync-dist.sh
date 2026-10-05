@@ -90,6 +90,7 @@ mkdir -p "$WORK/dist/assets" "$WORK/dist/app" "$WORK/dist/feeds"
 cp -R assets/css assets/js assets/icons "$WORK/dist/assets/"
 cp app/Info-howto.md "$WORK/dist/app/"
 cp feeds/*.json "$WORK/dist/feeds/"
+cp sitemap.xml robots.txt "$WORK/dist/"
 cp dist-assets/README.md "$WORK/dist/README.md"
 
 echo "==> [4/5] stripping dev-only sections from app/Info-howto.md"
