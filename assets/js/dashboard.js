@@ -717,6 +717,7 @@
       var p;
       try { p = loadTrackedCampaign(); } catch (e) { p = null; }
       Promise.resolve(p).then(function () {
+        trackImpression();
         fetchEarnings();
       });
     }
