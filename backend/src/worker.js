@@ -1009,6 +1009,19 @@ async function handleStats(env) {
   }
 }
 
+/* Only a missing key starts a new ledger. Transport failures and corrupt
+   existing balances must fail closed, never reset somebody's earnings. */
+async function readStoredLedger(kv, key) {
+  var raw = await kv.get(key);
+  if (raw === null || raw === undefined) return null;
+  var ledger = JSON.parse(raw);
+  if (!ledger || typeof ledger !== 'object' || Array.isArray(ledger) ||
+      !Number.isFinite(ledger.total) || ledger.total < 0) {
+    throw new Error('invalid stored ledger');
+  }
+  return ledger;
+}
+
 async function handleTrack(req, env) {
   if (!env || !env.SITE_KV) return json({ ok: false, error: 'KV not configured (SITE_KV binding missing)' }, 503);
 
@@ -1033,11 +1046,10 @@ async function handleTrack(req, env) {
   var key = 'earn:' + deviceId;
   var ledger = null;
   try {
-    var raw = await env.SITE_KV.get(key);
-    if (raw) {
-      try { ledger = JSON.parse(raw); } catch (e2) { ledger = null; }
-    }
-  } catch (e3) { ledger = null; }
+    ledger = await readStoredLedger(env.SITE_KV, key);
+  } catch (e3) {
+    return json({ ok: false, error: 'ledger unavailable' }, 503);
+  }
 
   /* Referee binding (KV `ref:{deviceId}`) — present only when this device
      arrived through someone's share link. A missing or corrupt binding means
@@ -1114,9 +1126,10 @@ async function creditReferrer(env, code, refereeDeviceId, amount, now) {
   var key = 'earn:' + owner;
   var ledger = null;
   try {
-    var raw = await env.SITE_KV.get(key);
-    if (raw) { try { ledger = JSON.parse(raw); } catch (e2) { ledger = null; } }
-  } catch (e3) { ledger = null; }
+    ledger = await readStoredLedger(env.SITE_KV, key);
+  } catch (e3) {
+    return { credited: false, note: 'referrer ledger unavailable' };
+  }
 
   var next = applyReferralCredit(ledger, amount, now);
   try {
@@ -1134,9 +1147,10 @@ async function handleEarnings(deviceId, env) {
   if (!env || !env.SITE_KV) return json({ ok: false, error: 'KV not configured (SITE_KV binding missing)' }, 503);
   var ledger = null;
   try {
-    var raw = await env.SITE_KV.get('earn:' + deviceId);
-    if (raw) { try { ledger = JSON.parse(raw); } catch (e) { ledger = null; } }
-  } catch (e2) { ledger = null; }
+    ledger = await readStoredLedger(env.SITE_KV, 'earn:' + deviceId);
+  } catch (e2) {
+    return json({ ok: false, error: 'ledger unavailable' }, 503);
+  }
 
   /* Referee side of the loop: if this device arrived through a share link,
      report its own activation-gate progress (aggregate-shaped — the referrer

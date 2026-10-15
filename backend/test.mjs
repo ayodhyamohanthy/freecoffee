@@ -1223,5 +1223,45 @@ function pass(name) { n++; console.log('PASS ' + name); }
   pass('sponsor slot always falls back to demo/no-ad and launch requires a signed founding pilot');
 }
 
+/* Failed reads must not replace an existing ledger with fresh zero state. */
+{
+  const trackBody = { deviceId: OWNER_DEV, type: 'impression', campaignId: 'camp_1', minutes: 1 };
+  const feed = JSON.stringify(FEED);
+  for (const bad of ['read failure', '{broken', 'null', '[]', '{}', '{"total":"100"}']) {
+    const writes = [];
+    const kv = {
+      get: async (key) => {
+        if (key === 'feed:current') return feed;
+        if (key === 'earn:' + OWNER_DEV) {
+          if (bad === 'read failure') throw new Error('storage unavailable');
+          return bad;
+        }
+        return null;
+      },
+      put: async (key, value) => { writes.push([key, value]); }
+    };
+    const env = { SITE_KV: kv };
+    const res = await workerFetch(new Request('https://x.test/track', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(trackBody)
+    }), env, {});
+    assert.equal(res.status, 503, bad + ': track refuses unsafe ledger replacement');
+    assert.deepEqual(writes, [], bad + ': no balance is overwritten');
+    const earnings = await workerFetch(new Request('https://x.test/earnings/' + OWNER_DEV), env, {});
+    assert.equal(earnings.status, 503, bad + ': balance read does not pretend it is zero');
+  }
+  const writes = [];
+  const missingEnv = { SITE_KV: {
+    get: async (key) => key === 'feed:current' ? feed : null,
+    put: async (key, value) => { writes.push([key, JSON.parse(value)]); }
+  } };
+  const first = await workerFetch(new Request('https://x.test/track', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(trackBody)
+  }), missingEnv, {});
+  assert.equal(first.status, 200, 'a genuinely absent ledger still starts fresh');
+  assert.equal(writes.length, 1);
+  assert.ok(writes[0][1].total > 0);
+  pass('ledger read failures and corrupt records never reset balances');
+}
+
 console.log('ALL TESTS PASSED (' + n + ' groups)');
 
