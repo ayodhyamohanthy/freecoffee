@@ -69,6 +69,64 @@ the explicit freeze acknowledgment and backup digest make the reviewed state
 binding, but cannot prove the review happened. Preexisting KV balances were
 client-reported and must not be treated as verified advertiser liabilities.
 
+## Operational handoff gates
+
+The repository config targets Worker `freecoffee-backend`, account
+`71102e7a2d820fb4ca21119099163dfc`, KV namespace
+`bb9be563917f4bb38bb4809bd513cef5`. Confirm those against the live bindings before
+exporting anything. The documented Worker URL is
+`https://freecoffee-backend.ayodhya-711.workers.dev`; the documentation is not
+proof of the current deployment or secret configuration.
+
+A successful deploy job alone does not prove old writers stopped. Verify the
+active deployment is the intended new version at 100% traffic, inventory custom
+routes, version overrides/preview endpoints, external jobs and other scripts
+sharing the KV namespace, and stop or block every legacy money writer. Record
+that evidence and the last-writer time privately. Do not infer a freeze from a
+503 response, user approval, a static-site deployment or an empty export.
+
+Export each of the four prefixes with all pagination cursors, then fetch every
+listed value. REST key listing returns names, not values. Reject non-success
+responses, missing values, parse errors, duplicate keys and repeated cursors.
+Store the full backup privately with restrictive permissions; never print raw
+records, tokens or device credentials. After propagation has drained, take a
+second complete export and require the sorted count/digest to match. Matching
+exports supplement, but do not replace, evidence that writers are stopped.
+Run the actual authority migration validator against the snapshot in an isolated
+local harness before approving its manifest. Review every missing identity or
+schema failure; do not patch the backup into a passing shape.
+
+Only then set `LEGACY_LEDGER_FROZEN=true` on the same deployed authority while
+preserving all existing bindings/secrets, and submit the reviewed manifest to
+`/admin/ledger/migrate` with admin bearer auth. Never enable the flag in a legacy
+writer version or restore that version. A 200 response must match the manifest
+record count; the marker and imported records commit atomically. On an ambiguous
+network response, inspect authority state through private operational tooling;
+do not create a new object or reset the marker. Repeated migration may return
+409 after a successful first call and cannot overwrite balances.
+
+Compare authenticated migrated balances with their reviewed backup, verify public
+stats and unauthorized failures, then enroll only owners verified out of band.
+Check balances before any real event. Do not mint synthetic paid receipts in
+production just to test the pipeline. Production tracking resumes only through
+an actual trusted evidence/receipt integration and private device enrollment;
+the shipped demo client has neither. A migrated database alone does not make
+existing clients resume earnings or make payouts safe.
+
+The deploy workflow references GitHub Actions secret `CLOUDFLARE_API_TOKEN`.
+A successful past workflow is evidence of past availability, not access to the
+secret value: Actions secrets cannot be read back. KV export additionally needs
+an appropriately scoped Cloudflare credential. The Worker `ADMIN_TOKEN` is a
+separate secret required for migration/enrollment, not a Cloudflare API token.
+Use an existing authorized secret store/operator session, or arrange an explicit
+reviewed credential provision/rotation; never extract secrets from CI logs or
+public assets. Neither live credentials nor a stopped-writer state are supplied
+by this repository.
+
+Cloudflare references for operators are
+https://developers.cloudflare.com/api/resources/kv/subresources/namespaces/subresources/keys/methods/list
+and https://developers.cloudflare.com/workers/versions-and-deployments/.
+
 ## Legacy compatibility and missing-ledger policy
 
 The importer preserves accepted ledger records exactly. It never rebuilds totals
