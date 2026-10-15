@@ -598,103 +598,7 @@ function pass(name) { n++; console.log('PASS ' + name); }
   pass('platform attribution: normalized, sorted, bounded, never affects money');
 }
 
-/* ------------------------------------------------------------------------
-   13. the loop end-to-end over HTTP: register → claim → verified impressions
-       (attributed to a platform) → the referrer is paid → the public views
-       show the mix without leaking a single device id.
-   ------------------------------------------------------------------------ */
-{
-  const store = {};
-  const kv = {
-    get: async (k) => (k in store ? store[k] : null),
-    put: async (k, v) => { store[k] = String(v); },
-    list: async ({ prefix, limit, cursor }) => {
-      const names = Object.keys(store).filter((k) => k.indexOf(prefix) === 0);
-      const start = cursor ? Number(cursor) || 0 : 0;
-      const slice = names.slice(start, start + (limit || 100));
-      return {
-        keys: slice.map((name) => ({ name })),
-        list_complete: start + slice.length >= names.length,
-        cursor: String(start + slice.length)
-      };
-    }
-  };
-  const env = { SITE_KV: kv };
-  await kv.put('feed:current', JSON.stringify([{ id: 'camp_1', sponsor: 'S1', clickUrl: 'https://x.example/', cpm: 6 }]));
-
-  const post = (path, body) => workerFetch(new Request('https://x.test' + path, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
-  }), env, {});
-  const get = (path) => workerFetch(new Request('https://x.test' + path), env, {});
-
-  let j = await (await post('/referral', { deviceId: OWNER_DEV, code: 'astra-1', action: 'register' })).json();
-  assert.equal(j.created, true, 'owner registers the share code');
-  j = await (await post('/referral', { deviceId: THIRD_DEV, code: 'astra-1', action: 'register' })).json();
-  assert.equal(j.created, false, 'a second registration never re-points the code');
-
-  j = await (await post('/referral', { deviceId: REF_DEV, code: 'astra-1' })).json();
-  assert.equal(j.claimed, true, 'referee claims the code');
-  j = await (await post('/referral', { deviceId: REF_DEV, code: 'astra-1' })).json();
-  assert.equal(j.claimed, false, 'a second claim is refused');
-  j = await (await post('/referral', { deviceId: OWNER_DEV, code: 'astra-1' })).json();
-  assert.equal(j.claimed, false, 'self-referral refused');
-  assert.match(String(j.note), /self-referral/);
-  j = await (await post('/referral', { deviceId: THIRD_DEV, code: 'nobody-here' })).json();
-  assert.equal(j.claimed, false, 'unknown code');
-  assert.match(String(j.note), /unknown referral code/);
-  assert.equal((await post('/referral', { deviceId: 'x', code: 'astra-1' })).status, 400, 'bad deviceId → 400');
-  assert.equal((await post('/referral', { deviceId: OWNER_DEV, code: '!!' })).status, 400, 'bad code → 400');
-
-  // One 60-minute placement batch: the referee earns the 70% base plus the
-  // 5% referee bonus, the gate passes, and the referrer's 5% is released
-  // in the same call.
-  const tr = await post('/track', {
-    deviceId: REF_DEV, type: 'impression', campaignId: 'camp_1', minutes: 60, platform: 'mac'
-  });
-  assert.equal(tr.status, 200);
-  const trBody = await tr.json();
-  assert.equal(trBody.platform, 'mac', 'the report says which platform it came from');
-  assert.equal(trBody.earned, 0.26, '70% base plus 5% of base referee bonus');
-  assert.deepEqual(trBody.breakdown, { base: 0.252, launch: 0, referee: 0.0126 });
-  assert.equal(trBody.referral.referrer, 'astra-1');
-  assert.equal(trBody.referral.credited, true);
-  assert.equal(trBody.referral.released, 0.01);
-
-  const own = await (await get('/earnings/' + OWNER_DEV)).json();
-  assert.equal(own.total, 0.01, 'referral credit lands in the referrer ledger');
-  assert.equal(own.referral.total, 0.01);
-  assert.equal(own.rows[0].type, 'referral');
-  assert.deepEqual(own.platforms, [], 'a referrer without placements has no platform mix');
-
-  const mine = await (await get('/earnings/' + REF_DEV)).json();
-  assert.equal(mine.referee.refereeOf, 'astra-1', 'referee sees its own gate status');
-  assert.equal(mine.referee.gate, 'passed');
-  assert.equal(mine.referee.minutes, 60);
-  assert.equal(mine.platforms.length, 1);
-  assert.equal(mine.platforms[0].platform, 'mac');
-  assert.equal(mine.platforms[0].minutes, 60);
-
-  const view = await (await get('/referrals/astra-1')).json();
-  assert.equal(view.registered, true);
-  assert.equal(view.totals.referees, 1);
-  assert.equal(view.totals.gated, 1);
-  assert.equal(view.totals.accrued, 0.01);
-  assert.equal(view.referees[0].label, 'referee 1');
-  const viewText = JSON.stringify(view);
-  assert.ok(viewText.indexOf(REF_DEV) === -1, 'no referee device id leaks');
-  assert.ok(viewText.indexOf(OWNER_DEV) === -1, 'no owner device id leaks');
-  assert.equal((await get('/referrals/nope%21%21')).status, 400, 'junk code → 400');
-
-  // /stats publishes the flywheel mix — and keeps referral cost out of spend.
-  const stats = await (await get('/stats')).json();
-  assert.equal(stats.totals.impressions, 60, 'referee delivery only — a referral is not delivery');
-  assert.equal(stats.totals.spend, 0.25, 'campaign spend excludes platform-funded bonuses');
-  assert.equal(stats.totals.earners, 2, 'referee + referrer both have ledgers');
-  assert.equal(stats.referralSpend, 0.01, 'referrer cost published separately');
-  assert.deepEqual(stats.platforms, [{ platform: 'mac', minutes: 60, clicks: 0 }]);
-
-  pass('loop end-to-end: claim → gate → referrer paid → public mix, no ids leaked');
-}
+/* Secure HTTP ledger integration lives in ledger.test.mjs below. */
 
 /* ------------------------------------------------------------------------
    18. Open submission: anyone posts ONE campaign → pending-review queue →
@@ -1029,11 +933,12 @@ function pass(name) { n++; console.log('PASS ' + name); }
   }), env, {});
 
   // 60 min at $8 CPM × 70% = $0.336 → served at 2 decimals.
-  const win = await (await track('win1', 60)).json();
-  assert.equal(win.earned, 0.34, 'the slot winner is paid at its own CPM');
+  assert.equal((await track('win1', 60)).status, 503, 'unconfigured authority fails closed');
+  const win = applyEarnings(null, { type: 'impression', campaignId: 'win1', minutes: 60 }, feed.campaigns, now);
+  assert.equal(Math.round(win.earned * 100) / 100, 0.34, 'the slot winner is paid at its own CPM');
 
   // The suppressed campaign earns NOTHING while the slot runs.
-  const sup = await (await track('open1', 60)).json();
+  const sup = applyEarnings(null, { type: 'impression', campaignId: 'open1', minutes: 60 }, feed.campaigns, now);
   assert.equal(sup.earned, 0, 'a suppressed open-feed campaign cannot be paid during a slot');
 
   // With no slot winner the open auction serves as before.
@@ -1223,45 +1128,7 @@ function pass(name) { n++; console.log('PASS ' + name); }
   pass('sponsor slot always falls back to demo/no-ad and launch requires a signed founding pilot');
 }
 
-/* Failed reads must not replace an existing ledger with fresh zero state. */
-{
-  const trackBody = { deviceId: OWNER_DEV, type: 'impression', campaignId: 'camp_1', minutes: 1 };
-  const feed = JSON.stringify(FEED);
-  for (const bad of ['read failure', '{broken', 'null', '[]', '{}', '{"total":"100"}']) {
-    const writes = [];
-    const kv = {
-      get: async (key) => {
-        if (key === 'feed:current') return feed;
-        if (key === 'earn:' + OWNER_DEV) {
-          if (bad === 'read failure') throw new Error('storage unavailable');
-          return bad;
-        }
-        return null;
-      },
-      put: async (key, value) => { writes.push([key, value]); }
-    };
-    const env = { SITE_KV: kv };
-    const res = await workerFetch(new Request('https://x.test/track', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(trackBody)
-    }), env, {});
-    assert.equal(res.status, 503, bad + ': track refuses unsafe ledger replacement');
-    assert.deepEqual(writes, [], bad + ': no balance is overwritten');
-    const earnings = await workerFetch(new Request('https://x.test/earnings/' + OWNER_DEV), env, {});
-    assert.equal(earnings.status, 503, bad + ': balance read does not pretend it is zero');
-  }
-  const writes = [];
-  const missingEnv = { SITE_KV: {
-    get: async (key) => key === 'feed:current' ? feed : null,
-    put: async (key, value) => { writes.push([key, JSON.parse(value)]); }
-  } };
-  const first = await workerFetch(new Request('https://x.test/track', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(trackBody)
-  }), missingEnv, {});
-  assert.equal(first.status, 200, 'a genuinely absent ledger still starts fresh');
-  assert.equal(writes.length, 1);
-  assert.ok(writes[0][1].total > 0);
-  pass('ledger read failures and corrupt records never reset balances');
-}
+await import('./ledger.test.mjs');
 
 console.log('ALL TESTS PASSED (' + n + ' groups)');
 

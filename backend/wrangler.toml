@@ -1,5 +1,5 @@
 name = "freecoffee-backend"
-main = "src/worker.js"
+main = "src/entry.js"
 compatibility_date = "2026-01-01"
 
 # ── Fill these in (see README.md step ③) ─────────────────────────────────
@@ -17,3 +17,16 @@ id = "bb9be563917f4bb38bb4809bd513cef5"
 # ADAPTER_URL  → optional upstream feed URL; plain text var is fine, or a
 #                secret if the URL contains a key.
 # Variables reference: https://developers.cloudflare.com/workers/configuration/environment-variables/
+
+# One authority for atomic cross-device referral credits. Keep object name stable.
+[[durable_objects.bindings]]
+name = "LEDGER"
+class_name = "LedgerAuthority"
+
+[[migrations]]
+tag = "ledger-v1"
+new_sqlite_classes = ["LedgerAuthority"]
+
+# Set LEGACY_LEDGER_FROZEN=true only AFTER old money writers are stopped,
+# eventual KV propagation has drained, and a complete backup has been reviewed.
+# This does not initialize/migrate balances automatically.

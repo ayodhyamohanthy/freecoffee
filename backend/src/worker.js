@@ -1,3 +1,4 @@
+import { createLedgerAuthority } from './ledger.js';
 import { PILOT_LIST_KEY, PILOT_KEY_PREFIX, newPilot, transitionPilot,
   confirmPilotRevenue, fundPromotionalPool, eligiblePilotView, proofGate,
   settlementGate } from './pilots.js';
@@ -7,44 +8,12 @@ import { PILOT_LIST_KEY, PILOT_KEY_PREFIX, newPilot, transitionPilot,
 
    SECURITY MODEL
    --------------
-   • The device id is the ONLY identifier the platform ever sees: a random
-     UUID generated client-side and kept in the browser's localStorage. No
-     account, no email, no PII beyond that random id.
-   • Money math is 100% server-side. The client reports only {deviceId,
-     type, campaignId, minutes}; every amount is computed from the campaign
-     CPM looked up in the SERVED feed, and the click caps are read from the
-     STORED ledger — a tampered client cannot mint money.
-   • Keys (`feed:current`, `earn:{deviceId}`) are treated as secrets: they
-     are never echoed into responses, errors, or logs.
-   • Admin routes require `Authorization: Bearer ${env.ADMIN_TOKEN}`
-     (length-safe constant-time compare; ADMIN_TOKEN is an encrypted
-     Worker variable — `wrangler secret put ADMIN_TOKEN` or dashboard →
-     Settings → Variables → Encrypt). No CREDENTIAL is ever committed to
-     this repo: wrangler.toml ships no secrets. It does carry the Cloudflare
-     account id and KV namespace id, which are non-secret identifiers (they
-     grant nothing on their own and appear in every dashboard URL) — they are
-     committed deliberately so `wrangler deploy` works out of the box. Fork
-     the repo and swap them for your own before deploying.
-   • CORS: `access-control-allow-origin: *` on EVERY response (the API is
-     public and holds no credentials) + OPTIONS preflight → 204.
-   • Abuse caps enforced server-side: ≤5 paid clicks/day per device and
-     paid clicks ≤25% of that device's impressions this month. The daily
-     cap counts click REPORTS (paid or not) — spammers burn their own quota.
-   • Referral codes are NOT device ids. A share link carries a short random
-     code the user registers (`refcode:{code}` → deviceId, first writer
-     wins); the device id itself is never put in a URL. `GET /referrals/{code}`
-     is public because the owner shares the code themselves, but it is
-     aggregate-only: anonymous "referee N" rows, no device ids, no ledger
-     rows. A referee's credit is held until it passes the 60-minute / 30-day
-     activation gate and is voided after the 30-day term; a referee can
-     never be its own referrer, and a code can never be re-pointed at a
-     different device.
-   • `platform` on a report is advisory attribution only (mac | web | pwa |
-     agent | …): unrecognised values are counted as 'unknown', and it can
-     never change an amount.
-   • Honest limits: `minutes` is client-reported (MVP trusts it; the caps
-     bound the blast radius). KV is eventually consistent — the ledger is a
-     best-effort read-modify-write (last-write-wins on the free tier).
+   Real money routes use one transactional Durable Object, never KV writes.
+   Administrator-reviewed migration and device enrollment are mandatory.
+   Device bearer credentials protect private reads and referral mutations.
+   Tracking additionally consumes an administrator-issued, body-bound receipt.
+   Receipts authorize bounded events; they are NOT independent ad-view proof.
+   Public demo clients are deliberately not enrolled and cannot earn real money.
 
    EARNINGS MODEL (mirrors the demo ledger's public model)
    -------------------------------------------------------
@@ -461,6 +430,7 @@ function pickRoute(method, pathname) {
   if (method === 'POST' && pathname === '/admin/pilots/settlement') return { handled: true, route: 'adminPilotSettlement' };
   if (method === 'GET' && pathname === '/campaigns/eligible') return { handled: true, route: 'pilotEligibility' };
   if (method === 'GET' && pathname === '/health') return { handled: true, route: 'health' };
+  if (method === 'POST' && /^\/admin\/ledger\/(migrate|enroll|receipt)$/.test(pathname)) return { handled: true, route: 'ledgerAdmin' };
   if (method === 'POST' && pathname === '/track') return { handled: true, route: 'track' };
   if (method === 'POST' && pathname === '/admin/feed') return { handled: true, route: 'adminFeed' };
   if (method === 'POST' && pathname === '/referral') return { handled: true, route: 'referral' };
@@ -1009,300 +979,16 @@ async function handleStats(env) {
   }
 }
 
-/* Only a missing key starts a new ledger. Transport failures and corrupt
-   existing balances must fail closed, never reset somebody's earnings. */
-async function readStoredLedger(kv, key) {
-  var raw = await kv.get(key);
-  if (raw === null || raw === undefined) return null;
-  var ledger = JSON.parse(raw);
-  if (!ledger || typeof ledger !== 'object' || Array.isArray(ledger) ||
-      !Number.isFinite(ledger.total) || ledger.total < 0) {
-    throw new Error('invalid stored ledger');
-  }
-  return ledger;
-}
-
-async function handleTrack(req, env) {
-  if (!env || !env.SITE_KV) return json({ ok: false, error: 'KV not configured (SITE_KV binding missing)' }, 503);
-
-  var body;
-  try { body = await req.json(); }
-  catch (e) { return json({ ok: false, error: 'invalid JSON body' }, 400); }
-  if (!body || typeof body !== 'object' || Array.isArray(body)) {
-    return json({ ok: false, error: 'invalid body' }, 400);
-  }
-  var deviceId = typeof body.deviceId === 'string' ? body.deviceId : '';
-  if (!DEVICE_ID_RE.test(deviceId)) {
-    return json({ ok: false, error: 'invalid deviceId' }, 400);
-  }
-
-  var feed = await getFeed(env);
-  /* cpm is looked up in the SERVING list, so a slot's exclusive winner is the
-     only campaign that can be paid while that slot is running. */
-  var served = await servingList(env, feed.campaigns);
-
-  /* Best-effort atomic-ish read-modify-write. KV is eventually consistent;
-     free tier = last-write-wins (documented in the security model). */
-  var key = 'earn:' + deviceId;
-  var ledger = null;
+/* A single authority keeps referee, referrer, binding and event in the same
+   transaction. Never change this name without an explicit data migration. */
+async function handleMoney(request, env) {
+  if (!env || !env.LEDGER) return json({ ok: false, error: 'secure ledger unavailable' }, 503);
   try {
-    ledger = await readStoredLedger(env.SITE_KV, key);
-  } catch (e3) {
-    return json({ ok: false, error: 'ledger unavailable' }, 503);
+    return await env.LEDGER.get(env.LEDGER.idFromName('earnings-v1')).fetch(request);
+  } catch (error) {
+    console.error('secure ledger request failed');
+    return json({ ok: false, error: 'secure ledger unavailable' }, 503);
   }
-
-  /* Referee binding (KV `ref:{deviceId}`) — present only when this device
-     arrived through someone's share link. A missing or corrupt binding means
-     "no referral"; it can never block or inflate this device's own pay. */
-  var binding = null;
-  try {
-    var braw = await env.SITE_KV.get('ref:' + deviceId);
-    if (braw) { try { binding = JSON.parse(braw); } catch (e5) { binding = null; } }
-  } catch (e6) { binding = null; }
-  if (binding && !normalizeRefCode(binding.code)) binding = null;
-
-  if (binding) {
-    try {
-      var referralOwner = JSON.parse(await env.SITE_KV.get('refcode:' + binding.code));
-      if (!referralOwner || !DEVICE_ID_RE.test(String(referralOwner.deviceId || '')) || referralOwner.deviceId === deviceId) binding = null;
-    } catch (e8) { return json({ ok: false, error: 'referral unavailable' }, 503); }
-  }
-  var result = applyEarnings(ledger, body, served.campaigns, Date.now(), binding, env.LAUNCH_BONUS_ENABLED === 'true');
-  if (result.error) return json({ ok: false, error: result.error }, 400);
-
-  try {
-    await env.SITE_KV.put(key, JSON.stringify(result.ledger));
-  } catch (e4) {
-    return json({ ok: false, error: 'ledger unavailable' }, 503);
-  }
-
-  var resp = { ok: true, earned: round2(result.earned), total: round2(result.ledger.total),
-    breakdown: { base: result.baseEarned, launch: result.launchBonus, referee: result.refereeBonus } };
-  if (result.note) resp.note = result.note;
-  resp.platform = result.platform;
-
-   /* The loop closes HERE. The referrer's 5% is credited to the referrer's own
-      ledger — platform-side money, separate from the referee's 70%. Both
-      writes are best-effort: a failure never fails the referee's report. */
-  if (binding && result.referrerBinding) {
-    try {
-      await env.SITE_KV.put('ref:' + deviceId, JSON.stringify(result.referrerBinding));
-    } catch (e7) { /* binding refresh is best-effort */ }
-  }
-  if (binding && result.referrerCredit > 0) {
-    var credited = await creditReferrer(env, binding.code, deviceId, result.referrerCredit, Date.now());
-    resp.referral = {
-      referrer: binding.code,
-      released: round2(result.referrerCredit),
-      credited: !!(credited && credited.credited)
-    };
-    if (credited && credited.note) resp.referral.note = credited.note;
-  } else if (binding && result.referralNote) {
-    resp.referral = { referrer: binding.code, released: 0, credited: false, note: result.referralNote };
-  }
-  return json(resp, 200);
-}
-
-/* Pay the referrer: `refcode:{code}` → the owner's device id → its ledger,
-   add the released credit (applyReferralCredit), write it back. Guards: an
-   unregistered code, a self-referral, or an unreadable ledger all end in
-   `credited:false` with a reason — never in a silent wrong payment. */
-async function creditReferrer(env, code, refereeDeviceId, amount, now) {
-  var c = normalizeRefCode(code);
-  if (!c) return { credited: false, note: 'invalid referral code' };
-  if (!env || !env.SITE_KV) return { credited: false, note: 'KV not configured' };
-
-  var owner = '';
-  try {
-    var craw = await env.SITE_KV.get('refcode:' + c);
-    if (craw) {
-      var rec = JSON.parse(craw);
-      if (rec && typeof rec.deviceId === 'string') owner = rec.deviceId;
-    }
-  } catch (e) { owner = ''; }
-  if (!DEVICE_ID_RE.test(owner)) return { credited: false, note: 'referrer code not registered' };
-  if (owner === refereeDeviceId) return { credited: false, note: 'self-referral ignored' };
-
-  var key = 'earn:' + owner;
-  var ledger = null;
-  try {
-    ledger = await readStoredLedger(env.SITE_KV, key);
-  } catch (e3) {
-    return { credited: false, note: 'referrer ledger unavailable' };
-  }
-
-  var next = applyReferralCredit(ledger, amount, now);
-  try {
-    await env.SITE_KV.put(key, JSON.stringify(next));
-  } catch (e4) {
-    return { credited: false, note: 'referrer ledger unavailable' };
-  }
-  return { credited: true, referrerTotal: round2(Number(next.total) || 0) };
-}
-
-async function handleEarnings(deviceId, env) {
-  if (!DEVICE_ID_RE.test(deviceId)) {
-    return json({ ok: false, error: 'invalid deviceId' }, 400);
-  }
-  if (!env || !env.SITE_KV) return json({ ok: false, error: 'KV not configured (SITE_KV binding missing)' }, 503);
-  var ledger = null;
-  try {
-    ledger = await readStoredLedger(env.SITE_KV, 'earn:' + deviceId);
-  } catch (e2) {
-    return json({ ok: false, error: 'ledger unavailable' }, 503);
-  }
-
-  /* Referee side of the loop: if this device arrived through a share link,
-     report its own activation-gate progress (aggregate-shaped — the referrer
-     is a public code, nothing else). */
-  var binding = null;
-  try {
-    var braw = await env.SITE_KV.get('ref:' + deviceId);
-    if (braw) { try { binding = JSON.parse(braw); } catch (e3) { binding = null; } }
-  } catch (e4) { binding = null; }
-
-  return json(ledgerView(ledger, { now: Date.now(), referral: binding }), 200);
-}
-
-/* POST /referral — the two halves of a share link:
-     action 'register' (default) → this device OWNS `code`
-     action 'claim'              → this device IS a referee of `code`
-   Split by an explicit `action` so a device can never register itself as its
-   own referee (creditReferrer refuses self-referrals as a second line). */
-async function handleReferral(req, env) {
-  if (!env || !env.SITE_KV) return json({ ok: false, error: 'KV not configured (SITE_KV binding missing)' }, 503);
-
-  var body;
-  try { body = await req.json(); }
-  catch (e) { return json({ ok: false, error: 'invalid JSON body' }, 400); }
-  if (!body || typeof body !== 'object' || Array.isArray(body)) {
-    return json({ ok: false, error: 'invalid body' }, 400);
-  }
-  var deviceId = typeof body.deviceId === 'string' ? body.deviceId : '';
-  if (!DEVICE_ID_RE.test(deviceId)) return json({ ok: false, error: 'invalid deviceId' }, 400);
-  var code = normalizeRefCode(body.code);
-  if (!code) return json({ ok: false, error: 'invalid referral code (3–32 chars: a–z, 0–9, -)' }, 400);
-
-  var action = body.action === 'register' ? 'register' : 'claim';
-  var now = Date.now();
-
-  if (action === 'register') {
-    var existing = null;
-    try {
-      var raw = await env.SITE_KV.get('refcode:' + code);
-      if (raw) { try { existing = JSON.parse(raw); } catch (e1) { existing = null; } }
-    } catch (e2) { existing = null; }
-    var reg = applyReferralRegister(existing, deviceId, code, now);
-    if (reg.error) return json({ ok: false, error: reg.error }, 400);
-    if (reg.created) {
-      try {
-        await env.SITE_KV.put('refcode:' + code, JSON.stringify(reg.record));
-      } catch (e3) {
-        return json({ ok: false, error: 'KV unavailable' }, 503);
-      }
-    }
-    return json({
-      ok: true, action: 'register', code: code,
-      created: !!reg.created, note: reg.note || null
-    }, 200);
-  }
-
-  /* claim — the code must belong to a real (registered) owner, and this
-     device must not already be bound: the first claim wins. */
-  var ownerRecord = null;
-  try {
-    var craw = await env.SITE_KV.get('refcode:' + code);
-    if (craw) { try { ownerRecord = JSON.parse(craw); } catch (e4) { ownerRecord = null; } }
-  } catch (e5) { ownerRecord = null; }
-  if (!ownerRecord || !DEVICE_ID_RE.test(String(ownerRecord.deviceId || ''))) {
-    return json({ ok: true, action: 'claim', claimed: false, code: code, note: 'unknown referral code' }, 200);
-  }
-  if (ownerRecord.deviceId === deviceId) {
-    return json({ ok: true, action: 'claim', claimed: false, code: code, note: 'self-referral ignored' }, 200);
-  }
-
-  var mine = null;
-  try {
-    var mraw = await env.SITE_KV.get('ref:' + deviceId);
-    if (mraw) { try { mine = JSON.parse(mraw); } catch (e6) { mine = null; } }
-  } catch (e7) { mine = null; }
-
-  try {
-    var earningsRaw = await env.SITE_KV.get('earn:' + deviceId);
-    var earnings = earningsRaw ? JSON.parse(earningsRaw) : null;
-    if (earnings && (Number.isFinite(earnings.firstValidImpressionAt) ||
-        Number(earnings.counters && earnings.counters.impressions) > 0)) {
-      return json({ ok: true, action: 'claim', claimed: false, code: code, note: 'attribution locked after first impression' }, 200);
-    }
-  } catch (e10) { return json({ ok: false, error: 'ledger unavailable' }, 503); }
-  var claim = applyReferralClaim(mine, code, now, body.action === 'click');
-  if (claim.error) return json({ ok: false, error: claim.error }, 400);
-  if (!claim.claimed) {
-    return json({ ok: true, action: 'claim', claimed: false, code: code, note: claim.note || null }, 200);
-  }
-
-  try {
-    await env.SITE_KV.put('ref:' + deviceId, JSON.stringify(claim.record));
-    var idx = [];
-    try {
-      var iraw = await env.SITE_KV.get('refs:' + code);
-      if (iraw) { var parsedIdx = JSON.parse(iraw); if (Array.isArray(parsedIdx)) idx = parsedIdx; }
-    } catch (e8) { idx = []; }
-    if (idx.indexOf(deviceId) === -1 && idx.length < REFERRALS_MAX) {
-      idx.push(deviceId);
-      await env.SITE_KV.put('refs:' + code, JSON.stringify(idx));
-    }
-  } catch (e9) {
-    return json({ ok: false, error: 'KV unavailable' }, 503);
-  }
-  return json({ ok: true, action: 'claim', claimed: true, code: code }, 200);
-}
-
-/* GET /referrals/{code} — the referrer's own view of the loop. PUBLIC by
-   design (the referrer shares the code themselves) but aggregate-only: one
-   anonymous row per referee, no device ids, no ledger rows, ever. */
-async function handleReferrals(code, env) {
-  var c = normalizeRefCode(code);
-  if (!c) return json({ ok: false, error: 'invalid referral code' }, 400);
-  if (!env || !env.SITE_KV) return json({ ok: false, error: 'KV not configured (SITE_KV binding missing)' }, 503);
-
-  var owner = '';
-  try {
-    var craw = await env.SITE_KV.get('refcode:' + c);
-    if (craw) {
-      var rec = JSON.parse(craw);
-      if (rec && typeof rec.deviceId === 'string') owner = rec.deviceId;
-    }
-  } catch (e) { owner = ''; }
-
-  var ids = [];
-  try {
-    var iraw = await env.SITE_KV.get('refs:' + c);
-    if (iraw) { var parsed = JSON.parse(iraw); if (Array.isArray(parsed)) ids = parsed; }
-  } catch (e2) { ids = []; }
-
-  var bindings = [];
-  for (var i = 0; i < ids.length && i < REFERRALS_MAX; i++) {
-    if (!DEVICE_ID_RE.test(String(ids[i] || ''))) continue;
-    try {
-      var braw = await env.SITE_KV.get('ref:' + ids[i]);
-      if (!braw) continue;
-      var b = JSON.parse(braw);
-      if (b && normalizeRefCode(b.code) === c) bindings.push(b);
-    } catch (e3) { /* skip an unreadable referee */ }
-  }
-
-  var ledger = null;
-  if (DEVICE_ID_RE.test(owner)) {
-    try {
-      var lraw = await env.SITE_KV.get('earn:' + owner);
-      if (lraw) { try { ledger = JSON.parse(lraw); } catch (e4) { ledger = null; } }
-    } catch (e5) { ledger = null; }
-  }
-
-  var view = referralView(c, bindings, ledger);
-  view.registered = !!owner;
-  return json(view, 200);
 }
 
 async function handleAdminFeed(req, env) {
@@ -1959,23 +1645,13 @@ async function handleFetch(request, env, ctx) {
       case 'feed':
         return await handleFeed(env);
       case 'stats':
-        return await handleStats(env);
+        return env && env.LEDGER ? await handleMoney(request, env) : await handleStats(env);
       case 'track':
-        return await handleTrack(request, env);
-      case 'earnings': {
-        var deviceId = '';
-        try { deviceId = decodeURIComponent(picked.deviceId || ''); }
-        catch (e) { return json({ ok: false, error: 'invalid deviceId' }, 400); }
-        return await handleEarnings(deviceId, env);
-      }
+      case 'earnings':
       case 'referral':
-        return await handleReferral(request, env);
-      case 'referrals': {
-        var refCode = '';
-        try { refCode = decodeURIComponent(picked.code || ''); }
-        catch (e) { return json({ ok: false, error: 'invalid referral code' }, 400); }
-        return await handleReferrals(refCode, env);
-      }
+      case 'referrals':
+      case 'ledgerAdmin':
+        return await handleMoney(request, env);
       case 'adminFeed':
         return await handleAdminFeed(request, env);
       case 'submit':
@@ -2077,3 +1753,10 @@ export {
   SLOT_BIDS_KEPT,
   SLOT_MAX_PER_REQUEST
 };
+
+export const LedgerAuthority = createLedgerAuthority({
+  json, safeEqual, freshLedger, ledgerView, applyEarnings, applyReferralCredit,
+  applyReferralRegister, applyReferralClaim, normalizeRefCode, referralView,
+  normalizePlatform, normalizeRegion, aggregateStats, getFeed, servingList,
+  DEVICE_ID_RE, REFERRALS_MAX, round2
+});
