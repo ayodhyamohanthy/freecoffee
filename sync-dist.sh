@@ -44,6 +44,8 @@ SITE_FILES="index.html dashboard.html payouts.html model.html campaigns.html
 ASSET_FILES="
 assets/css/styles.css
 assets/icons/icon-192.png
+assets/img/cafe-laptop.jpg
+assets/img/cafe-table.jpg
 assets/icons/icon-512.png
 assets/icons/icon-maskable-512.png
 assets/js/dashboard.js
