@@ -26,7 +26,11 @@ try {
     const response = await fetch('http://127.0.0.1:' + port + path, { method: body === undefined ? 'GET' : 'POST',
       headers: { 'content-type': 'application/json', ...(token ? { authorization: 'Bearer ' + token } : {}) },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
-    return { status: response.status, body: await response.json() };
+    const text = await response.text();
+    let bodyValue;
+    try { bodyValue = JSON.parse(text); }
+    catch { throw Error('Non-JSON local runtime response for ' + path + ' (' + response.status + '): ' + text + '\n' + output); }
+    return { status: response.status, body: bodyValue };
   };
   const admin = (path, body) => call('/admin/ledger/' + path, body, 'local-test-only');
   assert.equal((await call('/track', {})).status, 503);

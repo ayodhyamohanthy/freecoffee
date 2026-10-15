@@ -52,7 +52,10 @@ assets, logs, URLs or git. CORS allows authorization headers, not cookie session
    prefix/page and verifies the same count and digest before a transaction imports
    the snapshot and writes its migration marker. Wrong hash/count, corrupt JSON,
    corrupt balances, missing referral owners/indexes or read failures fail closed.
-   There is no fallback to zero. All records and the marker commit together.
+   There is no fallback to zero. Every identity referenced by a binding, owner or
+   index must have its own `earn:` record, even if it has never earned anything.
+   Missing records reject the whole migration; there is no inferred-zero approval
+   switch. All records and the marker commit together.
 5. A successful import returns counts, not private records. Repeating migration
    returns 409 and never overwrites balances. Remove the freeze variable afterward
    to reduce accidental bootstrap attempts. Enrollment still works. If migration
@@ -65,6 +68,41 @@ human exported a complete authoritative snapshot. Those are operational gates;
 the explicit freeze acknowledgment and backup digest make the reviewed state
 binding, but cannot prove the review happened. Preexisting KV balances were
 client-reported and must not be treated as verified advertiser liabilities.
+
+## Legacy compatibility and missing-ledger policy
+
+The importer preserves accepted ledger records exactly. It never rebuilds totals
+from retained rows or creates balances for referral-only identities. Legacy
+registration/attribution could create owner records, bindings or indexes before
+an earnings record existed. Such otherwise legitimate snapshots now BLOCK the
+cutover. A known identity without an earnings record is not evidence of a zero
+balance. Keep tracking frozen and resolve missing authoritative records through
+a separate reconciliation review; a manifest approval alone cannot authorize
+invented balances. Do not delete referral records to make migration pass.
+
+At import and on authority reads, total/today/monthly/referral/bonus amounts and
+row amounts must be finite nonnegative numbers. Counters, monthly impressions,
+optional monthly paid clicks, daily click attempts, platform minutes/clicks and
+optional row minutes must be nonnegative safe integers, not numeric strings.
+Dates must be actual ISO calendar days and months; row types and timestamps
+must have supported shapes. Present malformed optional data is rejected, not
+replaced with defaults. Invalid stored or computed ledgers return 503 and no
+transaction changes balances or consumes the receipt. Statistics also fail
+closed rather than skipping corrupt ledgers.
+
+Supported older shapes may omit `monthly.paidClicks`, `counters.platforms`,
+`referral`, `bonuses`, `firstValidImpressionAt`, and row `minutes`, `platform` or
+`region`. Existing pure helpers retain their legacy behavior: missing paid-click
+counts use lifetime click attempts conservatively until month rollover; old
+impression rows without minutes count as one in retained-row reporting. Core
+balance, today/monthly buckets, impression/click counters and dated daily click
+counter remain required. Missing core data or unsupported historical schemas
+need separate evidence-backed reconciliation, not coercion or silent repair.
+Daily click attempts above five are valid history (unpaid attempts still count),
+not corruption; negative/fractional attempts are rejected even for older dates.
+Review the full production snapshot for these compatibility risks before any
+deployment. Available git history and helper tests do not establish every shape
+that may exist in production KV.
 
 ## Administrator-only enrollment
 
