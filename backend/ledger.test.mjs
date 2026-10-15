@@ -128,3 +128,83 @@ assert.equal((await corrupt.admin('enroll', {deviceId: oldId, confirmOwnership: 
 const missing = await workerFetch(new Request('https://x.test/track', {method: 'POST', body: '{}'}), {}, {});
 assert.equal(missing.status, 503);
 console.log('PASS secure ledger migration, enrollment, body-bound receipts, concurrent replay, rollback and referral atomicity');
+
+// Review regressions: no inferred zero balances and no nested corruption.
+async function migrateRecords(H, records) {
+  records = records.toSorted(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
+  for (const [key, value] of records) H.legacy.set(key, JSON.stringify(value));
+  const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(records)))), b => b.toString(16).padStart(2, '0')).join('');
+  return H.admin('migrate', {confirm: 'legacy writers stopped; snapshot reviewed', recordCount: records.length, snapshotSha256: hash});
+}
+for (const records of [
+  [['refcode:orphan-code', {code:'orphan-code', deviceId:oldId, t:1}]],
+  [['refs:orphan-code', [oldId]]],
+  [['earn:bbbbbbbb', freshLedger(Date.now())], ['refcode:orphan-code', {code:'orphan-code', deviceId:'bbbbbbbb', t:1}],
+   ['ref:' + oldId, {code:'orphan-code', t0:1, minutes:0}], ['refs:orphan-code', [oldId]]]
+]) {
+  const H = harness();
+  assert.equal((await migrateRecords(H, records)).status, 503, 'referenced identity without earn record blocks migration');
+  assert.equal(await H.storage.get('migration:v1'), undefined);
+  assert.equal(await H.storage.get('earn:' + oldId), undefined, 'never infer a zero balance');
+}
+console.log('PASS missing referenced ledgers reject migration without inferred zero balances');
+const mutations = [
+  l => {l.today.total = -10;}, l => {l.monthly.total = 'corrupt';}, l => {l.total = Infinity;},
+  l => {l.counters.todayClicks.count = -100;}, l => {l.counters.todayClicks.count = 0.5;},
+  l => {l.counters.impressions = 'garbage';}, l => {l.counters.clicks = -1;},
+  l => {l.monthly.impressions = -1;}, l => {l.monthly.paidClicks = -1;},
+  l => {l.monthly.paidClicks = '0';}, l => {l.referral.total = -1;},
+  l => {l.bonuses = {launch:0, referee:-1};},
+  l => {l.counters.platforms = {web:{minutes:-1, clicks:0}};},
+  l => {l.rows = [{t:1, type:'click', campaignId:'c', amount:-1}];},
+  l => {l.rows = [{t:1, type:'impression', campaignId:'c', amount:1, minutes:1.5}];},
+  l => {l.firstValidImpressionAt = -1;}, l => {l.today.date = '2026-02-30';},
+  l => {l.counters.todayClicks.date = 'broken';}, l => {l.monthly.month = '2026-13';}
+];
+for (const mutate of mutations) {
+  const value = freshLedger(Date.now()); mutate(value);
+  const H = harness();
+  assert.equal((await migrateRecords(H, [['earn:' + oldId, value]])).status, 503, 'nested corruption blocks migration');
+  assert.equal(await H.storage.get('migration:v1'), undefined);
+  const runtime = harness({'migration:v1':{at:1}, ['earn:' + oldId]:freshLedger(Date.now())});
+  runtime.legacy.set('feed:current', JSON.stringify([{id:'camp_1', sponsor:'Test', cpm:6}]));
+  const identity = await (await runtime.admin('enroll', {deviceId:oldId, confirmOwnership:true})).json();
+  const event = {deviceId:oldId, type:'click', campaignId:'camp_1', minutes:0, platform:'web', region:'IN'};
+  const receipt = await (await runtime.admin('receipt', {...event, eventId:'nested_review_event_0001'})).json();
+  await runtime.storage.transaction(tx => tx.put('earn:' + oldId, value));
+  assert.equal((await runtime.request('/earnings/' + oldId, undefined, identity.token)).status, 503);
+  assert.equal((await runtime.request('/stats')).status, 503);
+  assert.equal((await runtime.request('/track', {...event, receiptId:receipt.receiptId}, identity.token)).status, 503);
+  assert.equal((await runtime.request('/referral', {deviceId:oldId, code:'some-code', action:'register'}, identity.token)).status, 503);
+  assert.equal((await runtime.admin('receipt', {...event, eventId:'nested_review_event_0002'})).status, 503);
+  assert.equal((await runtime.storage.get('receipt:' + receipt.receiptId)).result, undefined);
+  assert.deepEqual(await runtime.storage.get('earn:' + oldId), value);
+}
+console.log('PASS nested ledger corruption blocks import, private reads, stats, receipts and mutations');
+
+// Old rows omit minutes/platform/region; paidClicks and optional aggregates
+// were introduced later. Do not invent values during migration.
+for (const attempts of [0, 5, 9]) {
+  const H = harness(), value = freshLedger(Date.now());
+  value.total = 12.3456; value.monthly.impressions = 100;
+  value.counters.impressions = 100; value.counters.clicks = attempts;
+  value.counters.todayClicks.count = attempts;
+  delete value.monthly.paidClicks; delete value.counters.platforms;
+  delete value.referral;
+  value.rows = [{t:1, type:'impression', campaignId:'camp_1', amount:0.0042}];
+  assert.equal((await migrateRecords(H, [['earn:' + oldId, value]])).status, 200);
+  assert.deepEqual(await H.storage.get('earn:' + oldId), value, 'legacy snapshot preserved exactly');
+  const identity = await (await H.admin('enroll', {deviceId:oldId, confirmOwnership:true})).json();
+  H.legacy.set('feed:current', JSON.stringify([{id:'camp_1', sponsor:'Test', cpm:6}]));
+  let paid = 0;
+  for (let n = 0; n < 6; n++) {
+    const event = {deviceId:oldId, type:'click', campaignId:'camp_1', minutes:0, platform:'web', region:'IN'};
+    const receipt = await (await H.admin('receipt', {...event, eventId:'legacy_valid_click_' + n})).json();
+    const response = await H.request('/track', {...event, receiptId:receipt.receiptId}, identity.token);
+    assert.equal(response.status, 200);
+    if ((await response.json()).earned > 0) paid++;
+  }
+  assert.equal(paid, attempts === 0 ? 5 : 0, 'five daily attempts maximum, no sixth paid click');
+  assert.equal((await H.storage.get('earn:' + oldId)).counters.todayClicks.count, attempts + 6);
+}
+console.log('PASS supported legacy omissions preserved and five-click daily cap enforced');

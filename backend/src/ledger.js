@@ -5,8 +5,31 @@ export function createLedgerAuthority(h) {
   const fail = (status, message) => { throw Object.assign(new Error(message), { status }); };
   const object = value => value && typeof value === 'object' && !Array.isArray(value);
   const device = value => typeof value === 'string' && h.DEVICE_ID_RE.test(value);
-  const validLedger = value => object(value) && Number.isFinite(value.total) && value.total >= 0 &&
-    Array.isArray(value.rows) && object(value.counters) && object(value.today) && object(value.monthly);
+  const money = value => typeof value === 'number' && Number.isFinite(value) && value >= 0;
+  const count = value => Number.isSafeInteger(value) && value >= 0;
+  const optional = (value, key, check) => !Object.hasOwn(value, key) || check(value[key]);
+  const date = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+    Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
+  const month = value => typeof value === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(value);
+  // Validate supported stored shapes without filling missing legacy fields.
+  // paidClicks was added later: applyEarnings conservatively uses lifetime
+  // clicks when absent. Missing optional data is NOT malformed present data.
+  const validLedger = value => object(value) && money(value.total) &&
+    object(value.today) && date(value.today.date) && money(value.today.total) &&
+    object(value.monthly) && month(value.monthly.month) && money(value.monthly.total) &&
+    count(value.monthly.impressions) && optional(value.monthly, 'paidClicks', count) &&
+    object(value.counters) && count(value.counters.impressions) && count(value.counters.clicks) &&
+    object(value.counters.todayClicks) && date(value.counters.todayClicks.date) && count(value.counters.todayClicks.count) &&
+    optional(value.counters, 'platforms', platforms => object(platforms) && Object.values(platforms).every(p =>
+      object(p) && count(p.minutes) && count(p.clicks))) &&
+    optional(value, 'referral', referral => object(referral) && money(referral.total)) &&
+    optional(value, 'bonuses', bonuses => object(bonuses) && money(bonuses.launch) && money(bonuses.referee)) &&
+    optional(value, 'firstValidImpressionAt', timestamp => timestamp === null || money(timestamp)) &&
+    Array.isArray(value.rows) && value.rows.every(row => object(row) && money(row.t) &&
+      ['impression', 'click', 'referral', 'launch', 'referee'].includes(row.type) &&
+      typeof row.campaignId === 'string' && money(row.amount) &&
+      optional(row, 'minutes', count) && optional(row, 'platform', p => typeof p === 'string') &&
+      optional(row, 'region', r => typeof r === 'string'));
   async function digest(token) {
     const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
     return Array.from(new Uint8Array(bytes), b => b.toString(16).padStart(2, '0')).join('');
@@ -80,6 +103,7 @@ export function createLedgerAuthority(h) {
             const owner = await tx.get('refcode:' + code);
             if (!owner) fail(404, 'unknown referral code');
             await this.authenticate(tx, owner.deviceId, hash);
+            await this.ledger(tx, owner.deviceId);
             const ids = (await tx.get('refs:' + code)) || [];
             const bindings = [];
             for (const referee of ids) {
@@ -89,6 +113,7 @@ export function createLedgerAuthority(h) {
             return h.json({ ...h.referralView(code, bindings, await this.ledger(tx, owner.deviceId)), registered: true });
           }
           await this.authenticate(tx, id, hash);
+          await this.ledger(tx, id); // validate even registration/early-return operations
           if (req.method === 'GET' && path.startsWith('/earnings/')) {
             return h.json(h.ledgerView(await this.ledger(tx, id), { now: Date.now(), referral: await tx.get('ref:' + id) }));
           }
@@ -161,10 +186,12 @@ export function createLedgerAuthority(h) {
           if (!index || !index.includes(key.slice(4))) fail(503, 'incomplete legacy referral index');
         }
       }
+      for (const id of identities) {
+        if (!records.has('earn:' + id)) fail(503, 'referenced legacy identity missing ledger');
+      }
       return await this.storage.transaction(async tx => {
         if (await tx.get('migration:v1')) fail(409, 'migration already completed');
         for (const [key, value] of records) await tx.put(key, value);
-        for (const id of identities) if (!records.has('earn:' + id)) await tx.put('earn:' + id, h.freshLedger(Date.now()));
         await tx.put('migration:v1', { at: Date.now(), records: records.size, identities: identities.size, snapshotSha256: snapshotHash });
         return h.json({ ok: true, records: records.size, identities: identities.size });
       });
@@ -199,6 +226,7 @@ export function createLedgerAuthority(h) {
       const now = Date.now();
       return await this.storage.transaction(async tx => {
         if (!(await tx.get('auth:' + report.deviceId))) fail(403, 'device not enrolled');
+        await this.ledger(tx, report.deviceId);
         const previous = await tx.get('event:' + body.eventId);
         const fingerprint = JSON.stringify(report);
         if (previous) {
@@ -220,6 +248,7 @@ export function createLedgerAuthority(h) {
       const receipt = await tx.get(key);
       if (!receipt) fail(403, 'unknown receipt');
       if (receipt.fingerprint !== JSON.stringify(report)) fail(409, 'receipt body mismatch');
+      await this.ledger(tx, report.deviceId);
       if (receipt.result) return h.json(receipt.result); // deterministic retry, including after expiry
       const now = Date.now();
       if (now > receipt.expiresAt) fail(403, 'receipt expired');
@@ -229,9 +258,11 @@ export function createLedgerAuthority(h) {
       if (binding) {
         owner = await tx.get('refcode:' + binding.code);
         if (!owner || owner.deviceId === report.deviceId) fail(503, 'referral owner unavailable');
+        await this.ledger(tx, owner.deviceId);
       }
       const result = h.applyEarnings(ledger, report, [receipt.campaign], now, binding, receipt.launch);
       if (result.error) fail(400, result.error);
+      if (!validLedger(result.ledger)) fail(503, 'computed ledger unavailable');
       const response = { ok: true, earned: h.round2(result.earned), total: h.round2(result.ledger.total),
         platform: result.platform, breakdown: { base: result.baseEarned, launch: result.launchBonus, referee: result.refereeBonus } };
       if (result.note) response.note = result.note;
@@ -239,7 +270,9 @@ export function createLedgerAuthority(h) {
       await tx.put('earn:' + report.deviceId, result.ledger);
       if (binding && result.referrerBinding) await tx.put('ref:' + report.deviceId, result.referrerBinding);
       if (owner && result.referrerCredit > 0) {
-        await tx.put('earn:' + owner.deviceId, h.applyReferralCredit(await this.ledger(tx, owner.deviceId), result.referrerCredit, now));
+        const credited = h.applyReferralCredit(await this.ledger(tx, owner.deviceId), result.referrerCredit, now);
+        if (!validLedger(credited)) fail(503, 'computed ledger unavailable');
+        await tx.put('earn:' + owner.deviceId, credited);
         response.referral = { referrer: binding.code, released: h.round2(result.referrerCredit), credited: true };
       }
       await tx.put(key, { ...receipt, result: response });
@@ -259,6 +292,7 @@ export function createLedgerAuthority(h) {
         return h.json({ ok: true, created: result.created, note: result.note || null, code });
       }
       if (!owner || owner.deviceId === id) return h.json({ ok: true, claimed: false, note: owner ? 'self-referral ignored' : 'unknown referral code' });
+      await this.ledger(tx, owner.deviceId);
       const ledger = await this.ledger(tx, id);
       if (Number.isFinite(ledger.firstValidImpressionAt) || ledger.counters.impressions > 0) return h.json({ ok: true, claimed: false, note: 'attribution locked after first impression' });
       const prior = await tx.get('ref:' + id);
