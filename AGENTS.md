@@ -21,7 +21,7 @@ This document governs all AI-driven contributions, refactors, and terminal execu
 
 - **Web layer:** hand-written static **HTML + CSS + vanilla JS**. No framework, no bundler, no build step, no CDN, no external fonts, no npm. Eleven pages live at the repo root.
 - **Design authority:** `DESIGN.md` — the Promova midnight-magazine reskin (black `#000000` canvas on every page, white/Smoke `#f5f5f5` cards at 30px radius, one highlighter `#fff050` CTA per page). **If the code drifts from that file, fix the code, not the file.**
-- **Backend:** a single **Cloudflare Worker** — `backend/src/worker.js` (ES module, `export default { fetch: handleFetch }`, routed by `pickRoute()`) plus `backend/src/pilots.js` — on **Cloudflare KV** (binding `SITE_KV`). Plain JavaScript: no TypeScript, no framework, no ORM.
+- **Backend:** a single **Cloudflare Worker** — `backend/src/worker.js` (ES module, `export default { fetch: handleFetch }`, routed by `pickRoute()`) plus `backend/src/pilots.js` and `backend/src/ledger.js`. Feed/config use **Cloudflare KV** (`SITE_KV`); money uses one SQLite-backed Durable Object (`LEDGER`, `LedgerAuthority`, `earnings-v1`). The deployment entry is `backend/src/entry.js`, which omits test-only exports. Plain JavaScript: no TypeScript, no framework, no ORM.
 - **Mac app:** `app/` — a single-file **Swift / AppKit** menu-bar app (`FreeCoffeeMenuBar.swift`), built by `app/build.sh` via `swiftc`. There is **no Xcode project**.
 - **Runtime:** Node 22 and `python3` are needed by the **test harness only**. The site itself requires neither at runtime.
 - **Validation:** hand-rolled guards in `backend/src/worker.js` (`normalizeRegion`, `normalizePlatform`, the feed-contract filters). **There is no Zod — do not add it.**
@@ -81,8 +81,8 @@ Follow the real boundaries below; do not create arbitrary top-level folders:
 ### Three invariants that are easy to break
 
 1. **Asset versions move together.** `?v=N` in every HTML asset URL ↔ `sw.js` `ASSET_V` ↔ `CACHE`. A mismatch silently breaks the precache and offline first loads. The *Asset version pairing* check in `test.sh` enforces the pairing and the `APP_VERSION` floor. (Named, not numbered, on purpose — step numbers shift as checks are added.)
-2. **Money math is server-side only.** The client reports `{deviceId, type, campaignId, minutes, platform, region}` and nothing else. Never compute, trust, or accept a client-supplied amount.
-3. **The two ledgers never mix.** The seeded demo ledger (`localStorage` key `freecoffee:v1`) and the real backend ledger are separate. The REAL EARNINGS panel appears only when a backend URL is configured.
+2. **Money math is server-side only.** An enrolled client reports `{deviceId, type, campaignId, minutes, platform, region, receiptId}` with its device bearer credential. Tracking additionally needs an administrator-authorized bounded receipt; see `backend/SECURITY-LEDGER.md`. Never compute, trust, or accept a client-supplied amount.
+3. **The two ledgers never mix.** The seeded demo ledger (`localStorage` key `freecoffee:v1`) and the real backend ledger are separate. The REAL EARNINGS panel appears only when a backend URL is configured, but the existing demo is not enrolled and its real tracking now fails closed. A backend URL is not payout readiness.
 
 ---
 

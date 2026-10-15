@@ -1,4 +1,4 @@
-# FreeCoffee backend — Cloudflare Worker + KV
+# FreeCoffee backend — Worker, KV feed, transactional earnings
 
 > **Deployment status (2026-09-13):** live at
 > **https://freecoffee-backend.ayodhya-711.workers.dev**. KV namespace
@@ -9,21 +9,27 @@
 > campaign is pushed via `POST /admin/feed` (see the cold-start runbook in
 > the root README).
 
-The production backend for FreeCoffee's **real-earnings** layer: serves the
-validated ad feed (`/feed.json`), records impressions/clicks from the web
-dashboard, and keeps a per-device earnings ledger in Cloudflare KV. Runs on
-the **Cloudflare free plan** (100k requests/day — orders of magnitude more
-than this project needs).
+The feed and campaign configuration still use KV. Money now belongs to one
+SQLite-backed Durable Object (`LEDGER`, class `LedgerAuthority`, object name
+`earnings-v1`). Deploying this version freezes the old unauthenticated money
+paths. Nothing initializes an empty replacement ledger automatically.
 
-**Honest separation:** everything on the web pages that is *not* wired to
-this backend stays simulated (the seeded demo ledger, the payout simulator).
-The dashboard's **REAL EARNINGS (backend)** panel only appears once a
-backend URL is set in Profile → BACKEND API URL, and it only ever shows what
-this Worker actually recorded. The two never mix.
+**Real tracking is disabled until a reviewed legacy migration and explicit
+administrator enrollment.** Each event additionally needs a single-use,
+body-bound server receipt from a trusted administrator. The existing static
+web demo has neither credentials nor receipts and cannot earn real money;
+its simulated ledger remains usable. The Mac app still does not report
+telemetry or real earnings. Do not put `ADMIN_TOKEN` in either public client.
+
+Read [SECURITY-LEDGER.md](SECURITY-LEDGER.md) before deploying or enabling money.
+Receipts authorize events; they do not prove an ad was actually viewed. There
+is no independent ad-view verification, settlement or payout integration here.
 
 ```
 backend/
-├── src/worker.js        the Worker (plain ES module, no build step, no deps)
+├── src/entry.js         deployment exports (handler + Durable Object only)
+├── src/worker.js        economics/feed/router helpers
+├── src/ledger.js        transactional money authority
 ├── test.mjs             unit tests:  node test.mjs
 ├── wrangler.toml        config — paste your KV namespace id + account id here
 └── ACCOUNT-CHECKLIST.md the exact free-account checklist, in order
@@ -35,15 +41,20 @@ backend/
 |---|---|---|---|
 | `/health` | GET | — | `{ok:true}` liveness probe (used by the site's Test button) |
 | `/feed.json` | GET | — | Campaign feed (same JSON contract as the web `AD FEED URL`), CORS `*` |
-| `/track` | POST | — | `{deviceId, type:'impression'\|'click', campaignId, minutes?}` → `{ok, earned, total}` |
-| `/earnings/{deviceId}` | GET | — | `{total, today, monthly, rows (last 50), counters}` |
+| `/track` | POST | Device bearer + server receipt | Bounded report + `receiptId` → `{ok, earned, total}`; identical retry returns original result |
+| `/earnings/{deviceId}` | GET | Owning device bearer | `{total, today, monthly, rows (last 50), counters}` |
+| `/referral` | POST | Owning device bearer | Explicit `register`, `claim`, or `click`, transactionally updates binding/index |
+| `/referrals/{code}` | GET | Owning referrer bearer | Private aggregate referral view |
+| `/admin/ledger/migrate` | POST | Admin bearer + freeze acknowledgment + reviewed backup digest | One-time complete legacy import |
+| `/admin/ledger/enroll` | POST | Admin bearer + verified ownership | Enroll a migrated device or generate a new identity; returns device token once |
+| `/admin/ledger/receipt` | POST | Admin bearer | Authorize exact bounded event using stable upstream `eventId` |
 | `/submit` | POST | — | Submit ONE campaign object → pending-review queue (id+sponsor required, https destination, $2 CPM floor, no duplicate ids, 5/day per IP, queue cap 50). Nothing serves without admin approval |
 | `/admin/queue` | GET | `Authorization: Bearer $ADMIN_TOKEN` | List campaigns awaiting human review |
 | `/admin/review` | POST | `Authorization: Bearer $ADMIN_TOKEN` | `{id, approve}` → approved goes live (feed cap 20), rejected leaves the queue |
-| `/stats` | GET | — | Public aggregate delivery report: per-campaign verified minutes, reported clicks, user-share spend + network totals. No device ids, no rows — safe for the advertiser page, no token needed |
+| `/stats` | GET | — | Public aggregate delivery report: per-campaign authorized/historical reported minutes, clicks, user-share spend + network totals (not independent proof). No device ids, no rows — safe for the advertiser page, no token needed |
 | `/admin/feed` | POST | `Authorization: Bearer $ADMIN_TOKEN` | Upload a validated campaign array → KV `feed:current` |
 
-- **Money math is server-side.** The client sends `minutes` + `type` only;
+- **Money math is server-side.** The enrolled client sends the exact authorized report and `receiptId`;
   amounts are computed from the campaign `cpm` looked up in the **served
   feed**. Impression: `minutes × cpm ÷ 1000 × 0.70`. Click: $0.05, capped
   server-side at 5/day per device and ≤25% of that device's monthly
@@ -56,8 +67,9 @@ backend/
   with 200.
 - Every response carries `access-control-allow-origin: *`; `OPTIONS`
   preflights get 204.
-- KV write model is best-effort read-modify-write (eventually consistent,
-  last-write-wins on the free tier — fine for an MVP ledger).
+- Money reads/writes use a single Durable Object transaction. Referee balance,
+  referrer balance, referral accrual, and receipt consumption commit together.
+  KV is used only for legacy migration and non-money configuration.
 
 ## Setup — exact steps
 
@@ -74,7 +86,7 @@ backend/
    - **Project name:** `freecoffee-backend`
    - **Root directory:** `freecoffee/backend` (or `backend` if the repo root *is* freecoffee)
    - **Deploy command:** `npx wrangler deploy`
-   - **Entry point / main:** `src/worker.js`
+   - **Entry point / main:** `src/entry.js`
 4. Deploy. Workers Builds now deploys on **every push to main** — no token,
    no GitHub Actions needed. Skip step ②.
 
@@ -87,8 +99,8 @@ backend/
    Actions → New repository secret** → name `CLOUDFLARE_API_TOKEN`, paste
    the token.
 3. The included workflow (`.github/workflows/deploy-backend.yml`) runs
-   `npx wrangler deploy` on every push that touches `backend/**`. Until the
-   secret exists the workflow simply prints a reminder and **never fails**.
+   `npx wrangler deploy` on every push that touches `backend/**`. If the
+   secret is absent the workflow **fails loudly** and deploys nothing.
 
 > ### Verify what is actually deployed — do this before debugging any page
 >
@@ -129,8 +141,8 @@ backend/
    `account_id` — then push, or redeploy from the dashboard.
    - Dashboard-only alternative: Worker → Settings → Variables + Bindings →
      **KV namespace** → bind `SITE_KV`.
-3. Lost bindings are fail-safe: `/track` answers `503 KV not configured`
-   instead of corrupting data.
+3. Lost money bindings are fail-safe: `/track` answers `503 secure ledger unavailable`
+   instead of falling back to KV or starting new balances.
 
 ### ③ Set the admin token
 
@@ -169,16 +181,19 @@ curl https://freecoffee-backend.<your-subdomain>.workers.dev/health
 # → {"ok":true}
 ```
 
-Then open the site → **Profile → BACKEND API URL** → paste the workers.dev
-URL → **Test** (green "Backend OK" toast) → **Save changes**. The dashboard
-gains a **REAL EARNINGS (backend)** panel that reports impressions via
-`/track` once a minute (while the tab is visible and ads are not paused) and
-polls `/earnings/{deviceId}`.
+A healthy `/health` proves liveness only, not migration, enrollment, receipt
+verification, payout readiness or ad delivery. Setting a backend URL in Profile
+still allows the public feed, but does not enroll that browser. Its real-earnings
+panel cannot authenticate with this backend yet and may show its generic backend
+error. This is intentional fail-closed behavior, not a zero balance. See the
+security runbook for the separate administrator-only bootstrap.
 
 ## Local development / tests
 
 ```bash
 node test.mjs                 # pure-helper unit tests (no network)
 node --check src/worker.js    # syntax check
+node --check src/ledger.js
+node runtime-smoke.mjs        # local Wrangler + real Durable Object concurrency gate
 npx wrangler dev              # full local Worker with emulated KV
 ```

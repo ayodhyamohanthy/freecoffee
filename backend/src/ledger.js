@@ -51,6 +51,7 @@ export function createLedgerAuthority(h) {
         if (req.method === 'POST' && path === '/admin/ledger/enroll') return await this.enroll(await parseBody(req));
         if (req.method === 'POST' && path === '/admin/ledger/receipt') return await this.issue(await parseBody(req));
         if (req.method === 'GET' && path === '/stats') {
+          const feed = await h.getFeed(this.env);
           return await this.storage.transaction(async tx => {
             const ledgers = await tx.list({ prefix: 'earn:', limit: 5001 });
             if (ledgers.size > 5000) fail(503, 'stats capacity exceeded');
@@ -59,7 +60,7 @@ export function createLedgerAuthority(h) {
               if (!validLedger(ledger)) fail(503, 'stored ledger unavailable');
               rows.push({ ...ledger, deviceId: key.slice(5) });
             }
-            return h.json({ ...h.aggregateStats(rows, []),
+            return h.json({ ...h.aggregateStats(rows, feed.campaigns),
               verification: 'Historical client reports and administrator-authorized events; not independent ad-view proof' });
           });
         }

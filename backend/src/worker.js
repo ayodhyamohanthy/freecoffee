@@ -20,7 +20,7 @@ import { PILOT_LIST_KEY, PILOT_KEY_PREFIX, newPilot, transitionPilot,
     • Impression: minutes × cpm ÷ 1000 × 0.70 (user base share). `minutes`
      is the reported length of the placement batch (0–60 per report,
      clamped server-side; defaults to 1 when absent).
-   • Click: flat $0.05 when the caps allow.
+   • Click: flat $0.05 when the caps allow. Receipts are authorization, not proof.
    • Rounded to 4 decimals internally while accumulating; served at 2.
    ========================================================================== */
 
@@ -176,11 +176,9 @@ function validateCampaigns(raw) {
    Owner record     (KV `refcode:{code}`)   { code, deviceId, t }
    Referee index    (KV `refs:{code}`)      [refereeDeviceId, …]
 
-   `code` is deliberately NOT the device id: the device id is the only
-   identifier this platform holds and `GET /earnings/{deviceId}` is public,
-   so a share link must never carry it. The client generates a random code
-   and registers it — first writer wins, so a leaked code can never be
-   re-pointed at someone else's device. */
+   `code` is deliberately NOT the device id. Earnings and referral views now
+   require an owning device credential. Share links never carry an identity
+   or a bearer secret, and registration is transactional first-writer-wins. */
 
 function normalizeRefCode(val) {
   var c = (typeof val === 'string') ? val.replace(/^\s+|\s+$/g, '').toLowerCase() : '';
@@ -941,7 +939,8 @@ async function handleStats(env) {
     platforms: [],
     regions: [],
     referralSpend: 0,
-    served: feed.campaigns.length
+    served: feed.campaigns.length,
+    verification: 'Historical client reports; not independent ad-view proof'
   };
   if (!env || !env.SITE_KV || typeof env.SITE_KV.list !== 'function') {
     return json(zeros, 200, { 'cache-control': 'public, max-age=60' });
@@ -973,6 +972,7 @@ async function handleStats(env) {
     }
     var agg = aggregateStats(ledgers, feed.campaigns);
     agg.served = feed.campaigns.length;
+    agg.verification = 'Historical client reports; not independent ad-view proof';
     return json(agg, 200, { 'cache-control': 'public, max-age=60' });
   } catch (e3) {
     return json({ ok: false, error: 'stats unavailable' }, 503);

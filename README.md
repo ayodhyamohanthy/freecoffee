@@ -233,18 +233,20 @@ production platform will bill on.
 
 ## Going live for real money
 
-The site above stays a demo forever unless you flip one switch: the
-**production backend** in [`backend/`](backend/README.md) — a Cloudflare
-Worker + KV on the free plan that serves the validated feed (`/feed.json`),
-records impressions/clicks (`/track`), and settles a **real** per-device
-earnings ledger (`/earnings/{deviceId}`). Money math is server-side only;
-the client reports `minutes` + `type` and nothing else.
+The public site remains a demo. The [backend](backend/README.md) serves a
+validated public feed (`/feed.json`), while its real earnings use a separate,
+transactional Durable Object. Real tracking requires a reviewed legacy migration,
+administrator-verified device enrollment, a private device bearer token and an
+administrator-issued bounded receipt for every event. A backend URL alone does
+not enable earnings. The existing browser demo is not enrolled, and the Mac app
+does not report telemetry or real earnings.
 
-**Honest separation, everywhere:** the REAL EARNINGS (backend) panel on the
-dashboard appears **only** when Profile → BACKEND API URL is set, shows only
-what the Worker actually recorded, and is labeled as separate from the
-simulated ledger. Empty URL = 100% offline demo; nothing ever leaves the
-browser. The two ledgers never mix.
+**Honest separation:** the seeded demo ledger and the real authority never mix.
+The current browser real-earnings panel cannot authenticate and will show its
+generic backend error rather than a real balance. No admin token belongs in the
+public client. Event receipts authorize reports, not independent proof of ad views.
+This is not a payout/settlement implementation. See the
+[security migration runbook](backend/SECURITY-LEDGER.md) before enabling money.
 
 The account checklist — Cloudflare (free), a KV namespace, `ADMIN_TOKEN`,
 one free ad network, the optional CI token — with exact click-paths lives in
@@ -272,7 +274,8 @@ make that day come faster — each item is a channel, not a guess.
    arm64+x86_64 with a `/Applications` link in the DMG; a `v1.1.0` release makes the download
    buttons real. Nothing converts a sponsor faster than a working install.
 3. **Deploy the backend (30 minutes, free):** follow `backend/ACCOUNT-CHECKLIST.md` exactly —
-   Cloudflare Worker + KV + `ADMIN_TOKEN`. Once `/feed.json` and `/earnings/{deviceId}` are live,
+   Cloudflare Worker + KV feed + transactional Durable Object. Complete the security
+   migration/enrollment runbook before enabling money; a healthy feed alone is not delivery proof. Once a reviewed feed is serving,
    "your campaign went live" is a curl, not an engineering promise.
 4. **First-slot bait:** when the first paid campaign clears review, the honest network counters
    (index `#netCount`, advertisers `#liveCount`) flip from 0 to 1 — that's the "auction is filling"
