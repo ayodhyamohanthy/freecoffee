@@ -30,6 +30,3 @@ new_sqlite_classes = ["LedgerAuthority"]
 # Set LEGACY_LEDGER_FROZEN=true only AFTER old money writers are stopped,
 # eventual KV propagation has drained, and a complete backup has been reviewed.
 # This does not initialize/migrate balances automatically.
-
-[vars]
-LEGACY_LEDGER_FROZEN = "true"
