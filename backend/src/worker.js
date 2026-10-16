@@ -435,6 +435,9 @@ function pickRoute(method, pathname) {
   /* Slot auction (public: anyone can bid on inventory). */
   if (method === 'GET' && pathname === '/slots') return { handled: true, route: 'slots' };
   if (method === 'GET' && pathname === '/slots/current') return { handled: true, route: 'slotCurrent' };
+  if (method === 'GET' && pathname === '/market') return { handled: true, route: 'market' };
+  if (method === 'POST' && pathname === '/mcp') return { handled: true, route: 'mcp' };
+  if (method === 'GET' && pathname === '/mcp') return { handled: true, route: 'mcpGet' };
   if (method === 'POST' && pathname === '/slots/bid') return { handled: true, route: 'slotBid' };
   if (method === 'GET' && /^\/referrals\/[^/]+$/.test(pathname)) {
     return { handled: true, route: 'referrals', code: pathname.split('/')[2] || '' };
@@ -1500,6 +1503,117 @@ async function servingList(env, feedCampaigns) {
   return { campaigns: feedCampaigns.filter(function (campaign) { return campaign.cpm >= SERVING_MIN_CPM; }), slot: slot };
 }
 
+
+/* ---------------------------- market snapshot ---------------------------
+   Read-only price discovery. The auction IS the price: a block's price is the
+   highest bid on it, and to win it you must bid above that. With no bids the
+   price to win is the floor. Nothing here estimates demand or supply that we
+   have not observed. */
+var MARKET_LOOKAHEAD_BLOCKS = 12;
+function priceToWin(topCpm) {
+  if (typeof topCpm !== 'number' || !isFinite(topCpm)) return SLOT_MIN_CPM;
+  return Math.max(SLOT_MIN_CPM, round2(topCpm + 0.01));
+}
+function marketSnapshot(readStore, now, limit) {
+  var t = (typeof now === 'number' && isFinite(now)) ? now : Date.now();
+  var n = Math.max(1, Math.min(48, limit | 0 || MARKET_LOOKAHEAD_BLOCKS));
+  var blocks = [];
+  var startMs = Math.floor(t / (SLOT_BLOCK_HOURS * 3600000)) * SLOT_BLOCK_HOURS * 3600000;
+  for (var i = 0; i < n; i++) {
+    var ts = startMs + i * SLOT_BLOCK_HOURS * 3600000;
+    var p = parseSlotId(slotIdOf(ts));
+    if (!p) continue;
+    var store = readStore(p.month) || {};
+    var bids = (store[p.date] && store[p.date][p.block]) || [];
+    var w = slotWinner(bids);
+    blocks.push({ id: p.id, startsAt: p.startsAt, endsAt: p.endsAt,
+      state: i === 0 ? 'active' : 'open', bidCount: bids.length,
+      topCpm: w ? w.cpm : null, priceToWin: priceToWin(w ? w.cpm : null) });
+  }
+  var withBids = blocks.filter(function (b) { return b.bidCount > 0; }).length;
+  return { ok: true, currency: 'USD', unit: 'CPM', floorCpm: SLOT_MIN_CPM,
+    pricing: 'first-price auction per four-hour UTC block; highest bid wins and pays its own bid',
+    blockHours: SLOT_BLOCK_HOURS, generatedAt: t, blocks: blocks,
+    summary: { blocksListed: blocks.length, blocksWithBids: withBids,
+      liveBidders: withBids > 0 } };
+}
+async function handleMarket(env, limit) {
+  if (!env || !env.SITE_KV) return json({ ok: false, error: 'KV not configured (SITE_KV binding missing)' }, 503);
+  var t = Date.now(), months = {};
+  for (var i = 0; i < MARKET_LOOKAHEAD_BLOCKS * 2; i++) {
+    var p = parseSlotId(slotIdOf(t + i * SLOT_BLOCK_HOURS * 3600000));
+    if (p && !(p.month in months)) months[p.month] = await readMonthStore(env.SITE_KV, p.month);
+  }
+  return json(marketSnapshot(function (m) { return months[m]; }, t, limit), 200, { 'cache-control': 'public, max-age=30' });
+}
+
+/* ------------------------- read-only agent endpoint -----------------------
+   Minimal stateless MCP (JSON-RPC 2.0 over POST). Public, read-only tools
+   only: browse the market, list blocks, preview a creative. It cannot bid,
+   fund, or read anything private. Bidding stays with the human on the site. */
+var MCP_TOOLS = [
+  { name: 'get_market_price', description: 'Current floor CPM and the price to win each of the next four-hour blocks.',
+    inputSchema: { type: 'object', properties: { blocks: { type: 'integer', minimum: 1, maximum: 48 } }, additionalProperties: false } },
+  { name: 'list_slots', description: 'Slot grid for one UTC month with state, bid count and top CPM per block.',
+    inputSchema: { type: 'object', properties: { month: { type: 'string', pattern: '^\\d{4}-\\d{2}$' } }, additionalProperties: false } },
+  { name: 'preview_creative', description: 'Check a compact creative against the limits. Does not submit or bid.',
+    inputSchema: { type: 'object', properties: { sponsor: { type: 'string' }, tagline: { type: 'string' }, clickUrl: { type: 'string' } }, required: ['sponsor', 'clickUrl'], additionalProperties: false } }
+];
+function previewCreative(a) {
+  var problems = [];
+  var sponsor = typeof a.sponsor === 'string' ? a.sponsor.trim() : '';
+  var tagline = typeof a.tagline === 'string' ? a.tagline.trim() : '';
+  var url = typeof a.clickUrl === 'string' ? a.clickUrl.trim() : '';
+  if (!sponsor) problems.push('sponsor is required');
+  if (sponsor.length > SPONSOR_MAX) problems.push('sponsor is longer than ' + SPONSOR_MAX + ' characters');
+  if (tagline.length > TAGLINE_MAX) problems.push('tagline is longer than ' + TAGLINE_MAX + ' characters');
+  if (url.length > URL_MAX) problems.push('clickUrl is longer than ' + URL_MAX + ' characters');
+  if (!/^https:\/\/[^\s/]+/i.test(url)) problems.push('clickUrl must be an https:// URL');
+  return { ok: problems.length === 0, problems: problems,
+    normalized: { sponsor: sponsor, tagline: tagline, clickUrl: url },
+    note: 'Preview only. Nothing was submitted. A human reviews every creative before it runs.' };
+}
+async function mcpCall(env, name, args) {
+  var a = (args && typeof args === 'object') ? args : {};
+  if (name === 'get_market_price') {
+    var r = await handleMarket(env, a.blocks);
+    return await r.json();
+  }
+  if (name === 'list_slots') {
+    var r2 = await handleSlots(env, a.month || null);
+    return await r2.json();
+  }
+  if (name === 'preview_creative') return previewCreative(a);
+  return null;
+}
+async function handleMcp(req, env) {
+  var body;
+  try { body = await req.json(); } catch (e) {
+    return json({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'parse error' } }, 400);
+  }
+  if (!body || typeof body !== 'object' || Array.isArray(body) || body.jsonrpc !== '2.0' || typeof body.method !== 'string') {
+    return json({ jsonrpc: '2.0', id: null, error: { code: -32600, message: 'invalid request' } }, 400);
+  }
+  var id = body.id === undefined ? null : body.id;
+  var reply = function (result) { return json({ jsonrpc: '2.0', id: id, result: result }, 200); };
+  var fail = function (code, message) { return json({ jsonrpc: '2.0', id: id, error: { code: code, message: message } }, 200); };
+  if (body.id === undefined) return new Response(null, { status: 202, headers: corsHeaders() });
+  if (body.method === 'initialize') {
+    return reply({ protocolVersion: '2025-03-26', capabilities: { tools: {} },
+      serverInfo: { name: 'freecoffee', version: '1.0.0' },
+      instructions: 'Read-only market data and creative checks. Bids are placed by the human on the website.' });
+  }
+  if (body.method === 'ping') return reply({});
+  if (body.method === 'tools/list') return reply({ tools: MCP_TOOLS });
+  if (body.method === 'tools/call') {
+    var p = body.params || {};
+    var out = await mcpCall(env, p.name, p.arguments);
+    if (out === null) return fail(-32602, 'unknown tool');
+    return reply({ content: [{ type: 'text', text: JSON.stringify(out) }], isError: out.ok === false });
+  }
+  return fail(-32601, 'method not found');
+}
+
 /* ------------------------------ slot handlers --------------------------- */
 async function handleSlots(env, month) {
   if (!env || !env.SITE_KV) {
@@ -1674,6 +1788,12 @@ async function handleFetch(request, env, ctx) {
         return await handleSlots(env, url.searchParams.get('month'));
       case 'slotBid':
         return await handleSlotBid(request, env);
+      case 'market':
+        return await handleMarket(env, parseInt(url.searchParams.get('blocks') || '', 10));
+      case 'mcp':
+        return await handleMcp(request, env);
+      case 'mcpGet':
+        return json({ ok: false, error: 'POST JSON-RPC to this endpoint' }, 405, { allow: 'POST' });
       case 'slotCurrent':
         return json({ ok: true, slot: await currentSlot(env, Date.now()) }, 200,
           { 'cache-control': 'public, max-age=15' });
@@ -1702,6 +1822,7 @@ if (typeof addEventListener !== 'undefined') {
 /* ES-module format entrypoint (wrangler v3+) — the deploy target. */
 export default { fetch: handleFetch };
 export {
+  marketSnapshot, priceToWin, previewCreative,
   handleFetch as workerFetch,
   validateCampaigns,
   applyEarnings,

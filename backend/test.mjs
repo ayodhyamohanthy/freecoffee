@@ -16,6 +16,9 @@ import {
   ledgerView,
   getFeed,
   workerFetch,
+  marketSnapshot,
+  priceToWin,
+  previewCreative,
   normalizeRefCode,
   normalizePlatform,
   normalizeRegion,
@@ -1126,6 +1129,58 @@ function pass(name) { n++; console.log('PASS ' + name); }
   assert.equal(publicLaunchGate([{ state:'approved_not_funded' }]).enabled, false);
   assert.equal(publicLaunchGate([{ state:'approved_not_funded', foundingPilotSignedAt:9 }]).enabled, true);
   pass('sponsor slot always falls back to demo/no-ad and launch requires a signed founding pilot');
+}
+
+
+/* ------------------------------------------------------------------------
+   Market snapshot + read-only agent endpoint
+   ------------------------------------------------------------------------ */
+{
+  assert.equal(priceToWin(null), 2, 'no bids: price to win is the floor');
+  assert.equal(priceToWin(5), 5.01, 'price to win is just above the top bid');
+  assert.equal(priceToWin(1), 2, 'never below the floor');
+  const now = Date.UTC(2026, 9, 16, 5, 0, 0);            // block 1 (04-08 UTC)
+  const store = { '2026-10-16': { 1: [{ campaignId: 'a', sponsor: 'A', cpm: 6, bidTs: 1 }, { campaignId: 'b', sponsor: 'B', cpm: 4, bidTs: 2 }] } };
+  const snap = marketSnapshot(() => store, now, 3);
+  assert.equal(snap.floorCpm, 2);
+  assert.equal(snap.blocks.length, 3);
+  assert.equal(snap.blocks[0].id, '2026-10-16#1');
+  assert.equal(snap.blocks[0].topCpm, 6);
+  assert.equal(snap.blocks[0].priceToWin, 6.01);
+  assert.equal(snap.blocks[1].topCpm, null);
+  assert.equal(snap.blocks[1].priceToWin, 2);
+  assert.equal(snap.summary.blocksWithBids, 1);
+  const empty = marketSnapshot(() => ({}), now, 2);
+  assert.equal(empty.summary.liveBidders, false, 'no bids means no claimed demand');
+  assert.ok(!('estimatedSupply' in empty), 'no invented supply numbers');
+
+  assert.equal(previewCreative({ sponsor: 'Acme', tagline: 'Hi', clickUrl: 'https://acme.example/x' }).ok, true);
+  assert.equal(previewCreative({ sponsor: 'Acme', clickUrl: 'http://acme.example' }).ok, false, 'http rejected');
+  assert.equal(previewCreative({ sponsor: '', clickUrl: 'https://a.example' }).ok, false);
+  assert.equal(previewCreative({ sponsor: 'x'.repeat(41), clickUrl: 'https://a.example' }).ok, false);
+
+  const kvStore = { get: async () => null, put: async () => {} };
+  const env = { SITE_KV: kvStore };
+  const rpc = (body) => workerFetch(new Request('https://x.test/mcp', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }), env, {});
+  const init = await (await rpc({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} })).json();
+  assert.equal(init.result.serverInfo.name, 'freecoffee');
+  const list = await (await rpc({ jsonrpc: '2.0', id: 2, method: 'tools/list' })).json();
+  assert.deepEqual(list.result.tools.map(t => t.name).sort(), ['get_market_price', 'list_slots', 'preview_creative']);
+  assert.ok(!list.result.tools.some(t => /bid|fund|pay/i.test(t.name)), 'no money-moving tools');
+  const price = await (await rpc({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'get_market_price', arguments: { blocks: 2 } } })).json();
+  assert.equal(JSON.parse(price.result.content[0].text).blocks.length, 2);
+  const bad = await (await rpc({ jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'place_bid', arguments: {} } })).json();
+  assert.equal(bad.error.code, -32602, 'unknown tool refused');
+  const note = await rpc({ jsonrpc: '2.0', method: 'notifications/initialized' });
+  assert.equal(note.status, 202);
+  const junk = await workerFetch(new Request('https://x.test/mcp', { method: 'POST', body: 'nope' }), env, {});
+  assert.equal(junk.status, 400);
+  const get = await workerFetch(new Request('https://x.test/mcp'), env, {});
+  assert.equal(get.status, 405);
+  const mk = await workerFetch(new Request('https://x.test/market?blocks=2'), env, {});
+  assert.equal(mk.status, 200);
+  assert.equal((await mk.json()).blocks.length, 2);
+  pass('market snapshot is the real auction state; agent endpoint is read-only and refuses unknown tools');
 }
 
 await import('./ledger.test.mjs');
