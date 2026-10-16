@@ -146,6 +146,7 @@ const INVARIANTS = [
   ['.fc-count', 'background', 'var(--card)', 'paper insert, not the legacy #17120f panel'],
   ['.fc-auction', 'background', 'var(--card)', 'paper insert, not the legacy #17120f panel'],
   ['.fc-footer .fc-wordmark', 'color', 'var(--ink)', 'legacy cream #f3eee5 outranks .fc-wordmark on specificity'],
+  ['.fc-dark h1', 'color', '#f7f5ee', 'headline on a dark band must be light (was invisible ink on ink)'],
 ];
 
 for (const [sel, prop, want, why] of INVARIANTS) {
