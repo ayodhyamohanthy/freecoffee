@@ -28,7 +28,7 @@ CHECK=0
 [ "${1:-}" = "--check" ] && CHECK=1
 
 SITE_FILES="index.html dashboard.html payouts.html model.html campaigns.html
-  profile.html referrals.html advertisers.html agents.html install-guide.html faq.html ad-policy.html terms.html account.html privacy.html flywheel.html sitemap.xml robots.txt
+  profile.html referrals.html advertisers.html agents.html install-guide.html faq.html ad-policy.html terms.html account.html privacy.html flywheel.html sitemap.xml robots.txt status.html
   manifest.webmanifest sw.js"
 # CNAME lives in dist permanently (copied on first sync); it is intentionally
 # NOT in SITE_FILES — the custom domain must survive even if the dev tree
@@ -53,6 +53,7 @@ assets/js/dashboard.js
 assets/js/demo.js
 assets/js/account.js
 assets/js/site.js
+assets/js/status.js
 assets/js/appnav.js
 assets/fonts/archivo-var.woff2
 "
