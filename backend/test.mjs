@@ -1192,6 +1192,7 @@ function pass(name) { n++; console.log('PASS ' + name); }
 
 await import('./ledger.test.mjs');
 await import('./accounts.test.mjs');
+await import('./clicks.test.mjs');
 
 console.log('ALL TESTS PASSED (' + n + ' groups)');
 

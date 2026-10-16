@@ -1,4 +1,5 @@
 import { pickAuthRoute, authStart, authCallback, me as accountMe, logout as accountLogout, authStatus, recordAccountBid, myBids, createLinkCode, redeemLinkCode, myLink, unlinkMac } from './accounts.js';
+import { clickRoute, handleClick, adminClicks } from './clicks.js';
 import { createLedgerAuthority } from './ledger.js';
 import { PILOT_LIST_KEY, PILOT_KEY_PREFIX, newPilot, transitionPilot,
   confirmPilotRevenue, fundPromotionalPool, eligiblePilotView, proofGate,
@@ -1762,6 +1763,15 @@ async function handleSlotBid(req, env) {
 async function handleFetch(request, env, ctx) {
   try {
     var url = new URL(request.url);
+    var clickPick = clickRoute(request.method, url.pathname);
+    if (clickPick) return await handleClick(request, env, clickPick.campaignId, { getFeed: getFeed, minCpm: SERVING_MIN_CPM, ip: clientIP });
+    if (request.method === 'GET' && url.pathname === '/admin/clicks') {
+      var ca = request.headers.get('authorization') || '';
+      if (!(env && env.ADMIN_TOKEN && safeEqual(ca, 'Bearer ' + env.ADMIN_TOKEN))) return json({ ok: false, error: 'unauthorized' }, 401);
+      var cid = url.searchParams.get('campaign') || '';
+      if (!/^[A-Za-z0-9_.-]{1,40}$/.test(cid) || !env.SITE_KV) return json({ ok: false, error: 'campaign id required' }, 400);
+      return await adminClicks(request, env, cid, Number(url.searchParams.get('days')) || 7, json);
+    }
     var authPick = pickAuthRoute(request.method, url.pathname);
     if (authPick) {
       if (authPick.route === 'authStart') return await authStart(request, env, authPick.provider);
