@@ -28,7 +28,7 @@ CHECK=0
 [ "${1:-}" = "--check" ] && CHECK=1
 
 SITE_FILES="index.html dashboard.html payouts.html model.html campaigns.html
-  profile.html referrals.html advertisers.html agents.html install-guide.html faq.html ad-policy.html terms.html
+  profile.html referrals.html advertisers.html agents.html install-guide.html faq.html ad-policy.html terms.html account.html
   manifest.webmanifest sw.js"
 # CNAME lives in dist permanently (copied on first sync); it is intentionally
 # NOT in SITE_FILES — the custom domain must survive even if the dev tree
@@ -50,6 +50,7 @@ assets/icons/icon-512.png
 assets/icons/icon-maskable-512.png
 assets/js/dashboard.js
 assets/js/demo.js
+assets/js/account.js
 "
 
 echo "==> [1/5] test.sh must pass before anything ships"
