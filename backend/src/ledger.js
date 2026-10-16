@@ -81,7 +81,10 @@ export function createLedgerAuthority(h) {
             const rows = [];
             for (const [key, ledger] of ledgers) {
               if (!validLedger(ledger)) fail(503, 'stored ledger unavailable');
-              rows.push({ ...ledger, deviceId: key.slice(5) });
+              /* QA fixture campaigns (ids starting qa_) stay out of the public report. */
+              const shown = Array.isArray(ledger.rows) ? ledger.rows.filter(r => !(r && typeof r.campaignId === 'string' && r.campaignId.startsWith('qa_'))) : ledger.rows;
+              if (Array.isArray(ledger.rows) && ledger.rows.length > 0 && shown.length === 0) continue;
+              rows.push({ ...ledger, rows: shown, deviceId: key.slice(5) });
             }
             return h.json({ ...h.aggregateStats(rows, feed.campaigns),
               verification: 'Historical client reports and administrator-authorized events; not independent ad-view proof' });

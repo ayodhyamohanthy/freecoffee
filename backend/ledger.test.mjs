@@ -14,6 +14,7 @@ export function harness(initial = {}) {
         const result = await callback({
           get: async key => structuredClone(staged.get(key)),
           put: async (key, value) => { if (key === storage.failKey) throw Error('injected write failure'); staged.set(key, structuredClone(value)); },
+          delete: async key => { staged.delete(key); },
           list: async ({prefix, limit}) => new Map([...staged].filter(([key]) => key.startsWith(prefix)).sort().slice(0, limit))
         });
         data = staged;
@@ -106,6 +107,13 @@ assert.ok(!JSON.stringify(privateView).includes(referee.deviceId));
 const stats = await (await request('/stats')).json();
 assert.equal(stats.totals.impressions, 60);
 assert.match(stats.verification, /not independent/);
+const qaLedger = structuredClone(await storage.get('earn:' + oldId));
+qaLedger.rows = [{ t: 1, type: 'impression', campaignId: 'qa_camp_001', amount: 0 }];
+await storage.transaction(async tx => { await tx.put('earn:qa-fixture', qaLedger); });
+const statsQa = await (await request('/stats')).json();
+assert.ok(!JSON.stringify(statsQa).includes('qa_camp'), 'qa_ fixture hidden from public stats');
+assert.equal(statsQa.totals.earners, stats.totals.earners, 'fixture-only ledger not counted');
+await storage.transaction(async tx => { await tx.delete('earn:qa-fixture'); });
 await storage.transaction(async tx => { const r = await tx.get('receipt:' + receipt.receiptId); r.expiresAt = 0; await tx.put('receipt:' + receipt.receiptId, r); });
 assert.deepEqual(await (await request('/track', body, referee.token)).json(), results[0], 'committed receipt retry survives expiry');
 assert.equal((await request('/track', {...body, receiptId: '00000000-0000-0000-0000-000000000000'}, referee.token)).status, 403);
