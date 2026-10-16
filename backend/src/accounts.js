@@ -35,6 +35,7 @@ export function pickAuthRoute(method, pathname) {
   var m = /^\/auth\/(github|google)\/(start|callback)$/.exec(pathname);
   if (method === 'GET' && m) return { route: 'auth' + m[2][0].toUpperCase() + m[2].slice(1), provider: m[1] };
   if (method === 'GET' && pathname === '/me') return { route: 'me' };
+  if (method === 'GET' && pathname === '/me/bids') return { route: 'myBids' };
   if (method === 'POST' && pathname === '/auth/logout') return { route: 'logout' };
   return null;
 }
@@ -101,7 +102,7 @@ export async function authCallback(request, env, name, doFetch) {
   return redirect(SITE + '#session=' + token);
 }
 
-async function sessionAccount(request, env) {
+export async function sessionAccount(request, env) {
   const m = /^Bearer ([a-f0-9]{64})$/.exec(request.headers.get('authorization') || '');
   if (!m || !env || !env.SITE_KV) return null;
   const hash = await sha(m[1]);
@@ -128,4 +129,34 @@ export async function logout(request, env, json) {
 
 export function authStatus(env) {
   return { github: providerConfigured(env, 'github'), google: providerConfigured(env, 'google') };
+}
+
+/* "Your bids": a short per-account list written after a bid is placed while
+   signed in. It records what was true at the time of the bid, nothing more. */
+const BIDS_MAX = 50;
+export async function recordAccountBid(env, request, summary) {
+  const s = await sessionAccount(request, env);
+  if (!s) return false;
+  const key = 'acctbids:' + s.account.id;
+  let list = [];
+  try { list = JSON.parse(await env.SITE_KV.get(key) || '[]'); } catch (e) { list = []; }
+  if (!Array.isArray(list)) list = [];
+  list.unshift({
+    campaignId: String(summary.campaignId || '').slice(0, 40),
+    sponsor: String(summary.sponsor || '').slice(0, 40),
+    cpm: Number(summary.cpm) || 0,
+    placed: Number(summary.placed) || 0,
+    winningAtTime: Number(summary.winning) || 0,
+    ts: Number(summary.ts) || Date.now()
+  });
+  await env.SITE_KV.put(key, JSON.stringify(list.slice(0, BIDS_MAX)));
+  return true;
+}
+
+export async function myBids(request, env, json) {
+  const s = await sessionAccount(request, env);
+  if (!s) return json({ ok: false, error: 'sign in required' }, 401);
+  let list = [];
+  try { list = JSON.parse(await env.SITE_KV.get('acctbids:' + s.account.id) || '[]'); } catch (e) { list = []; }
+  return json({ ok: true, bids: Array.isArray(list) ? list : [], note: 'Standing at the time each bid was placed. Highest bid per slot wins.' }, 200, { 'cache-control': 'no-store' });
 }

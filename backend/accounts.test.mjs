@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { workerFetch } from './src/worker.js';
+import { workerFetch, slotIdOf } from './src/worker.js';
 
 const store = new Map();
 const kv = {
@@ -73,6 +73,22 @@ globalThis.fetch = realFetch;
 const token2 = /#session=([a-f0-9]{64})/.exec(r.headers.get('location'))[1];
 const again = await (await call('/me', { headers: { authorization: 'Bearer ' + token2 } })).json();
 assert.equal(again.account.id, mine.account.id, 'stable account id per provider identity');
+
+// Bids placed while signed in appear under "your bids"; anonymous bids do not.
+const slotX = slotIdOf(Date.now() + 3 * 86400000);
+const campX = (id, cpm) => ({ id, sponsor: 'Sponsor ' + id, tagline: 't', clickUrl: 'https://ads.example/' + id, cpm });
+const bid = (id, cpm, tk) => call('/slots/bid', { method: 'POST', headers: { 'content-type': 'application/json', ...(tk ? { authorization: 'Bearer ' + tk } : {}) }, body: JSON.stringify({ campaign: campX(id, cpm), slots: [slotX], bidder: 'x@example.com' }) });
+assert.equal((await call('/me/bids')).status, 401);
+assert.equal((await bid('anon1', 5)).status, 200);
+assert.equal((await bid('mine1', 7, token2)).status, 200);
+const bids = await (await call('/me/bids', { headers: { authorization: 'Bearer ' + token2 } })).json();
+assert.equal(bids.bids.length, 1, 'only the signed-in bid is listed');
+assert.equal(bids.bids[0].campaignId, 'mine1');
+assert.equal(bids.bids[0].cpm, 7);
+assert.equal(bids.bids[0].winningAtTime, 1);
+// A second session of the same account sees the same list; a forged token sees nothing.
+assert.equal((await (await call('/me/bids', { headers: { authorization: 'Bearer ' + token } })).json()).bids.length, 1);
+assert.equal((await call('/me/bids', { headers: { authorization: 'Bearer ' + 'e'.repeat(64) } })).status, 401);
 
 // Logout kills only that session.
 assert.equal((await call('/auth/logout', { method: 'POST', headers: { authorization: 'Bearer ' + token } })).status, 200);

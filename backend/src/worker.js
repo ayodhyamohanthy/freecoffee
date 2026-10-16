@@ -1,4 +1,4 @@
-import { pickAuthRoute, authStart, authCallback, me as accountMe, logout as accountLogout, authStatus } from './accounts.js';
+import { pickAuthRoute, authStart, authCallback, me as accountMe, logout as accountLogout, authStatus, recordAccountBid, myBids } from './accounts.js';
 import { createLedgerAuthority } from './ledger.js';
 import { PILOT_LIST_KEY, PILOT_KEY_PREFIX, newPilot, transitionPilot,
   confirmPilotRevenue, fundPromotionalPool, eligiblePilotView, proofGate,
@@ -1741,6 +1741,7 @@ async function handleSlotBid(req, env) {
     await env.SITE_KV.put(rateKey, String(used + 1), { expirationTtl: 86400 });
   } catch (e3) { /* rate-limit write failed — the bids are already the record */ }
 
+  try { await recordAccountBid(env, req, { campaignId: bid.campaignId, sponsor: bid.sponsor, cpm: bid.cpm, placed: placed.length, winning: winning, ts: now }); } catch (e4) { /* the bid stands even if the account list write fails */ }
   return json({
     ok: true,
     campaignId: bid.campaignId,
@@ -1766,6 +1767,7 @@ async function handleFetch(request, env, ctx) {
       if (authPick.route === 'authStart') return await authStart(request, env, authPick.provider);
       if (authPick.route === 'authCallback') return await authCallback(request, env, authPick.provider, function (u, o) { return fetch(u, o); });
       if (authPick.route === 'me') return await accountMe(request, env, json);
+      if (authPick.route === 'myBids') return await myBids(request, env, json);
       return await accountLogout(request, env, json);
     }
     if (request.method === 'GET' && url.pathname === '/auth/status') return json({ ok: true, providers: authStatus(env) }, 200, { 'cache-control': 'no-store' });
