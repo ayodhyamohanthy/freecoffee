@@ -36,6 +36,10 @@ export function pickAuthRoute(method, pathname) {
   if (method === 'GET' && m) return { route: 'auth' + m[2][0].toUpperCase() + m[2].slice(1), provider: m[1] };
   if (method === 'GET' && pathname === '/me') return { route: 'me' };
   if (method === 'GET' && pathname === '/me/bids') return { route: 'myBids' };
+  if (method === 'POST' && pathname === '/me/link-code') return { route: 'linkCode' };
+  if (method === 'POST' && pathname === '/link/redeem') return { route: 'linkRedeem' };
+  if (method === 'GET' && pathname === '/me/link') return { route: 'myLink' };
+  if (method === 'POST' && pathname === '/me/link/unlink') return { route: 'unlink' };
   if (method === 'POST' && pathname === '/auth/logout') return { route: 'logout' };
   return null;
 }
@@ -159,4 +163,65 @@ export async function myBids(request, env, json) {
   let list = [];
   try { list = JSON.parse(await env.SITE_KV.get('acctbids:' + s.account.id) || '[]'); } catch (e) { list = []; }
   return json({ ok: true, bids: Array.isArray(list) ? list : [], note: 'Standing at the time each bid was placed. Highest bid per slot wins.' }, 200, { 'cache-control': 'no-store' });
+}
+
+/* Account-side Mac link. A signed-in user makes a one-time code; the Mac side
+   redeems it and the account records one linked Mac (label only). This changes
+   nothing about earning: no device is enrolled in the ledger and nothing is
+   credited by linking. */
+const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+const CODE_TTL = 600;
+const REDEEM_PER_HOUR = 20;
+function newCode() {
+  const b = crypto.getRandomValues(new Uint8Array(8));
+  let c = '';
+  for (let i = 0; i < 8; i++) c += CODE_ALPHABET[b[i] % CODE_ALPHABET.length];
+  return c.slice(0, 4) + '-' + c.slice(4);
+}
+const normCode = v => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+export async function createLinkCode(request, env, json) {
+  const s = await sessionAccount(request, env);
+  if (!s) return json({ ok: false, error: 'sign in required' }, 401);
+  const code = newCode();
+  const exp = Date.now() + CODE_TTL * 1000;
+  await env.SITE_KV.put('linkcode:' + await sha(normCode(code)), JSON.stringify({ accountId: s.account.id, exp }), { expirationTtl: CODE_TTL });
+  return json({ ok: true, code, expiresAt: exp, note: 'One use. Expires in 10 minutes. Linking does not change what you earn.' }, 200, { 'cache-control': 'no-store' });
+}
+
+export async function redeemLinkCode(request, env, json, ip) {
+  let body = null;
+  try { body = await request.json(); } catch (e) { return json({ ok: false, error: 'invalid JSON body' }, 400); }
+  const code = normCode(body && body.code);
+  if (code.length !== 8) return json({ ok: false, error: 'invalid code' }, 400);
+  const rk = 'linkrate:' + String(ip || 'x').slice(0, 64) + ':' + new Date().toISOString().slice(0, 13);
+  const used = Number(await env.SITE_KV.get(rk)) || 0;
+  if (used >= REDEEM_PER_HOUR) return json({ ok: false, error: 'too many attempts, try later' }, 429);
+  await env.SITE_KV.put(rk, String(used + 1), { expirationTtl: 3700 });
+  const ck = 'linkcode:' + await sha(code);
+  let rec = null;
+  try { rec = JSON.parse(await env.SITE_KV.get(ck) || 'null'); } catch (e) { rec = null; }
+  if (!rec || !rec.accountId || rec.exp < Date.now()) return json({ ok: false, error: 'code not valid or expired' }, 400);
+  const lk = 'acctlink:' + rec.accountId;
+  if (await env.SITE_KV.get(lk)) return json({ ok: false, error: 'this account already has a linked Mac; unlink it first' }, 409);
+  await env.SITE_KV.delete(ck);
+  const label = cleanName(body.label || 'My Mac').slice(0, 40);
+  const link = { linkId: crypto.randomUUID(), label, linkedAt: Date.now() };
+  await env.SITE_KV.put(lk, JSON.stringify(link));
+  return json({ ok: true, linked: true, label }, 200, { 'cache-control': 'no-store' });
+}
+
+export async function myLink(request, env, json) {
+  const s = await sessionAccount(request, env);
+  if (!s) return json({ ok: false, error: 'sign in required' }, 401);
+  let link = null;
+  try { link = JSON.parse(await env.SITE_KV.get('acctlink:' + s.account.id) || 'null'); } catch (e) { link = null; }
+  return json({ ok: true, link: link ? { label: link.label, linkedAt: link.linkedAt } : null }, 200, { 'cache-control': 'no-store' });
+}
+
+export async function unlinkMac(request, env, json) {
+  const s = await sessionAccount(request, env);
+  if (!s) return json({ ok: false, error: 'sign in required' }, 401);
+  await env.SITE_KV.delete('acctlink:' + s.account.id);
+  return json({ ok: true }, 200, { 'cache-control': 'no-store' });
 }

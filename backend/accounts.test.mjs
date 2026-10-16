@@ -90,6 +90,27 @@ assert.equal(bids.bids[0].winningAtTime, 1);
 assert.equal((await (await call('/me/bids', { headers: { authorization: 'Bearer ' + token } })).json()).bids.length, 1);
 assert.equal((await call('/me/bids', { headers: { authorization: 'Bearer ' + 'e'.repeat(64) } })).status, 401);
 
+// Mac link codes: account-side only, one Mac per account, one-use codes.
+const post = (path, body, tk) => call(path, { method: 'POST', headers: { 'content-type': 'application/json', ...(tk ? { authorization: 'Bearer ' + tk } : {}) }, body: JSON.stringify(body || {}) });
+assert.equal((await post('/me/link-code')).status, 401);
+assert.equal((await (await call('/me/link', { headers: { authorization: 'Bearer ' + token2 } })).json()).link, null);
+const lc = await (await post('/me/link-code', {}, token2)).json();
+assert.match(lc.code, /^[A-Z2-9]{4}-[A-Z2-9]{4}$/);
+assert.equal((await post('/link/redeem', { code: 'AAAA-AAAA' })).status, 400, 'wrong code refused');
+const red = await post('/link/redeem', { code: lc.code.toLowerCase(), label: 'Work <Mac>' });
+assert.equal(red.status, 200);
+assert.equal((await post('/link/redeem', { code: lc.code })).status, 400, 'code is single use');
+const lk = await (await call('/me/link', { headers: { authorization: 'Bearer ' + token2 } })).json();
+assert.equal(lk.link.label, 'Work Mac', 'label cleaned');
+const lc2 = await (await post('/me/link-code', {}, token2)).json();
+assert.equal((await post('/link/redeem', { code: lc2.code })).status, 409, 'one Mac per account');
+assert.equal((await post('/me/link/unlink', {}, token2)).status, 200);
+assert.equal((await (await call('/me/link', { headers: { authorization: 'Bearer ' + token2 } })).json()).link, null);
+assert.equal((await post('/link/redeem', { code: lc2.code })).status, 200, 'relink after unlink');
+// Linking never touches the ledger or earnings.
+assert.ok(![...store.keys()].some(k => k.startsWith('earn:')), 'no ledger writes from linking');
+await post('/me/link/unlink', {}, token2);
+
 // Logout kills only that session.
 assert.equal((await call('/auth/logout', { method: 'POST', headers: { authorization: 'Bearer ' + token } })).status, 200);
 assert.equal((await call('/me', { headers: { authorization: 'Bearer ' + token } })).status, 401);

@@ -1,4 +1,4 @@
-import { pickAuthRoute, authStart, authCallback, me as accountMe, logout as accountLogout, authStatus, recordAccountBid, myBids } from './accounts.js';
+import { pickAuthRoute, authStart, authCallback, me as accountMe, logout as accountLogout, authStatus, recordAccountBid, myBids, createLinkCode, redeemLinkCode, myLink, unlinkMac } from './accounts.js';
 import { createLedgerAuthority } from './ledger.js';
 import { PILOT_LIST_KEY, PILOT_KEY_PREFIX, newPilot, transitionPilot,
   confirmPilotRevenue, fundPromotionalPool, eligiblePilotView, proofGate,
@@ -1768,6 +1768,10 @@ async function handleFetch(request, env, ctx) {
       if (authPick.route === 'authCallback') return await authCallback(request, env, authPick.provider, function (u, o) { return fetch(u, o); });
       if (authPick.route === 'me') return await accountMe(request, env, json);
       if (authPick.route === 'myBids') return await myBids(request, env, json);
+      if (authPick.route === 'linkCode') return await createLinkCode(request, env, json);
+      if (authPick.route === 'linkRedeem') return await redeemLinkCode(request, env, json, clientIP(request));
+      if (authPick.route === 'myLink') return await myLink(request, env, json);
+      if (authPick.route === 'unlink') return await unlinkMac(request, env, json);
       return await accountLogout(request, env, json);
     }
     if (request.method === 'GET' && url.pathname === '/auth/status') return json({ ok: true, providers: authStatus(env) }, 200, { 'cache-control': 'no-store' });
