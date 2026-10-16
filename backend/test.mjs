@@ -421,6 +421,13 @@ function pass(name) { n++; console.log('PASS ' + name); }
   assert.equal(body.campaigns[0].sponsor, 'S1', 'sponsor joined from the served feed');
   assert.ok(JSON.stringify(body).indexOf('dev1') === -1, 'no device ids leak');
 
+  // QA fixture rows (qa_ campaign ids) are hidden from the public report.
+  await kv.put('earn:qadev', JSON.stringify({ rows: [{ t: T1, type: 'impression', campaignId: 'qa_camp_001', amount: 0, minutes: 1 }] }));
+  const qaRes = await (await workerFetch(new Request('https://x.test/stats'), env, {})).json();
+  assert.equal(qaRes.totals.earners, 2, 'fixture-only ledger not counted');
+  assert.ok(JSON.stringify(qaRes).indexOf('qa_camp') === -1, 'qa_ ids hidden');
+  delete store['earn:qadev'];
+
   // Proto-named campaign ids aggregate without polluting the rollup.
   const proto = aggregateStats(
     [{ rows: [{ t: T1, type: 'impression', campaignId: '__proto__', amount: 0.01, minutes: 5 }] }],

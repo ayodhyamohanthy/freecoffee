@@ -965,6 +965,15 @@ async function handleStats(env) {
               if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
                 parsed.deviceId = String(page.keys[i].name).slice('earn:'.length);
               }
+              /* QA fixtures (campaign ids starting qa_) never show on the
+                 public report; a ledger with only fixture rows is dropped. */
+              if (parsed && Array.isArray(parsed.rows)) {
+                var before = parsed.rows.length;
+                parsed.rows = parsed.rows.filter(function (r) {
+                  return !(r && typeof r.campaignId === 'string' && r.campaignId.indexOf('qa_') === 0);
+                });
+                if (before > 0 && parsed.rows.length === 0) continue;
+              }
               ledgers.push(parsed);
             } catch (e) { /* skip corrupt */ }
           }
