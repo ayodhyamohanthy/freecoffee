@@ -915,7 +915,7 @@ async function getFeed(env) {
 }
 
 /* --------------------------- request handlers --------------------------- */
-async function handleFeed(env) {
+async function handleFeed(env, origin) {
   var feed = await getFeed(env);
   /* `campaigns` is the SERVING list, not the raw feed: while a slot has a
      winner that winner is the only thing that serves (winner takes all), so
@@ -923,8 +923,17 @@ async function handleFeed(env) {
      — honours the auction with no client change. `openFeedCount` keeps the
      advertiser page's "live campaigns" number honest. */
   var served = await servingList(env, feed.campaigns);
+  /* Additive: each clickable campaign also carries `clickRedirect`, our
+     verified-click address. Clients that ignore it keep using clickUrl. */
+  var out = served.campaigns.map(function (c) {
+    if (!c || typeof c !== 'object' || c.allowClicks === false || !origin || !/^[A-Za-z0-9_.-]{1,40}$/.test(String(c.id))) return c;
+    var copy = {};
+    Object.keys(c).forEach(function (k) { copy[k] = c[k]; });
+    copy.clickRedirect = origin + '/c/' + c.id;
+    return copy;
+  });
   return json({
-    campaigns: served.campaigns,
+    campaigns: out,
     openFeedCount: feed.campaigns.length,
     slot: served.slot
   }, 200, { 'cache-control': 'public, max-age=30' });
@@ -1791,7 +1800,7 @@ async function handleFetch(request, env, ctx) {
       case 'preflight':
         return new Response(null, { status: 204, headers: corsHeaders() });
       case 'feed':
-        return await handleFeed(env);
+        return await handleFeed(env, url.origin);
       case 'stats':
         return env && env.LEDGER ? await handleMoney(request, env) : await handleStats(env);
       case 'track':

@@ -35,6 +35,13 @@ assert.equal(adm.days[0].clicks, 2, 'two networks counted, repeats ignored');
 assert.equal((await get('/admin/clicks?campaign=camp1')).status, 401);
 assert.ok(![...store.keys()].some(k => k.includes('1.1.1.1')) && ![...store.values()].some(v => v.includes('1.1.1.1')), 'raw address never stored');
 assert.ok(![...store.keys()].some(k => k.startsWith('earn:')), 'clicks credit nothing');
+// The feed carries the redirect address additively; click-disabled campaigns do not get one.
+const feedBody = await (await get('/feed.json')).json();
+const fc1 = feedBody.campaigns.find(c => c.id === 'camp1');
+assert.equal(fc1.clickRedirect, 'https://api.test/c/camp1');
+assert.equal(fc1.clickUrl, 'https://s1.example/landing?x=1', 'clickUrl unchanged for old clients');
+const fnc = feedBody.campaigns.find(c => c.id === 'noclick');
+assert.ok(!fnc || fnc.clickRedirect === undefined, 'no redirect for click-disabled campaigns');
 // Existing sponsor tracking parameters are not overwritten; http is refused.
 assert.equal(new URL(trackedUrl('https://a.example/?utm_source=x', 'c')).searchParams.get('utm_source'), 'x');
 assert.equal(trackedUrl('http://a.example/', 'c'), null);
