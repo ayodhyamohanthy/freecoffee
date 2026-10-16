@@ -110,14 +110,14 @@ assert.equal(winner.known.one.mine, undefined, 'server refresh clears stale loca
 
   // Structured chip: two-line copy inside the bar, tile monogram, honest status line.
   const s = run(engine, true);
-  const names = D.SPONSORS.map(x => x.name);
-  assert(names.includes(s.head.textContent), 'chip headline must be a demo sponsor');
-  const match = D.SPONSORS.find(x => x.name === s.head.textContent);
-  assert.equal(s.small.textContent, match.tag, 'chip second line must be THAT sponsor tagline');
-  assert.match(s.mark.textContent, /^[A-Z0-9]{1,2}$/, 'tile must show a short monogram');
+  // The demo chip shows one example advertiser (skipwait.me) with its own icon.
+  assert.equal(s.head.textContent, 'skipwait.me', 'chip headline must be the example advertiser');
+  assert.equal(s.small.textContent, 'Free job referrals. A warmer way in.', 'chip second line must be the real tagline');
+  assert.equal(s.mark.textContent, '', 'tile shows the icon, not a monogram');
+  assert.match(String(s.mark.style.backgroundImage), /skipwait-icon\.svg/, 'tile must carry the skipwait.me icon');
   assert.equal(s.chip.textContent, '', 'structured chip must never be flattened by textContent');
   assert.equal(s.tag.textContent,
-    'Fictional demo sponsor (simulated) — display only, nothing is collected.',
+    'Example advertiser, not a paid campaign — display only, nothing is collected.',
     'the line under the bar must state the demo status, not repeat the tagline');
   assert.equal(s.chip.attrs['data-paused'], undefined, 'chip starts without a paused flag');
 
@@ -133,7 +133,7 @@ assert.equal(winner.known.one.mine, undefined, 'server refresh clears stale loca
   s.api.applyLiveCampaigns([]);
   assert.equal(s.mark.style.backgroundColor, '', 'returning to demo clears live accent');
   assert.equal(s.tag.textContent,
-    'Fictional demo sponsor (simulated) — display only, nothing is collected.',
+    'Example advertiser, not a paid campaign — display only, nothing is collected.',
     'returning to demo replaces rather than appends to the live caption');
 
   // Legacy single-line markup still renders instead of throwing.
