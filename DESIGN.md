@@ -1,3 +1,14 @@
+> **Superseded for public pages (Oct 16, founder).** The founder said the site
+> "doesn't look like" the reference and asked for a visible match. Public
+> (`.fc-public`) pages now use: cream paper `#f7f5ee`, ink `#202521`, mint
+> `#edf3f0` and teal `#e4f1f0` bands, dark ink bands, one gold action
+> `#f6c944` (8px radius, 1px `#d9a92b` border), Archivo Variable headlines
+> (weight 735, tracking -0.045em), 1194px container, 110px section rhythm,
+> cards `#fffefa` with 1px ink border and 16px radius. The black Promova
+> rules below still describe the app-shell pages (dashboard, payouts,
+> profile, referrals, flywheel, campaigns, model). Never use the reference's
+> name or the words "menu bar" in public copy.
+
 # FreeCoffee DESIGN.md — Promova midnight-magazine reskin
 
 Source lock: **Promova** (Refero style `dae5e893…`, primary) + **Hellotime**

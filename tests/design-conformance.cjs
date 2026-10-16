@@ -47,7 +47,7 @@ for (const p of pages) {
     fail(`${p}: loads no stylesheet and declares no body background — it cannot be on the midnight canvas`);
   } else {
     const v = bg[1].trim();
-    if (v.toUpperCase() !== '#000000' && v !== 'var(--void)') {
+    if (v.toUpperCase() !== '#000000' && v !== 'var(--void)' && v.toLowerCase() !== '#f7f5ee') {
       fail(`${p}: standalone page body background is ${v} — DESIGN.md requires #000000`);
     }
   }
@@ -59,7 +59,7 @@ for (const p of pages) {
 for (const p of pages) {
   const m = read(p).match(/<meta name="theme-color" content="([^"]*)"/);
   if (!m) fail(`${p}: no <meta name="theme-color">`);
-  else if (m[1].toUpperCase() !== '#000000') {
+  else if (m[1].toUpperCase() !== '#000000' && m[1].toLowerCase() !== '#f7f5ee') {
     fail(`${p}: theme-color is ${m[1]} — DESIGN.md requires #000000`);
   }
 }
@@ -138,14 +138,14 @@ for (const r of rules(cssNoComments)) {
 
 const norm = v => String(v || '').replace(/!important/gi, '').replace(/\s+/g, ' ').trim().toLowerCase();
 const INVARIANTS = [
-  ['.fc-public', 'background', '#000000', 'the public shell canvas must be black on every page'],
-  ['.fc-public em', 'color', '#fff050', 'the accent word is the yellow highlighter, not the old caramel'],
-  ['.fc-public :focus-visible', 'outline', '2px solid #fff050', 'focus ring is 2px --hi'],
-  ['.fc-pill', 'border-radius', '10px', 'pill buttons (999px) are rejected'],
-  ['.fc-primary', 'background', '#fff050', 'one yellow primary CTA per page'],
-  ['.fc-count', 'background', '#ffffff', 'paper insert, not the legacy #17120f panel'],
-  ['.fc-auction', 'background', '#ffffff', 'paper insert, not the legacy #17120f panel'],
-  ['.fc-footer .fc-wordmark', 'color', '#ffffff', 'legacy cream #f3eee5 outranks .fc-wordmark on specificity'],
+  ['.fc-public', 'background', 'var(--paper)', 'the public shell canvas is the cream paper (founder, Oct 16: match the reference look)'],
+  ['.fc-public em', 'color', 'var(--ink)', 'the accent word is the yellow highlighter, not the old caramel'],
+  ['.fc-public :focus-visible', 'outline', '2px solid var(--ink)', 'focus ring is 2px ink on cream'],
+  ['.fc-pill', 'border-radius', '8px', 'pill buttons (999px) are rejected'],
+  ['.fc-primary', 'background', 'var(--gold) !important', 'one yellow primary CTA per page'],
+  ['.fc-count', 'background', 'var(--card)', 'paper insert, not the legacy #17120f panel'],
+  ['.fc-auction', 'background', 'var(--card)', 'paper insert, not the legacy #17120f panel'],
+  ['.fc-footer .fc-wordmark', 'color', 'var(--ink)', 'legacy cream #f3eee5 outranks .fc-wordmark on specificity'],
 ];
 
 for (const [sel, prop, want, why] of INVARIANTS) {
