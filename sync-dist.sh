@@ -89,7 +89,7 @@ echo "==> [3/5] copying public files"
 # shellcheck disable=SC2086
 cp $SITE_FILES "$WORK/dist/"
 mkdir -p "$WORK/dist/assets" "$WORK/dist/app" "$WORK/dist/feeds"
-cp -R assets/css assets/js assets/icons "$WORK/dist/assets/"
+cp -R assets/css assets/js assets/icons assets/img "$WORK/dist/assets/"
 cp app/Info-howto.md "$WORK/dist/app/"
 cp feeds/*.json "$WORK/dist/feeds/"
 cp dist-assets/README.md "$WORK/dist/README.md"
