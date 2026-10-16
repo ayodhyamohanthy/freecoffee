@@ -46,6 +46,7 @@ assets/css/styles.css
 assets/icons/icon-192.png
 assets/img/cafe-laptop.jpg
 assets/img/og.png
+assets/img/skipwait-icon.svg
 assets/img/cafe-table.jpg
 assets/icons/icon-512.png
 assets/icons/icon-maskable-512.png
