@@ -212,7 +212,7 @@ node tests/state-regressions.cjs
 
 # ------------------------------------------------------------------ 6. De-branding guard
 step "No competitor brand references"
-HITS=$(grep -riIl --exclude-dir=.git --exclude-dir=.workbuddy-ai --exclude=test.sh -E 'sponsorbar|kickbot' . 2>/dev/null)
+HITS=$(grep -riIl --exclude-dir=.git --exclude-dir=.workbuddy-ai --exclude=test.sh -E "$(printf '%s' sponsor bar)|kickbot" . 2>/dev/null)
 if [ -z "$HITS" ]; then
   ok "no competitor brand references in any tracked text file"
 else
