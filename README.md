@@ -35,7 +35,7 @@ That's it — any static file server works.
 | `profile.html` | App-shell page (**Account › Profile**). Wide Account form (display name, email, coffee preference, email prefs → saved with a toast to `freecoffee:v1`) plus Payout account (Not set up + Set up), Connected Mac (green Connected pill, "This Mac · macOS 26", Unlink with confirm), and AI agents (Copy setup prompt → clipboard). |
 | `referrals.html` | App-shell page (**Earn › Referrals**). Referral link card (URL + Copy → clipboard), rewards cards, a 3-stat row (referred users **2** / referral earnings **$2.82** / next tier), and the referee table from the seeded ledger. The link itself is real and attributed (`?ref=<your code>`); a `REAL (backend)` line appears above the seeded numbers once a backend URL is configured. |
 | `flywheel.html` | App-shell page (**Earn › Flywheel**). The growth loop as code: the five stages (capture → activate → earn → share → advertise) with the back-edge that makes it compound, your own share kit (code + attributed link + Web Share), **ten platform artifacts** (Mac .dmg · Homebrew · PWA · GitHub · AI agent/MCP · X · LinkedIn · Reddit · Hacker News · email) each labelled *attributed* or *no referrer*, three live tile counts (`—` until a backend is configured, never a fake zero), the full "what is live today / what is not" audit table, and the compounding argument. `localStorage`: `freecoffee:refcode`, `freecoffee:refcapture`. |
-| `advertisers.html` | App-shell page (**Advertise › Campaigns**). The advertiser pitch + self-serve onboarding: hero, how-it-works (submit feed → review → live), the copyable feed contract JSON, the honesty box (what the client reports today vs what needs the platform backend), pricing (auction CPM with tier floors, $15 minimum, 70% + 10% launch boost to the user), and the contact card (`advertisers@freecoffee.tech`). |
+| `advertisers.html` | App-shell page (**Advertise › Campaigns**). The advertiser pitch + self-serve onboarding: hero, how-it-works (submit feed → review → live), the copyable feed contract JSON, the honesty box (what the client reports today vs what needs the platform backend), pricing (auction CPM with tier floors, $15 minimum, 70% + 10% launch boost to the user), and the contact card (`hello@freecoffee.tech`). |
 | `assets/js/demo.js` | Seeded PRNG (mulberry32, seed 42), history generator, projection math, cups helper, Mac status area demo + popover mock cycler, and the live-feed bridge (`fetchLiveCampaigns` — the AD FEED CONTRACT client). Also CommonJS-exported — `node` can `require` it. |
 | `assets/js/dashboard.js` | Dashboard rendering + interactions, plus the live-campaign surfaces (banner under the balance card, LIVE rows in Recent sponsors, disconnect). All dynamic strings go through `textContent`/`createElement` — no `innerHTML` with dynamic data. |
 | `assets/css/styles.css` | The whole design system: the Promova midnight-magazine palette (`--void #000000` canvas on every page, white/Smoke `#f5f5f5` cards at 30px radius, Fog `#dddddd` hairlines, highlighter `#fff050` reserved for the single primary CTA per page) plus the app-shell (sidebar / breadcrumb / cards), popover panel, forms, tables, chips, toggles, sliders, toasts, the Mac status area mock, responsive stacking, `:focus-visible`, `prefers-reduced-motion`. `DESIGN.md` is the authority for all of it — if the code drifts from that file, fix the code, not the file. |
@@ -208,7 +208,7 @@ how review works, the copyable feed spec, the honesty box, and the pricing card 
 the published tier floors, $15 minimum campaign spend, 70% + 10% launch boost to the user). The flow: host the JSON
 anywhere HTTPS (GitHub raw, your CDN, your server) → paste the URL into **Profile › Ad feed URL**
 (Test button verifies it) → campaigns appear in the Mac status area and dashboard. Email
-`advertisers@freecoffee.tech` for the review step — every campaign is human-reviewed before it can
+`hello@freecoffee.tech` for the review step — every campaign is human-reviewed before it can
 reach other users.
 
 ### Honesty note (read this before pitching)
@@ -265,7 +265,7 @@ make that day come faster — each item is a channel, not a guess.
 
 1. **Sell the first 10 advertisers, not impressions.** `advertisers.html#launchOffer` waives the
    $15 minimum and the platform cut on the first $100 for the first 10. Prospect list to work by
-   hand (email `advertisers@freecoffee.tech` is already on the page): indie macOS app makers
+   hand (email `hello@freecoffee.tech` is already on the page): indie macOS app makers
    (they're your natural audience — they ship on Macs), developer-tool SaaS, coffee/desk brands,
    and any brand already buying Mac status area or desktop placements elsewhere (proven buyers of this
    exact format). Each gets a two-minute pitch: "Mac status area, 1 minute, your CPM, your dashboard — 0
