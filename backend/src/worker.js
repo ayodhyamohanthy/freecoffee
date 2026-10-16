@@ -1,3 +1,4 @@
+import { pickAuthRoute, authStart, authCallback, me as accountMe, logout as accountLogout, authStatus } from './accounts.js';
 import { createLedgerAuthority } from './ledger.js';
 import { PILOT_LIST_KEY, PILOT_KEY_PREFIX, newPilot, transitionPilot,
   confirmPilotRevenue, fundPromotionalPool, eligiblePilotView, proofGate,
@@ -1760,6 +1761,14 @@ async function handleSlotBid(req, env) {
 async function handleFetch(request, env, ctx) {
   try {
     var url = new URL(request.url);
+    var authPick = pickAuthRoute(request.method, url.pathname);
+    if (authPick) {
+      if (authPick.route === 'authStart') return await authStart(request, env, authPick.provider);
+      if (authPick.route === 'authCallback') return await authCallback(request, env, authPick.provider, function (u, o) { return fetch(u, o); });
+      if (authPick.route === 'me') return await accountMe(request, env, json);
+      return await accountLogout(request, env, json);
+    }
+    if (request.method === 'GET' && url.pathname === '/auth/status') return json({ ok: true, providers: authStatus(env) }, 200, { 'cache-control': 'no-store' });
     var picked = pickRoute(request.method, url.pathname);
     if (!picked.handled) return json({ ok: false, error: 'not found' }, 404);
     switch (picked.route) {
