@@ -12,6 +12,7 @@ This document governs all AI-driven contributions, refactors, and terminal execu
 4. **Zero Package Hallucinations:** **There is no root `package.json`, no `tsconfig.json`, no `node_modules`, no bundler, and no npm dependency for the web layer.** Do not add one, and do not import a library that would require one. `backend/package.json` exists solely to declare `wrangler` as a devDependency.
 5. **No Regressions on Working Code:** Run the suites in §4 before declaring an issue resolved.
 6. **Say What Is True.** This repository's most expensive past bugs were not crashes — they were **the product misdescribing itself**: advertising a payout rate the code did not pay, and shipping docs that named a palette no longer present in the stylesheet. Green tests prove internal consistency, **not** truthfulness. If you change a number or a behaviour, grep the copy that describes it — across `README.md`, `model.html`, `advertisers.html`, `index.html`, and the Swift popover — in the same change.
+7. **Never choose money-spending options.** Founder rule (Oct 16, 2026): pick free or money-earning options only. Paid plans and paid add-ons are dropped, not proposed as defaults.
 
 ---
 
