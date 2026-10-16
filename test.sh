@@ -17,6 +17,7 @@
 #   - Dashboard/payout state regressions (tests/state-regressions.cjs)
 #   - Competitor brand references
 #   - Referenced local files exist + in-page fragments resolve to real ids
+#   - Sitemap lists exactly the published pages (sitemap.xml <-> sync-dist.sh)
 #   - Asset version pairing (?v= in HTML <-> sw.js ASSET_V <-> CACHE) — a
 #     mismatch silently breaks the precache and offline first loads — plus the
 #     PWA lockstep floor (ASSET_V >= padded APP_VERSION from app/build.sh) so
@@ -41,7 +42,7 @@ FAIL=0
 # quiet lie as a stale "(24 groups)" in the backend label. Now there is one
 # number to maintain, and a stale one is self-evident: the run prints a step
 # count one higher than the total, e.g. "13/12".
-TOTAL_STEPS=12
+TOTAL_STEPS=13
 STEP_NO=0
 step() { STEP_NO=$((STEP_NO+1)); printf '\n==> %d/%d %s\n' "$STEP_NO" "$TOTAL_STEPS" "$1"; }
 ok()  { PASS=$((PASS+1)); printf '    PASS  %s\n' "$1"; }
@@ -381,6 +382,33 @@ case "$BROWSER_RESULT" in
        fi ;;
   *) bad "browser regressions" ;;
 esac
+
+# ------------------------------------------------------------------ 6b. Sitemap lockstep
+step "Sitemap lists exactly the published pages"
+python3 - <<'PY'
+import re, sys
+sm = open('sitemap.xml', encoding='utf-8').read()
+locs = re.findall(r'<loc>([^<]+)</loc>', sm)
+sync = open('sync-dist.sh', encoding='utf-8').read()
+m = re.search(r'SITE_FILES="([^"]*)"', sync)
+pages = m.group(1).split()
+paths = set()
+for p in pages:
+    if p == 'index.html':
+        paths.add('https://freecoffee.tech/')
+    elif p.endswith('.html'):
+        paths.add('https://freecoffee.tech/' + p)
+bad = []
+missing = sorted(paths - set(locs))
+extra = sorted(p for p in locs if p not in paths)
+if missing: bad.append('published but not in sitemap: ' + ', '.join(missing))
+if extra: bad.append('in sitemap but not published: ' + ', '.join(extra))
+if bad:
+    for b in bad: print('    FAIL ' + b)
+    sys.exit(1)
+print('    ok   sitemap covers exactly the %d published pages' % len(paths))
+PY
+[ $? -eq 0 ] && ok "sitemap covers the published pages" || bad "sitemap covers the published pages"
 
 # ------------------------------------------------------------------ summary
 echo
