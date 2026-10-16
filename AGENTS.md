@@ -13,6 +13,8 @@ This document governs all AI-driven contributions, refactors, and terminal execu
 5. **No Regressions on Working Code:** Run the suites in §4 before declaring an issue resolved.
 6. **Say What Is True.** This repository's most expensive past bugs were not crashes — they were **the product misdescribing itself**: advertising a payout rate the code did not pay, and shipping docs that named a palette no longer present in the stylesheet. Green tests prove internal consistency, **not** truthfulness. If you change a number or a behaviour, grep the copy that describes it — across `README.md`, `model.html`, `advertisers.html`, `index.html`, and the Swift popover — in the same change.
 7. **Never choose money-spending options.** Founder rule (Oct 16, 2026): pick free or money-earning options only. Paid plans and paid add-ons are dropped, not proposed as defaults.
+8. **Read the decisions before acting.** Founder instruction (Oct 16, 2026): at the start of every session, every agent and model reads this file, including the decisions list below and the bootstrap money rule (7), before doing anything. The whole team stays in sync on decisions.
+9. **Recommend better, never override.** If you see a better approach than a recorded decision, recommend it with evidence and ask the founder. He makes the call. Do not override a decision on your own.
 
 ---
 
@@ -121,3 +123,17 @@ Environment notes learned the hard way:
   harness, scratch file, or source map dropped there would ship to freecoffee.tech by
   default. An allowlist in `sync-dist.sh` now refuses to publish anything not listed —
   if it stops you, that is the guard working, not a bug.
+
+
+---
+
+## Decisions list (keep current)
+
+Add a dated line whenever the founder makes or changes a decision. Newest last.
+
+- 2026-09-16: Site structure rebuilt to the reference layout; ad frame matched to the founder's reference screenshot.
+- 2026-09-21: Demo withdrawal minimum is $10 (deliberate).
+- 2026-09-22: Ad surface is compact text in unused macOS menu-bar space, shown only in categories the user chose.
+- 2026-10-15: FreeCoffee is priority 3, after SkipWait and Swap.
+- 2026-10-16: Free or money-earning options only; never pick money-spending ones (rule 7).
+- 2026-10-16: Read decisions at session start; recommend better approaches, never override (rules 8 and 9).
