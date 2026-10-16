@@ -5,8 +5,8 @@
 > `#f6c944` (8px radius, 1px `#d9a92b` border), Archivo Variable headlines
 > (weight 735, tracking -0.045em), 1194px container, 110px section rhythm,
 > cards `#fffefa` with 1px ink border and 16px radius. The black Promova
-> rules below still describe the app-shell pages (dashboard, payouts,
-> profile, referrals, flywheel, campaigns, model). Never use the reference's
+> rules below are history. The app pages (dashboard, payouts, profile,
+> referrals, flywheel, campaigns, model) use the same look (founder, Oct 16). Never use the reference's
 > name or the words "menu bar" in public copy.
 
 # FreeCoffee DESIGN.md — Promova midnight-magazine reskin
