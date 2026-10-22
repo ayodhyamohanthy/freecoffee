@@ -1026,7 +1026,7 @@
       link: attributedUrl(c, 'share', t),
       text: SHARE_TEXT,
       platforms: [
-        { id: 'mac', label: 'Mac app (.dmg)', href: attributedUrl(c, 'mac', DMG_URL) },
+        { id: 'mac', label: 'Mac app (.dmg)', href: DMG_URL },   // a release download drops ?ref on redirect; nothing captures it
         { id: 'brew', label: 'Homebrew', cmd: BREW_CMD },
         { id: 'pwa', label: 'Web app (PWA)', href: attributedUrl(c, 'pwa', t) },
         { id: 'github', label: 'GitHub', href: attributedUrl(c, 'github', DIST_REPO) },

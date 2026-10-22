@@ -223,13 +223,11 @@
         <section class="card" aria-label="Mac app">
           <div class="plat-head">
             <h3>Mac app (.dmg)</h3>
-            <span class="pill pill-ok">attributed</span>
+            <span class="pill pill-gold">no referrer</span>
           </div>
-          <p class="footnote" style="margin-top:6px">The strongest artifact you have: it is the
-            product, and the ref rides in the download URL, so the install arrives already
-            credited to you.</p>
+          <p class="footnote" style="margin-top:6px">The strongest artifact you have: it is the product. But a GitHub release download drops the query string on its redirect, and a .dmg cannot read its own URL, so no ref can ride along. Share the web-app link when the credit matters; share the .dmg when the friction matters.</p>
           <div class="plat-art">
-            <input class="input" type="text" id="artMac" readonly aria-label="Attributed Mac download link"
+            <input class="input" type="text" id="artMac" readonly aria-label="Mac download link"
                    value="https://github.com/ayodhyamohanthy/freecoffee-dist/releases/latest/download/FreeCoffee.dmg">
             <button type="button" class="btn btn-ghost btn-sm" data-copy="artMac">Copy</button>
             <a class="btn btn-primary btn-sm" id="openMac" href="https://github.com/ayodhyamohanthy/freecoffee-dist/releases/latest/download/FreeCoffee.dmg" rel="noopener">Download</a>
@@ -243,8 +241,7 @@
             <span class="pill pill-gold">no referrer</span>
           </div>
           <p class="footnote" style="margin-top:6px">A <code>brew install</code> cannot carry a
-            referrer — Homebrew has no query string to put it in. Share the .dmg above when the
-            credit matters; share the command when the friction matters. We will not pretend the
+            referrer — Homebrew has no query string to put it in. Share the web-app link when the credit matters; share the command when the friction matters. We will not pretend the
             two are the same.</p>
           <div class="plat-art">
             <div class="code-block">
