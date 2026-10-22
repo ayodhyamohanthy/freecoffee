@@ -48,9 +48,14 @@ site's REAL EARNINGS panel talks to. Free tier = 100k requests/day.
 3. **Deployments → your deployment → Retry deploy** if the first deploy ran
    before the id was in place.
 
-**Unlocks:** the earnings ledger (`earn:{deviceId}`) and the campaign cache
-(`feed:current`). Without KV, `/track` honestly answers
-`503 KV not configured` instead of pretending.
+**Unlocks:** the campaign cache (`feed:current`) and demo session state.
+Real earnings no longer live in KV: this Worker routes them through the
+`LEDGER` Durable Object binding that ships in `wrangler.toml` (see
+`backend/SECURITY-LEDGER.md`). Without KV the feed and admin endpoints
+honestly answer `503 KV not configured` instead of pretending; without a
+migrated ledger the money endpoints answer `503` fail-closed the same way.
+(The namespace and account ids in `backend/wrangler.toml` are already the
+live deployment's, per the status note above.)
 
 ## ☐ 3. [FREE] ADMIN_TOKEN secret → lock the admin route
 
@@ -132,5 +137,10 @@ curl -X POST https://freecoffee-backend.<your-subdomain>.workers.dev/admin/feed 
 
 Then: site → **Profile → BACKEND API URL** → paste the workers.dev URL →
 **Test** → "Backend OK" → **Save changes** → open **Overview** → the
-**REAL EARNINGS (backend)** panel appears above the payout simulator and
-starts counting verified impressions. Demo ledger untouched, as labeled.
+**REAL EARNINGS (backend)** panel appears above the payout simulator. As
+shipped it is fail-closed: with no migrated ledger it shows the backend
+error rather than counting impressions, and the money endpoints answer
+`503` until the deploy-freeze, migration and device-enrollment runbook in
+[`backend/SECURITY-LEDGER.md`](SECURITY-LEDGER.md) is completed. The demo
+ledger stays simulated, as labeled; a connected backend alone does not
+enable earnings.

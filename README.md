@@ -32,10 +32,10 @@ That's it — any static file server works.
 | `payouts.html` | App-shell page (**Earn › Payouts**, paper inserts on a black canvas). Choose how you get paid: Stripe (gold gradient CTA) and Whop (orange gradient CTA) rails split by a divider — clicking marks `freecoffee:v1 → profile.payoutRail` connected (demo-only until the backend payout integration), a Balance 3-stat strip (Total/Available/Pending from the seeded ledger), and the Withdrawal history table fed by simulated `paidOut` records (empty state until the first simulated payout). |
 | `model.html` | App-shell page (**Account › Payout model**, paper inserts on a black canvas). The payout model in plain numbers: lever table, honesty policy, sustainability math (worked example), anti-fraud controls, payout rails. |
 | `campaigns.html` | App-shell page (**Advertise › Campaigns**, paper inserts on a black canvas). Advertiser-side management view with honest zeros (Active 0 / In review 0 / Total spend $0.00 / Impressions 0), working filter tabs (All/Running/In review/Paused/Archived + "N shown"), and the "No campaigns yet" empty state with a gold CTA to the advertiser pitch. |
-| `profile.html` | App-shell page (**Account › Profile**). Wide Account form (display name, email, coffee preference, email prefs → saved with a toast to `freecoffee:v1`) plus Payout account (Not set up + Set up), Connected Mac (green Connected pill, "This Mac · macOS 26", Unlink with confirm), and AI agents (Copy setup prompt → clipboard). |
-| `referrals.html` | App-shell page (**Earn › Referrals**). Referral link card (URL + Copy → clipboard), rewards cards, a 3-stat row (referred users **2** / referral earnings **$2.82** / next tier), and the referee table from the seeded ledger. The link itself is real and attributed (`?ref=<your code>`); a `REAL (backend)` line appears above the seeded numbers once a backend URL is configured. |
+| `profile.html` | App-shell page (**Account › Profile**). Wide Account form (display name, email, coffee preference, email prefs → saved with a toast to `freecoffee:v1`) plus Payout account (Not set up + Set up), Connected Mac (a green "Browser demo" pill, "No native device connection verified", the device ID with a Copy button, and an Unlink Mac button that confirms first), and AI agents (Copy setup prompt → clipboard). |
+| `referrals.html` | App-shell page (**Earn › Referrals**). Referral link card (URL + Copy → clipboard), rewards cards, a 3-stat row (referred users **2** / referral earnings computed live from the seeded ledger / demo users in their first 30 days), and the referee table from the seeded ledger. The link itself is real and attributed (`?ref=<your code>`); a `REAL (backend)` line appears above the seeded numbers once a backend URL is configured. |
 | `flywheel.html` | App-shell page (**Earn › Flywheel**). The growth loop as code: the five stages (capture → activate → earn → share → advertise) with the back-edge that makes it compound, your own share kit (code + attributed link + Web Share), **ten platform artifacts** (Mac .dmg · Homebrew · PWA · GitHub · AI agent/MCP · X · LinkedIn · Reddit · Hacker News · email) each labelled *attributed* or *no referrer*, three live tile counts (`—` until a backend is configured, never a fake zero), the full "what is live today / what is not" audit table, and the compounding argument. `localStorage`: `freecoffee:refcode`, `freecoffee:refcapture`. |
-| `advertisers.html` | App-shell page (**Advertise › Campaigns**). The advertiser pitch + self-serve onboarding: hero, how-it-works (submit feed → review → live), the copyable feed contract JSON, the honesty box (what the client reports today vs what needs the platform backend), pricing (auction CPM with tier floors, $15 minimum, 70% + 10% launch boost to the user), and the contact card (`hello@freecoffee.tech`). |
+| `advertisers.html` | App-shell page (**Advertise › Campaigns**). The advertiser pitch + self-serve onboarding: hero, how-it-works (submit feed → review → live), the copyable feed contract JSON, the honesty box (what the client reports today vs what needs the platform backend), pricing (auction CPM, $15 minimum, 70% + 10% launch boost to the user), and the contact card (`hello@freecoffee.tech`). |
 | `assets/js/demo.js` | Seeded PRNG (mulberry32, seed 42), history generator, projection math, cups helper, Mac status area demo + popover mock cycler, and the live-feed bridge (`fetchLiveCampaigns` — the AD FEED CONTRACT client). Also CommonJS-exported — `node` can `require` it. |
 | `assets/js/dashboard.js` | Dashboard rendering + interactions, plus the live-campaign surfaces (banner under the balance card, LIVE rows in Recent sponsors, disconnect). All dynamic strings go through `textContent`/`createElement` — no `innerHTML` with dynamic data. |
 | `assets/css/styles.css` | The whole design system: the Promova midnight-magazine palette (`--void #000000` canvas on every page, white/Smoke `#f5f5f5` cards at 30px radius, Fog `#dddddd` hairlines, highlighter `#fff050` reserved for the single primary CTA per page) plus the app-shell (sidebar / breadcrumb / cards), popover panel, forms, tables, chips, toggles, sliders, toasts, the Mac status area mock, responsive stacking, `:focus-visible`, `prefers-reduced-motion`. `DESIGN.md` is the authority for all of it — if the code drifts from that file, fix the code, not the file. |
@@ -130,8 +130,6 @@ The site is also a full PWA (works entirely offline after first visit — no bac
 - **Base share:** 70% of auction revenue, always on. During launch the platform additionally funds
   a 10% launch boost — promotional, never a reduction of the base share.
 - **Click bonus:** $0.05 per verified click. Caps: max 5/day and ≤25% of verified monthly impressions.
-- **Tiered earnings floor on user earnings:** $4.00 CPM-equivalent Tier 1 (US, CA, UK, CH, EEA),
-  $2.50 Tier 2 (AU, NZ, JP, KR, SG, AE), $1.25 Tier 3 (rest of world).
 - **Referrals:** 5% to the referrer and a 5% bonus to the referred user, both platform-funded on the
   referee's base earnings for the first 30 days; 14-day last-click attribution. Referral money is
   platform-side — the referee's 70% is never reduced.
@@ -144,8 +142,8 @@ The site is also a full PWA (works entirely offline after first visit — no bac
   platform keeps $0.78 before costs.
 
 No competitor comparisons appear anywhere on the site or in copy — the product stands on its own
-published economics: the 70% base share with the platform-funded 10% launch boost, the $10 payout
-floor, and the tier floors.
+published economics: the 70% base share with the platform-funded 10% launch boost and the $10
+payout floor.
 
 ## Connecting real advertisers
 
@@ -176,13 +174,14 @@ A feed is any HTTPS URL returning a JSON array of campaigns:
 
 | Field | Type | Rules |
 |---|---|---|
-| `id` | string | Unique, max 40 chars; duplicates dropped. Optional (falls back to array position). |
+| `id` | string | Unique, max 40 chars; duplicates dropped. Optional in a client-fetched feed (falls back to `camp_1`, `camp_2`, … by array position). **Required when publishing through the backend** — the id is the earnings pay-key. |
 | `sponsor` | string | Brand name, trimmed, max 40 chars. **Required** — entries without it are skipped. |
 | `tagline` | string | One line of creative, trimmed, max 90 chars. Optional. |
 | `clickUrl` | string | Must be `https://`. Anything else is dropped; the campaign renders linkless. |
 | `cpm` | number | What the platform earns per 1,000 verified minutes. Coerced, clamped 0–100. |
 | `logoText` | string | 1–2 char monogram. Optional (initials derived from the sponsor name). |
 | `accent` | string | Optional `#RRGGBB` tile color; invalid values fall back to the default caramel. |
+| `allowClicks` | boolean | Optional, default `true`. `false` opts the campaign out of the $0.05 click bonus — clicks are refused and pay nothing. |
 
 Validation is identical on both clients (web: `assets/js/demo.js → fetchLiveCampaigns`; Mac app:
 `config.json → adFeedURL`): 8-second timeout, https-only URLs, trimmed/capped strings, deduped by
@@ -204,8 +203,8 @@ the fictional demo sponsors without touching earnings math.
 ### The self-serve flow (advertisers.html)
 
 The **Advertise › Campaigns** page (`advertisers.html`) is the pitch + onboarding in one: the hero,
-how review works, the copyable feed spec, the honesty box, and the pricing card (auction CPM with
-the published tier floors, $15 minimum campaign spend, 70% + 10% launch boost to the user). The flow: host the JSON
+how review works, the copyable feed spec, the honesty box, and the pricing card (auction CPM,
+$15 minimum campaign spend, 70% + 10% launch boost to the user). The flow: host the JSON
 anywhere HTTPS (GitHub raw, your CDN, your server) → paste the URL into **Profile › Ad feed URL**
 (Test button verifies it) → campaigns appear in the Mac status area and dashboard. Email
 `hello@freecoffee.tech` for the review step — every campaign is human-reviewed before it can

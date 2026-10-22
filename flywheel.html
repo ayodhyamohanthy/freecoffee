@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Flywheel — FreeCoffee</title>
-<meta name="description" content="FreeCoffee's growth loop: every platform you are already on carries an attributed link, 5% of base earnings goes to each person for the referred user's first 30 days with 14-day last-click attribution, and the same verification feeds the public advertiser proof. Demo — simulated data.">
+<meta name="description" content="FreeCoffee's growth loop: an attributed link on every platform you already use, and 5% of base earnings for a referred user's first 30 days. Demo, simulated.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="FreeCoffee">
 <meta property="og:title" content="Flywheel — FreeCoffee">
@@ -223,13 +223,11 @@
         <section class="card" aria-label="Mac app">
           <div class="plat-head">
             <h3>Mac app (.dmg)</h3>
-            <span class="pill pill-ok">attributed</span>
+            <span class="pill pill-gold">no referrer</span>
           </div>
-          <p class="footnote" style="margin-top:6px">The strongest artifact you have: it is the
-            product, and the ref rides in the download URL, so the install arrives already
-            credited to you.</p>
+          <p class="footnote" style="margin-top:6px">The strongest artifact you have: it is the product. But a GitHub release download drops the query string on its redirect, and a .dmg cannot read its own URL, so no ref can ride along. Share the web-app link when the credit matters; share the .dmg when the friction matters.</p>
           <div class="plat-art">
-            <input class="input" type="text" id="artMac" readonly aria-label="Attributed Mac download link"
+            <input class="input" type="text" id="artMac" readonly aria-label="Mac download link"
                    value="https://github.com/ayodhyamohanthy/freecoffee-dist/releases/latest/download/FreeCoffee.dmg">
             <button type="button" class="btn btn-ghost btn-sm" data-copy="artMac">Copy</button>
             <a class="btn btn-primary btn-sm" id="openMac" href="https://github.com/ayodhyamohanthy/freecoffee-dist/releases/latest/download/FreeCoffee.dmg" rel="noopener">Download</a>
@@ -243,8 +241,7 @@
             <span class="pill pill-gold">no referrer</span>
           </div>
           <p class="footnote" style="margin-top:6px">A <code>brew install</code> cannot carry a
-            referrer — Homebrew has no query string to put it in. Share the .dmg above when the
-            credit matters; share the command when the friction matters. We will not pretend the
+            referrer — Homebrew has no query string to put it in. Share the web-app link when the credit matters; share the command when the friction matters. We will not pretend the
             two are the same.</p>
           <div class="plat-art">
             <div class="code-block">
@@ -317,7 +314,7 @@
           <div class="plat-art">
             <input class="input" type="text" id="artX" readonly aria-label="Attributed X link">
             <button type="button" class="btn btn-ghost btn-sm" data-copy="artX">Copy</button>
-            <a class="btn btn-primary btn-sm" id="openX" href="https://twitter.com/intent/tweet" rel="noopener">Compose</a>
+            <a class="btn btn-primary btn-sm" id="openX" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Ffreecoffee.tech%2F&text=FreeCoffee%20demo%3A%20explore%20Mac%20status%20area%20sponsorships%20with%20a%2070%25%20base%20share%2C%20a%20platform-funded%2010%25%20launch%20boost%2C%20and%205%25%20referral%20bonuses%20for%20each%20person%20in%20the%20first%2030%20days.%20%2410%20payout%20minimum%20after%20a%205-day%20pending%20period%3B%20setup%20unlocks%20at%20%245.%20Preview%20only%20%E2%80%94%20no%20real%20payouts." target="_blank" rel="noopener">Compose</a>
           </div>
         </section>
 
@@ -332,7 +329,7 @@
           <div class="plat-art">
             <input class="input" type="text" id="artLinkedin" readonly aria-label="Attributed LinkedIn link">
             <button type="button" class="btn btn-ghost btn-sm" data-copy="artLinkedin">Copy</button>
-            <a class="btn btn-primary btn-sm" id="openLinkedin" href="https://www.linkedin.com/sharing/share-offsite/" rel="noopener">Share</a>
+            <a class="btn btn-primary btn-sm" id="openLinkedin" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Ffreecoffee.tech%2F" target="_blank" rel="noopener">Share</a>
           </div>
         </section>
 
@@ -348,7 +345,7 @@
           <div class="plat-art">
             <input class="input" type="text" id="artReddit" readonly aria-label="Attributed Reddit link">
             <button type="button" class="btn btn-ghost btn-sm" data-copy="artReddit">Copy</button>
-            <a class="btn btn-primary btn-sm" id="openReddit" href="https://www.reddit.com/submit" rel="noopener">Submit</a>
+            <a class="btn btn-primary btn-sm" id="openReddit" href="https://www.reddit.com/submit" target="_blank" rel="noopener">Submit</a>
           </div>
         </section>
 
@@ -364,7 +361,7 @@
           <div class="plat-art">
             <input class="input" type="text" id="artHn" readonly aria-label="Attributed Hacker News link">
             <button type="button" class="btn btn-ghost btn-sm" data-copy="artHn">Copy</button>
-            <a class="btn btn-primary btn-sm" id="openHn" href="https://news.ycombinator.com/submit" rel="noopener">Submit</a>
+            <a class="btn btn-primary btn-sm" id="openHn" href="https://news.ycombinator.com/submit" target="_blank" rel="noopener">Submit</a>
           </div>
         </section>
 
