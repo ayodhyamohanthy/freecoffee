@@ -28,7 +28,10 @@ is no independent ad-view verification, settlement or payout integration here.
 ```
 backend/
 ├── src/entry.js         deployment exports (handler + Durable Object only)
-├── src/worker.js        economics/feed/router helpers
+├── src/worker.js        routes, economics, feed, slots, MCP
+├── src/accounts.js      sign-in (GitHub/Google), sessions, account + Mac linking
+├── src/clicks.js        paid-click tracking + admin audit
+├── src/pilots.js        pilot programs (create, transition, revenue, pools)
 ├── src/ledger.js        transactional money authority
 ├── test.mjs             unit tests:  node test.mjs
 ├── wrangler.toml        config — paste your KV namespace id + account id here
@@ -53,6 +56,30 @@ backend/
 | `/admin/review` | POST | `Authorization: Bearer $ADMIN_TOKEN` | `{id, approve}` → approved goes live (feed cap 20), rejected leaves the queue |
 | `/stats` | GET | — | Public aggregate delivery report: per-campaign authorized/historical reported minutes, clicks, user-share spend + network totals (not independent proof). No device ids, no rows — safe for the advertiser page, no token needed |
 | `/admin/feed` | POST | `Authorization: Bearer $ADMIN_TOKEN` | Upload a validated campaign array → KV `feed:current` |
+| `/slots` | GET | — | Slot-auction inventory for `?month=YYYY-MM` (defaults to the current month): every four-hour UTC block, its bids and price-to-win |
+| `/slots/current` | GET | — | The four-hour block being served right now |
+| `/market` | GET | — | Public market snapshot: serving floor and per-block pricing for the lookahead (`?blocks=` caps it at 48) |
+| `/slots/bid` | POST | Optional account bearer | One bid object `{campaign, slots[], bidder}` across chosen blocks; first-price auction, highest CPM per block wins; a signed-in session records the bid on the account |
+| `/mcp` | POST | — | Read-only agent endpoint: stateless JSON-RPC 2.0 MCP (market browse, block list, creative preview). It cannot bid, fund, or read anything private; GET answers 405 |
+| `/pilot-interest` | POST | — | Pilot interest intake (company, name, valid email, optional https destination); rate-limited per IP, capped queue |
+| `/campaigns/eligible` | GET | — | Campaigns currently eligible for pilot programs |
+| `/auth/status` | GET | — | `{ok, providers:{github, google}}`: which sign-in providers are configured |
+| `/auth/{github,google}/start` | GET | — | Redirect to the provider's sign-in |
+| `/auth/{github,google}/callback` | GET | — | Completes sign-in and redirects back with a one-time session token |
+| `/auth/logout` | POST | Account bearer | Deletes the session |
+| `/me` | GET | Account bearer | Signed-in account profile (id, provider, name, avatar) |
+| `/me/bids` | GET | Account bearer | The account's placed slot bids, as recorded at bid time (max 50) |
+| `/me/link` | GET | Account bearer | The account's linked Mac, if any (label only; changes nothing about earning) |
+| `/me/link-code` | POST | Account bearer | Mint a one-time Mac-linking code (10-minute TTL) |
+| `/me/link/unlink` | POST | Account bearer | Unlink the Mac |
+| `/link/redeem` | POST | One-time link code | Redeem a link code from the Mac app (rate-limited per IP) |
+| `/admin/pilots` | GET / POST | `Authorization: Bearer $ADMIN_TOKEN` | List pilots / create a pilot |
+| `/admin/pilots/transition` | POST | `Authorization: Bearer $ADMIN_TOKEN` | Move a pilot between states |
+| `/admin/pilots/revenue` | POST | `Authorization: Bearer $ADMIN_TOKEN` | Confirm a pilot's revenue |
+| `/admin/pilots/promotional-pool` | POST | `Authorization: Bearer $ADMIN_TOKEN` | Fund a pilot's promotional pool |
+| `/admin/pilots/proof` | GET | `Authorization: Bearer $ADMIN_TOKEN` | Proof adapter (answers 501 until configured) |
+| `/admin/pilots/settlement` | POST | `Authorization: Bearer $ADMIN_TOKEN` | Settlement adapter (answers 501 until configured) |
+| `/admin/clicks` | GET | `Authorization: Bearer $ADMIN_TOKEN` | Paid-click audit for one campaign (`?campaign=`, `?days=`, default 7) |
 
 - **Money math is server-side.** The enrolled client sends the exact authorized report and `receiptId`;
   amounts are computed from the campaign `cpm` looked up in the **served
