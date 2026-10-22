@@ -174,13 +174,14 @@ A feed is any HTTPS URL returning a JSON array of campaigns:
 
 | Field | Type | Rules |
 |---|---|---|
-| `id` | string | Unique, max 40 chars; duplicates dropped. Optional (falls back to array position). |
+| `id` | string | Unique, max 40 chars; duplicates dropped. Optional in a client-fetched feed (falls back to `camp_1`, `camp_2`, … by array position). **Required when publishing through the backend** — the id is the earnings pay-key. |
 | `sponsor` | string | Brand name, trimmed, max 40 chars. **Required** — entries without it are skipped. |
 | `tagline` | string | One line of creative, trimmed, max 90 chars. Optional. |
 | `clickUrl` | string | Must be `https://`. Anything else is dropped; the campaign renders linkless. |
 | `cpm` | number | What the platform earns per 1,000 verified minutes. Coerced, clamped 0–100. |
 | `logoText` | string | 1–2 char monogram. Optional (initials derived from the sponsor name). |
 | `accent` | string | Optional `#RRGGBB` tile color; invalid values fall back to the default caramel. |
+| `allowClicks` | boolean | Optional, default `true`. `false` opts the campaign out of the $0.05 click bonus — clicks are refused and pay nothing. |
 
 Validation is identical on both clients (web: `assets/js/demo.js → fetchLiveCampaigns`; Mac app:
 `config.json → adFeedURL`): 8-second timeout, https-only URLs, trimmed/capped strings, deduped by

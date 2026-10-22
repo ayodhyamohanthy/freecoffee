@@ -93,11 +93,12 @@
     <tbody>
       <tr><th scope="row">id</th><td>string</td><td>Unique per campaign, max 40 chars. Required when publishing through the backend &mdash; the id is the earnings pay-key, and duplicates are dropped.</td></tr>
       <tr><th scope="row">sponsor</th><td>string</td><td>Brand name, max 40 chars. Required &mdash; entries without it are skipped.</td></tr>
-      <tr><th scope="row">tagline</th><td>string</td><td>One line, max 80 chars.</td></tr>
+      <tr><th scope="row">tagline</th><td>string</td><td>One line, max 90 chars.</td></tr>
       <tr><th scope="row">clickUrl</th><td>string</td><td>Must be <code>https://</code>. Anything else is stripped before the campaign is accepted.</td></tr>
       <tr><th scope="row">cpm</th><td>number</td><td>Clamped to 0&ndash;100. This is the rate a verified minute is paid against.</td></tr>
       <tr><th scope="row">logoText</th><td>string</td><td>Up to 2 characters, used for the tile.</td></tr>
       <tr><th scope="row">accent</th><td>string</td><td>Hex colour for the tile.</td></tr>
+      <tr><th scope="row">allowClicks</th><td>boolean</td><td>Optional, default <code>true</code>. Set <code>false</code> to opt the campaign out of the $0.05 click bonus &mdash; clicks are refused and pay nothing.</td></tr>
     </tbody>
   </table>
 </section>
