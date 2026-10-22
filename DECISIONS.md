@@ -10,3 +10,4 @@ Add a dated line whenever the founder makes or changes a decision. Newest last.
 - 2026-10-15: FreeCoffee is priority 3, after SkipWait and Swap.
 - 2026-10-16: Free or money-earning options only; never pick money-spending ones (rule 7).
 - 2026-10-16: Read decisions at session start; recommend better approaches, never override (rules 8 and 9).
+- 2026-10-22: Proof rule. Nothing is reported done, ready or verified without proof the founder can see: a screenshot, or log/output from a real test run, shown before handover. Anything without proof is labeled "unverified".

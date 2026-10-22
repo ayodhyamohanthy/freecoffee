@@ -130,3 +130,7 @@ Environment notes learned the hard way:
 ## Decisions list
 
 The current decisions list lives in `DECISIONS.md`. Read it before acting and add a dated line whenever the founder decides or changes something.
+
+## Proof rule (founder, 2026-10-22)
+
+Nothing is reported done, ready or verified without proof the founder can see: a screenshot, or log/output from a real test run, attached before handover. Words alone do not count. Any claim without proof must be labeled "unverified".
