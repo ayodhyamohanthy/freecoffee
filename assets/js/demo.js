@@ -60,7 +60,8 @@
     PAYOUT_MINIMUM: 10.0,
     CLAWBACK_DAYS: 90,            // fraud clawback window
     CUP_PRICE: CUP_PRICE,         // $5 per cup for the "≈ N cups" hint
-    // Worked example, displayed as-is on payouts.html.
+    // Worked example: model.html hardcodes these numbers in its worked-example
+    // card; no page renders this object and payouts.html does not display it.
     WORKED_EXAMPLE: {
       impressions: 1000, cpm: 6.0,
       revenue: 6.0, userBase: 4.20, launchBoost: 0.60,
