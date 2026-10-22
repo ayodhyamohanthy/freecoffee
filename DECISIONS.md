@@ -11,3 +11,4 @@ Add a dated line whenever the founder makes or changes a decision. Newest last.
 - 2026-10-16: Free or money-earning options only; never pick money-spending ones (rule 7).
 - 2026-10-16: Read decisions at session start; recommend better approaches, never override (rules 8 and 9).
 - 2026-10-22: Proof rule. Nothing is reported done, ready or verified without proof the founder can see: a screenshot, or log/output from a real test run, shown before handover. Anything without proof is labeled "unverified".
+- 2026-10-22: Full-stack verification rule. Before saying done, run the real flow end to end (UI, API, data, deploy) and show proof. Shared test accounts, when one exists for this project, are for every agent to sign in and exercise the flows. Never put passwords in the repo or chat; fetch them from the vault. FreeCoffee sign-in is GitHub or Google only, so it has no shared test account yet; none is recorded here.

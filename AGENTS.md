@@ -134,3 +134,7 @@ The current decisions list lives in `DECISIONS.md`. Read it before acting and ad
 ## Proof rule (founder, 2026-10-22)
 
 Nothing is reported done, ready or verified without proof the founder can see: a screenshot, or log/output from a real test run, attached before handover. Words alone do not count. Any claim without proof must be labeled "unverified".
+
+## Full-stack verification (founder, 2026-10-22)
+
+Before saying a piece is done, run the real flow end to end: UI, API, data and deploy. Show proof (screenshot or test output). Test accounts, once they exist, are for every agent to sign in and try the flows. Never put passwords in the repo or in chat; agents fetch them from the vault. FreeCoffee has no shared test account yet (sign-in is GitHub or Google only), so none is listed here.
