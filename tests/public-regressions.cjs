@@ -144,6 +144,36 @@ assert.equal(winner.known.one.mine, undefined, 'server refresh clears stale loca
   console.log('PASS menu-bar component regressions: markup on both pages, structured + legacy chip, live accent');
 })();
 
+
+/* ---------------------------------------------------------------------------
+   Share composers must open in a new tab: a composer click that navigates the
+   share page away throws away the visitor's place (the referral link input,
+   the platform card they were on). Download and repository links stay
+   same-tab on purpose.
+   --------------------------------------------------------------------------- */
+(function () {
+  const composers = {
+    'referrals.html': ['shareXBtn', 'shareWaBtn', 'shareLiBtn'],
+    'flywheel.html': ['openX', 'openLinkedin', 'openReddit', 'openHn'],
+  };
+  for (const [page, ids] of Object.entries(composers)) {
+    const src = read(page);
+    for (const id of ids) {
+      const tag = src.match(new RegExp('<a\\b[^>]*\\bid="' + id + '"[^>]*>'));
+      assert(tag, page + ' must ship the ' + id + ' composer link');
+      assert.match(tag[0], /\starget="_blank"/, id + ' on ' + page + ' must open the composer in a new tab');
+      assert.match(tag[0], /rel="[^"]*noopener/, id + ' on ' + page + ' must keep rel="noopener"');
+    }
+  }
+  const flywheel = read('flywheel.html');
+  for (const id of ['openMac', 'openGithub']) {
+    const tag = flywheel.match(new RegExp('<a\\b[^>]*\\bid="' + id + '"[^>]*>'));
+    assert(tag, 'flywheel.html must ship the ' + id + ' link');
+    assert.doesNotMatch(tag[0], /target="_blank"/, id + ' stays same-tab (download/repository navigation)');
+  }
+  console.log('PASS share composers: 7 composer links open new-tab with noopener; download/repo links stay same-tab');
+})();
+
 const swContext = { self: { location: { href: 'https://local.test/sw.js' }, addEventListener() {} }, URL };
 vm.runInNewContext(read('sw.js'), swContext);
 (async () => {
