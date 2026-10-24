@@ -2,7 +2,7 @@
    FreeCoffee demo service worker — plain ES2018, no transpiler, no imports.
 
    Caching strategy:
-     - precache (install):  all ten pages + CSS + JS + icons + manifest,
+     - precache (install):  every page + CSS + JS + icons + manifest,
        cache-first. Each URL is added individually so one missing file
        can never fail the whole install (cache.addAll is atomic).
      - navigations:         network-first, fall back to cache (then index.html)
@@ -25,8 +25,8 @@
 /* eslint-disable no-restricted-globals */
 'use strict';
 
-var ASSET_V = '1002057';                  // must match ?v= in the HTML asset URLs
-var CACHE = 'freecoffee-v1002057';
+var ASSET_V = '1002058';                  // must match ?v= in the HTML asset URLs
+var CACHE = 'freecoffee-v1002058';
 
 var PRECACHE = [
   './',
@@ -44,6 +44,7 @@ var PRECACHE = [
   './faq.html',
   './privacy.html',
   './account.html',
+  './status.html',
   './assets/js/account.js?v=' + ASSET_V,
   './assets/js/site.js?v=' + ASSET_V,
   './assets/js/status.js?v=' + ASSET_V,
