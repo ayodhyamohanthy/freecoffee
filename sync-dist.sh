@@ -29,7 +29,7 @@ CHECK=0
 
 SITE_FILES="index.html 404.html dashboard.html payouts.html model.html campaigns.html
   profile.html referrals.html advertisers.html agents.html install-guide.html faq.html ad-policy.html terms.html account.html privacy.html flywheel.html sitemap.xml robots.txt status.html
-  manifest.webmanifest sw.js"
+  manifest.webmanifest sw.js favicon.ico"
 # CNAME lives in dist permanently (copied on first sync); it is intentionally
 # NOT in SITE_FILES — the custom domain must survive even if the dev tree
 # has no CNAME file.
