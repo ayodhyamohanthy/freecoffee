@@ -41,7 +41,7 @@ FAIL=0
 # quiet lie as a stale "(24 groups)" in the backend label. Now there is one
 # number to maintain, and a stale one is self-evident: the run prints a step
 # count one higher than the total, e.g. "13/12".
-TOTAL_STEPS=12
+TOTAL_STEPS=13
 STEP_NO=0
 step() { STEP_NO=$((STEP_NO+1)); printf '\n==> %d/%d %s\n' "$STEP_NO" "$TOTAL_STEPS" "$1"; }
 ok()  { PASS=$((PASS+1)); printf '    PASS  %s\n' "$1"; }
@@ -343,6 +343,30 @@ if not asset_v.isdigit() or int(asset_v) < floor:
 print('    ok   ASSET_V=%s satisfies the APP_VERSION=%s floor (%d)' % (asset_v, m_app.group(1), floor))
 PY
 [ $? -eq 0 ] && ok "asset version pairing + PWA lockstep floor" || bad "asset version pairing"
+
+
+# ------------------------------------------------------------------ 11. noindex/canonical contradiction
+# A page that says noindex also used to carry a self-referencing canonical tag.
+# The two directives contradict each other: noindex wins and the canonical is
+# ignored, so the tag was dead weight and a trap for whoever reads the head
+# next. Guard it: a noindexed page must not ship a canonical link.
+step "noindex pages carry no canonical tag"
+python3 - <<'PY2'
+import glob, re, sys
+bad = []
+for f in sorted(glob.glob('*.html')):
+    src = open(f, encoding='utf-8').read()
+    noindex = re.search(r'<meta name="robots" content="[^"]*\bnoindex\b[^"]*"', src)
+    canonical = re.search(r'<link rel="canonical"', src)
+    if noindex and canonical:
+        bad.append(f)
+if bad:
+    for b in bad: print('    FAIL noindex + canonical contradiction: ' + b)
+    sys.exit(1)
+print('    ok   noindexed pages carry no canonical link')
+PY2
+[ $? -eq 0 ] && ok "noindex/canonical consistency" || bad "noindex pages carry canonical tags"
+
 
 # ------------------------------------------------------------------ 9. DESIGN.md
 # This class of drift was previously invisible: the paint drifted from
