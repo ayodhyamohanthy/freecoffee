@@ -174,6 +174,26 @@ assert.equal(winner.known.one.mine, undefined, 'server refresh clears stale loca
   console.log('PASS share composers: 7 composer links open new-tab with noopener; download/repo links stay same-tab');
 })();
 
+/* ---------------------------------------------------------------------------
+   No-JS fallbacks: the static share hrefs are what a visitor with scripts
+   off actually opens (the runtime kit replaces them only when it runs).
+   Reddit and Hacker News were the two buttons whose fallback opened a bare
+   submit form with nothing prefilled, unlike the X and LinkedIn fallbacks.
+   --------------------------------------------------------------------------- */
+(function () {
+  const fallbacks = {
+    openReddit: 'www\\.reddit\\.com/submit\\?url=https%3A%2F%2Ffreecoffee\\.tech%2F&amp;title=',
+    openHn: 'news\\.ycombinator\\.com/submitlink\\?u=https%3A%2F%2Ffreecoffee\\.tech%2F&amp;t=',
+  };
+  const flywheel = read('flywheel.html');
+  for (const [id, pattern] of Object.entries(fallbacks)) {
+    const tag = flywheel.match(new RegExp('<a\\b[^>]*\\bid="' + id + '"[^>]*>'));
+    assert(tag, 'flywheel.html must ship the ' + id + ' composer link');
+    assert.match(tag[0], new RegExp(pattern), id + ' static fallback must prefill the site URL and title');
+  }
+  console.log('PASS share fallbacks: Reddit and HN static buttons open prefilled, like the X and LinkedIn ones');
+})();
+
 const swContext = { self: { location: { href: 'https://local.test/sw.js' }, addEventListener() {} }, URL };
 vm.runInNewContext(read('sw.js'), swContext);
 (async () => {
