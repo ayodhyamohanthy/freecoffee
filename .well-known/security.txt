@@ -1,0 +1,8 @@
+# Security contact for freecoffee.tech (RFC 9116). The site handles
+# payments (Razorpay / PayPal) and a Cloudflare Worker backend, so a
+# public channel for vulnerability reports matters. Expires is renewed
+# within a year; test.sh fails loudly when it goes stale.
+Contact: mailto:hello@freecoffee.tech
+Expires: 2027-10-26T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://freecoffee.tech/.well-known/security.txt

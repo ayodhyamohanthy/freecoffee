@@ -29,7 +29,7 @@ CHECK=0
 
 SITE_FILES="index.html 404.html dashboard.html payouts.html model.html campaigns.html
   profile.html referrals.html advertisers.html agents.html install-guide.html faq.html ad-policy.html terms.html account.html privacy.html flywheel.html sitemap.xml robots.txt status.html
-  manifest.webmanifest sw.js"
+  manifest.webmanifest .well-known/security.txt"
 # CNAME lives in dist permanently (copied on first sync); it is intentionally
 # NOT in SITE_FILES — the custom domain must survive even if the dev tree
 # has no CNAME file.
@@ -95,10 +95,11 @@ fi
 echo "==> [3/5] copying public files"
 # shellcheck disable=SC2086
 cp $SITE_FILES "$WORK/dist/"
-mkdir -p "$WORK/dist/assets" "$WORK/dist/app" "$WORK/dist/feeds"
+mkdir -p "$WORK/dist/assets" "$WORK/dist/app" "$WORK/dist/feeds" "$WORK/dist/.well-known"
 cp -R assets/css assets/js assets/icons assets/img assets/fonts "$WORK/dist/assets/"
 cp app/Info-howto.md "$WORK/dist/app/"
 cp feeds/*.json "$WORK/dist/feeds/"
+cp .well-known/security.txt "$WORK/dist/.well-known/security.txt"
 cp dist-assets/README.md "$WORK/dist/README.md"
 
 echo "==> [4/5] stripping dev-only sections from app/Info-howto.md"

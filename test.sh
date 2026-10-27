@@ -243,6 +243,49 @@ if missing:
     sys.exit(1)
 print('    ok   every local href/src resolves to a real file')
 
+# .well-known/security.txt (RFC 9116). The site takes payments and runs a
+# Worker backend; a stale or dead security contact is the one rot that shows
+# up in no diff and no console. Expires must be current and no more than a
+# year out (renew annually), Contact must be the support address the site
+# itself publishes, and that address must really appear in the public pages
+# so the file cannot outlive it.
+sec_path = '.well-known/security.txt'
+if not os.path.exists(sec_path):
+    print('    FAIL missing .well-known/security.txt (RFC 9116)')
+    sys.exit(1)
+sec = open(sec_path, encoding='utf-8').read()
+sec_fields = {}
+for line in sec.splitlines():
+    line = line.strip()
+    if line.startswith('#') or not line:
+        continue
+    if ':' in line:
+        k, v = line.split(':', 1)
+        sec_fields.setdefault(k.strip().lower(), v.strip())
+sec_fails = []
+from datetime import datetime, timezone
+for req in ('contact', 'expires'):
+    if req not in sec_fields:
+        sec_fails.append('missing %s field' % req)
+if 'expires' in sec_fields:
+    try:
+        exp = datetime.fromisoformat(sec_fields['expires'].replace('Z', '+00:00'))
+        now = datetime.now(timezone.utc)
+        if exp <= now:
+            sec_fails.append('Expires is in the past: %s' % sec_fields['expires'])
+        elif (exp - now).days > 365:
+            sec_fails.append('Expires more than a year out; renew annually instead: %s' % sec_fields['expires'])
+    except ValueError:
+        sec_fails.append('Expires is not an RFC3339 date: %s' % sec_fields['expires'])
+if sec_fields.get('contact') != 'mailto:hello@freecoffee.tech':
+    sec_fails.append('Contact is not the published support address: %r' % sec_fields.get('contact'))
+if 'mailto:hello@freecoffee.tech' not in ''.join(srcs.values()):
+    sec_fails.append('Contact address appears on no public page')
+if sec_fails:
+    for m in sec_fails: print('    FAIL security.txt: ' + m)
+    sys.exit(1)
+print('    ok   security.txt present, current, and pointing at the published contact')
+
 # Fragment targets. A link to page.html#frag is only honest if page.html actually
 # has id="frag". This is the check that was missing when a page redesign deleted
 # its #faq section but left 13 links pointing at it — every one of them "resolved
