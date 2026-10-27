@@ -174,6 +174,20 @@ assert.equal(winner.known.one.mine, undefined, 'server refresh clears stale loca
   console.log('PASS share composers: 7 composer links open new-tab with noopener; download/repo links stay same-tab');
 })();
 
+/* ---------------------------------------------------------------------------
+   No-JS fallback: the Email composer's static href is what a visitor with
+   scripts off actually opens. It shipped as a bare "mailto:", which opened an
+   empty compose window with no recipient, subject, or body, unlike every
+   other flywheel fallback.
+   --------------------------------------------------------------------------- */
+(function () {
+  const tag = read('flywheel.html').match(/<a\b[^>]*\bid="openEmail"[^>]*>/);
+  assert(tag, 'flywheel.html must ship the openEmail composer link');
+  assert.match(tag[0], /href="mailto:\?subject=.*&amp;body=.*https%3A%2F%2Ffreecoffee\.tech%2F"/,
+    'openEmail static fallback must prefill a subject and a body carrying the site URL');
+  console.log('PASS share fallbacks: the Email static button opens a prefilled compose, like the Reddit and HN ones');
+})();
+
 const swContext = { self: { location: { href: 'https://local.test/sw.js' }, addEventListener() {} }, URL };
 vm.runInNewContext(read('sw.js'), swContext);
 (async () => {
