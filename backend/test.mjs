@@ -1190,6 +1190,44 @@ function pass(name) { n++; console.log('PASS ' + name); }
   pass('market snapshot is the real auction state; agent endpoint is read-only and refuses unknown tools');
 }
 
+/* ------------------------------------------------------------------------
+   30. The repo's own demo feeds satisfy the executable feed contract
+   ------------------------------------------------------------------------ */
+{
+  /* Rule 2 of AGENTS.md: the ad-feed contract is strictly typed and the
+     executable validator (validateCampaigns, src/worker.js) is its source
+     of truth. The demo feeds in feeds/ are what sponsors copy from, so
+     they must keep validating against that same code, not just the prose
+     contract. This is the only group that reads files from the repo. */
+  const { readFileSync, readdirSync } = await import('node:fs');
+  const { dirname, join } = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+  const feedsDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'feeds');
+  const files = readdirSync(feedsDir).filter((f) => f.endsWith('.json')).sort();
+  assert.ok(files.length >= 3, 'demo feeds present');
+  let total = 0;
+  for (const f of files) {
+    const raw = JSON.parse(readFileSync(join(feedsDir, f), 'utf8'));
+    const v = validateCampaigns(raw);
+    assert.equal(v.length, raw.length, f + ': every demo entry survives validation');
+    for (let i = 0; i < v.length; i++) {
+      assert.equal(v[i].id, raw[i].id, f + ': id kept');
+      assert.equal(v[i].sponsor, raw[i].sponsor, f + ': sponsor kept');
+      assert.match(v[i].clickUrl, /^https:\/\//, f + ': clickUrl is https and kept');
+      assert.equal(v[i].cpm, raw[i].cpm, f + ': cpm unchanged (inside 0-100)');
+      assert.match(v[i].accent, /^#[0-9a-fA-F]{6}$/, f + ': accent is a 6-digit hex');
+    }
+    total += v.length;
+  }
+  /* The documented fallback: a campaign without logoText takes the
+     initials of its sponsor, so sample-ads entry 003 renders as SS. */
+  const sample = JSON.parse(readFileSync(join(feedsDir, 'sample-ads.json'), 'utf8'));
+  const s3 = validateCampaigns(sample).find((c) => c.id === 'camp_sample_003');
+  assert.ok(s3, 'sample-ads entry 003 validates');
+  assert.equal(s3.logoText, 'SS', 'missing logoText falls back to sponsor initials');
+  pass('demo feeds in feeds/ validate against the executable contract (' + total + ' campaigns)');
+}
+
 await import('./ledger.test.mjs');
 await import('./accounts.test.mjs');
 await import('./clicks.test.mjs');
