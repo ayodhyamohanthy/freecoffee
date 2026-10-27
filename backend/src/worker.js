@@ -849,7 +849,15 @@ function corsHeaders(extra) {
     'access-control-allow-headers': 'Content-Type, Authorization',
     'access-control-max-age': '86400',
     'content-type': 'application/json; charset=utf-8',
-    'cache-control': 'no-store'
+    'cache-control': 'no-store',
+    // Baseline hardening on every API response (this API takes money and
+    // serves the admin surface). nosniff stops a response body from being
+    // reinterpreted as script or stylesheet; a strict referrer policy keeps
+    // ad-click and bid URLs out of third-party referrer headers; frame DENY
+    // keeps the API out of clickjacking iframes.
+    'x-content-type-options': 'nosniff',
+    'referrer-policy': 'strict-origin-when-cross-origin',
+    'x-frame-options': 'DENY'
   };
   if (extra) for (var k in extra) h[k] = extra[k];
   return h;

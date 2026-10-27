@@ -97,6 +97,17 @@ for f in assets/js/*.js backend/src/worker.js; do
 done
 [ "$JS_FAIL" = "0" ] && ok "assets/js/*.js + backend/src/worker.js parse cleanly"
 
+# Worker API responses carry baseline hardening headers. The Worker takes
+# payments and serves the admin surface; a refactor that drops these headers
+# from corsHeaders should fail this suite, not ship.
+for hdr in x-content-type-options referrer-policy x-frame-options; do
+  if ! grep -A20 "function corsHeaders" backend/src/worker.js | grep -q "'$hdr'"; then
+    bad "worker security headers: missing $hdr in corsHeaders"
+  fi
+done
+grep -A20 "function corsHeaders" backend/src/worker.js | grep -q "'x-frame-options'" \
+  && ok "worker API responses carry nosniff, referrer-policy, frame-options"
+
 # Swift parse gate (macOS only, best-effort): catches typos/bracket slips in
 # the Mac status area app without a full typecheck. Skipped, not failed, off-Mac.
 if command -v xcrun >/dev/null 2>&1; then
