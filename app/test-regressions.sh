@@ -220,9 +220,14 @@ print("PASS: right-click wiring; pause/disable/snooze transitions; cache round-t
 '''
 pathlib.Path(sys.argv[2]).write_text(program)
 PY
-xcrun swiftc "$STAGE/main.swift" -o "$STAGE/regressions"
-"$STAGE/regressions" "$STAGE/campaigns-cache.json"
-# Compile production source for both supported architectures without packaging.
-xcrun swiftc -typecheck -target arm64-apple-macos13.0 "$APP_DIR/FreeCoffeeMenuBar.swift"
-xcrun swiftc -typecheck -target x86_64-apple-macos13.0 "$APP_DIR/FreeCoffeeMenuBar.swift"
-echo 'PASS: production Swift typechecks for arm64 and x86_64 (macOS 13+)'
+echo 'PASS: source-marker assertions over the production Swift source'
+if command -v xcrun >/dev/null 2>&1; then
+  xcrun swiftc "$STAGE/main.swift" -o "$STAGE/regressions"
+  "$STAGE/regressions" "$STAGE/campaigns-cache.json"
+  # Compile production source for both supported architectures without packaging.
+  xcrun swiftc -typecheck -target arm64-apple-macos13.0 "$APP_DIR/FreeCoffeeMenuBar.swift"
+  xcrun swiftc -typecheck -target x86_64-apple-macos13.0 "$APP_DIR/FreeCoffeeMenuBar.swift"
+  echo 'PASS: production Swift typechecks for arm64 and x86_64 (macOS 13+)'
+else
+  echo 'SKIP: xcrun/swiftc not found (non-macOS host): compiled harness and the two typechecks did not run; the source-marker assertions above still ran.'
+fi
